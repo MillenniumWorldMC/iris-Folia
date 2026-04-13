@@ -45,6 +45,8 @@ def lib = 'art.arcane.iris.util'
 String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')
     .orElse('com.github.VolmitSoftware:VolmLib:master-SNAPSHOT')
     .get()
+String sentryAuthToken = findProperty('sentry.auth.token') as String ?: System.getenv('SENTRY_AUTH_TOKEN')
+boolean hasSentryAuthToken = sentryAuthToken != null && !sentryAuthToken.isBlank()
 
 /**
  * Dependencies.
@@ -79,7 +81,7 @@ dependencies {
     compileOnly(libs.multiverseCore)
 
     // Shaded
-    implementation('de.crazydev22.slimjar.helper:spigot:2.1.5')
+    implementation('de.crazydev22.slimjar.helper:spigot:2.1.9')
     implementation(volmLibCoordinate) {
         changing = true
         transitive = false
@@ -123,14 +125,14 @@ dependencies {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_21)
+        jvmTarget.set(JvmTarget.fromTarget('25'))
     }
 }
 
@@ -141,7 +143,7 @@ sentry {
 
     org = 'sentry'
     projectName = 'iris'
-    authToken = findProperty('sentry.auth.token') as String ?: System.getenv('SENTRY_AUTH_TOKEN')
+    authToken = sentryAuthToken
 }
 
 slimJar {
@@ -269,6 +271,14 @@ tasks.named('sentryCollectSourcesJava').configure {
 
 tasks.named('generateSentryBundleIdJava').configure {
     dependsOn(generateTemplates)
+}
+
+tasks.matching { Task task ->
+    task.name.startsWith('sentry') || task.name.startsWith('generateSentry')
+}.configureEach {
+    onlyIf {
+        hasSentryAuthToken
+    }
 }
 
 rootProject.tasks.matching {

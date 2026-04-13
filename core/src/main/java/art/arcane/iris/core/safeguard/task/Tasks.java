@@ -156,19 +156,19 @@ public final class Tasks {
 
     private static final Task JAVA = Task.of("java", () -> {
         int version = Iris.getJavaVersion();
-        if (version == 21) {
+        if (version == 25) {
             return withDiagnostics(Mode.STABLE);
         }
 
-        if (version > 21) {
+        if (version > 25) {
             return withDiagnostics(Mode.STABLE,
                     Diagnostic.Logger.INFO.create("Java Runtime"),
-                    Diagnostic.Logger.INFO.create("- Running Java " + version + ". Iris is tested primarily on Java 21."));
+                    Diagnostic.Logger.INFO.create("- Running Java " + version + ". Iris is tested primarily on Java 25."));
         }
 
         return withDiagnostics(Mode.WARNING,
                 Diagnostic.Logger.WARN.create("Unsupported Java version"),
-                Diagnostic.Logger.WARN.create("- Java 21+ is recommended. Current runtime: Java " + version));
+                Diagnostic.Logger.WARN.create("- Java 25+ is recommended. Current runtime: Java " + version));
     });
 
     private static final List<Task> TASKS = List.of(

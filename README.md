@@ -15,17 +15,17 @@ Consider supporting our development by buying Iris on spigot! We work hard to ma
 
 ### Command Line Builds
 
-1. Install [Java JDK 21](https://www.oracle.com/java/technologies/javase/jdk21-archive-downloads.html)
+1. Install [Java JDK 25](https://adoptium.net/temurin/releases/?version=25)
 2. Set the JDK installation path to `JAVA_HOME` as an environment variable.
     * Windows
         1. Start > Type `env` and press Enter
         2. Advanced > Environment Variables
         3. Under System Variables, click `New...`
         4. Variable Name: `JAVA_HOME`
-        5. Variable Value: `C:\Program Files\Java\jdk-21.0.1` (verify this exists after installing java don't just copy
+        5. Variable Value: `C:\Program Files\Java\jdk-25` (verify this exists after installing java don't just copy
            the example text)
     * MacOS
-        1. Run `/usr/libexec/java_home -V` and look for Java 21
+        1. Run `/usr/libexec/java_home -V` and look for Java 25
         2. Run `sudo nano ~/.zshenv`
         3. Add `export JAVA_HOME=$(/usr/libexec/java_home)` as a new line
         4. Use `CTRL + X`, then Press `Y`, Then `ENTER`
