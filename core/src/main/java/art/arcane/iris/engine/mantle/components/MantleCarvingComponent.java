@@ -46,9 +46,6 @@ import java.util.Map;
 public class MantleCarvingComponent extends IrisMantleComponent {
     private static final int CHUNK_SIZE = 16;
     private static final int CHUNK_AREA = CHUNK_SIZE * CHUNK_SIZE;
-    private static final int TILE_SIZE = 2;
-    private static final int TILE_COUNT = CHUNK_SIZE / TILE_SIZE;
-    private static final int TILE_AREA = TILE_COUNT * TILE_COUNT;
     private static final int BLEND_RADIUS = 3;
     private static final int FIELD_SIZE = CHUNK_SIZE + (BLEND_RADIUS * 2);
     private static final double MIN_WEIGHT = 0.08D;
@@ -104,20 +101,18 @@ public class MantleCarvingComponent extends IrisMantleComponent {
     private List<WeightedProfile> resolveWeightedProfiles(int chunkX, int chunkZ, IrisComplex complex, IrisDimensionCarvingResolver.State resolverState, Long2ObjectOpenHashMap<IrisBiome> caveBiomeCache) {
         BlendScratch blendScratch = BLEND_SCRATCH.get();
         IrisCaveProfile[] profileField = blendScratch.profileField;
-        Map<IrisCaveProfile, double[]> tileProfileWeights = blendScratch.tileProfileWeights;
+        Map<IrisCaveProfile, double[]> columnProfileWeights = blendScratch.columnProfileWeights;
         IdentityHashMap<IrisCaveProfile, Boolean> activeProfiles = blendScratch.activeProfiles;
         IrisCaveProfile[] kernelProfiles = blendScratch.kernelProfiles;
         double[] kernelProfileWeights = blendScratch.kernelProfileWeights;
         activeProfiles.clear();
         fillProfileField(profileField, chunkX, chunkZ, complex, resolverState, caveBiomeCache);
 
-        for (int tileX = 0; tileX < TILE_COUNT; tileX++) {
-            for (int tileZ = 0; tileZ < TILE_COUNT; tileZ++) {
+        for (int localX = 0; localX < CHUNK_SIZE; localX++) {
+            for (int localZ = 0; localZ < CHUNK_SIZE; localZ++) {
                 int profileCount = 0;
-                int sampleLocalX = (tileX * TILE_SIZE) + 1;
-                int sampleLocalZ = (tileZ * TILE_SIZE) + 1;
-                int centerX = sampleLocalX + BLEND_RADIUS;
-                int centerZ = sampleLocalZ + BLEND_RADIUS;
+                int centerX = localX + BLEND_RADIUS;
+                int centerZ = localZ + BLEND_RADIUS;
                 double totalKernelWeight = 0D;
 
                 for (int kernelIndex = 0; kernelIndex < KERNEL_SIZE; kernelIndex++) {
@@ -164,30 +159,30 @@ public class MantleCarvingComponent extends IrisMantleComponent {
                     continue;
                 }
 
-                int tileIndex = tileIndex(tileX, tileZ);
+                int columnIndex = (localX << 4) | localZ;
                 double dominantWeight = clampWeight(dominantKernelWeight / totalKernelWeight);
-                double[] tileWeights = tileProfileWeights.get(dominantProfile);
-                if (tileWeights == null) {
-                    tileWeights = new double[TILE_AREA];
-                    tileProfileWeights.put(dominantProfile, tileWeights);
+                double[] weights = columnProfileWeights.get(dominantProfile);
+                if (weights == null) {
+                    weights = new double[CHUNK_AREA];
+                    columnProfileWeights.put(dominantProfile, weights);
                 } else if (!activeProfiles.containsKey(dominantProfile)) {
-                    Arrays.fill(tileWeights, 0D);
+                    Arrays.fill(weights, 0D);
                 }
                 activeProfiles.put(dominantProfile, Boolean.TRUE);
-                tileWeights[tileIndex] = dominantWeight;
+                weights[columnIndex] = dominantWeight;
             }
         }
 
-        List<WeightedProfile> tileWeightedProfiles = new ArrayList<>();
+        List<WeightedProfile> columnWeightedProfiles = new ArrayList<>();
         for (IrisCaveProfile profile : activeProfiles.keySet()) {
-            double[] tileWeights = tileProfileWeights.get(profile);
-            if (tileWeights == null) {
+            double[] weights = columnProfileWeights.get(profile);
+            if (weights == null) {
                 continue;
             }
 
             double totalWeight = 0D;
             double maxWeight = 0D;
-            for (double weight : tileWeights) {
+            for (double weight : weights) {
                 totalWeight += weight;
                 if (weight > maxWeight) {
                     maxWeight = weight;
@@ -198,12 +193,11 @@ public class MantleCarvingComponent extends IrisMantleComponent {
                 continue;
             }
 
-            double averageWeight = totalWeight / TILE_AREA;
-            tileWeightedProfiles.add(new WeightedProfile(profile, tileWeights, averageWeight, null));
+            double averageWeight = totalWeight / CHUNK_AREA;
+            columnWeightedProfiles.add(new WeightedProfile(profile, weights, averageWeight, null));
         }
 
-        List<WeightedProfile> boundedTileProfiles = limitAndMergeBlendedProfiles(tileWeightedProfiles, MAX_BLENDED_PROFILE_PASSES, TILE_AREA);
-        List<WeightedProfile> blendedProfiles = expandTileWeightedProfiles(boundedTileProfiles);
+        List<WeightedProfile> blendedProfiles = limitAndMergeBlendedProfiles(columnWeightedProfiles, MAX_BLENDED_PROFILE_PASSES, CHUNK_AREA);
         List<WeightedProfile> resolvedProfiles = resolveDimensionCarvingProfiles(chunkX, chunkZ, resolverState, blendScratch);
         resolvedProfiles.addAll(blendedProfiles);
         return resolvedProfiles;
@@ -216,8 +210,8 @@ public class MantleCarvingComponent extends IrisMantleComponent {
             return weightedProfiles;
         }
 
-        Map<IrisDimensionCarvingEntry, IrisDimensionCarvingEntry[]> dimensionTilePlans = blendScratch.dimensionTilePlans;
-        dimensionTilePlans.clear();
+        Map<IrisDimensionCarvingEntry, IrisDimensionCarvingEntry[]> dimensionColumnPlans = blendScratch.dimensionColumnPlans;
+        dimensionColumnPlans.clear();
 
         for (IrisDimensionCarvingEntry entry : entries) {
             if (entry == null || !entry.isEnabled()) {
@@ -229,13 +223,13 @@ public class MantleCarvingComponent extends IrisMantleComponent {
                 continue;
             }
 
-            IrisDimensionCarvingEntry[] tilePlan = dimensionTilePlans.computeIfAbsent(entry, key -> new IrisDimensionCarvingEntry[TILE_AREA]);
-            buildDimensionTilePlan(tilePlan, chunkX, chunkZ, entry, resolverState);
+            IrisDimensionCarvingEntry[] columnPlan = dimensionColumnPlans.computeIfAbsent(entry, key -> new IrisDimensionCarvingEntry[CHUNK_AREA]);
+            buildDimensionColumnPlan(columnPlan, chunkX, chunkZ, entry, resolverState);
 
-            Map<IrisCaveProfile, double[]> rootProfileTileWeights = new IdentityHashMap<>();
+            Map<IrisCaveProfile, double[]> rootProfileColumnWeights = new IdentityHashMap<>();
             IrisRange worldYRange = entry.getWorldYRange();
-            for (int tileIndex = 0; tileIndex < TILE_AREA; tileIndex++) {
-                IrisDimensionCarvingEntry resolvedEntry = tilePlan[tileIndex];
+            for (int columnIndex = 0; columnIndex < CHUNK_AREA; columnIndex++) {
+                IrisDimensionCarvingEntry resolvedEntry = columnPlan[columnIndex];
                 IrisBiome resolvedBiome = IrisDimensionCarvingResolver.resolveEntryBiome(getEngineMantle().getEngine(), resolvedEntry, resolverState);
                 if (resolvedBiome == null) {
                     continue;
@@ -246,73 +240,31 @@ public class MantleCarvingComponent extends IrisMantleComponent {
                     continue;
                 }
 
-                double[] tileWeights = rootProfileTileWeights.computeIfAbsent(profile, key -> new double[TILE_AREA]);
-                tileWeights[tileIndex] = 1D;
+                double[] columnWeights = rootProfileColumnWeights.computeIfAbsent(profile, key -> new double[CHUNK_AREA]);
+                columnWeights[columnIndex] = 1D;
             }
 
-            List<Map.Entry<IrisCaveProfile, double[]>> profileEntries = new ArrayList<>(rootProfileTileWeights.entrySet());
+            List<Map.Entry<IrisCaveProfile, double[]>> profileEntries = new ArrayList<>(rootProfileColumnWeights.entrySet());
             profileEntries.sort((a, b) -> Integer.compare(a.getKey().hashCode(), b.getKey().hashCode()));
             for (Map.Entry<IrisCaveProfile, double[]> profileEntry : profileEntries) {
-                double[] columnWeights = expandTileWeightsToColumns(profileEntry.getValue());
-                weightedProfiles.add(new WeightedProfile(profileEntry.getKey(), columnWeights, -1D, worldYRange));
+                weightedProfiles.add(new WeightedProfile(profileEntry.getKey(), profileEntry.getValue(), -1D, worldYRange));
             }
         }
 
         return weightedProfiles;
     }
 
-    private void buildDimensionTilePlan(IrisDimensionCarvingEntry[] tilePlan, int chunkX, int chunkZ, IrisDimensionCarvingEntry entry, IrisDimensionCarvingResolver.State resolverState) {
-        for (int tileX = 0; tileX < TILE_COUNT; tileX++) {
-            int worldX = (chunkX << 4) + (tileX * TILE_SIZE);
-            for (int tileZ = 0; tileZ < TILE_COUNT; tileZ++) {
-                int worldZ = (chunkZ << 4) + (tileZ * TILE_SIZE);
-                int tileIndex = tileIndex(tileX, tileZ);
-                tilePlan[tileIndex] = IrisDimensionCarvingResolver.resolveFromRoot(getEngineMantle().getEngine(), entry, worldX, worldZ, resolverState);
+    private void buildDimensionColumnPlan(IrisDimensionCarvingEntry[] columnPlan, int chunkX, int chunkZ, IrisDimensionCarvingEntry entry, IrisDimensionCarvingResolver.State resolverState) {
+        int baseX = chunkX << 4;
+        int baseZ = chunkZ << 4;
+        for (int localX = 0; localX < CHUNK_SIZE; localX++) {
+            int worldX = baseX + localX;
+            for (int localZ = 0; localZ < CHUNK_SIZE; localZ++) {
+                int worldZ = baseZ + localZ;
+                int columnIndex = (localX << 4) | localZ;
+                columnPlan[columnIndex] = IrisDimensionCarvingResolver.resolveFromRoot(getEngineMantle().getEngine(), entry, worldX, worldZ, resolverState);
             }
         }
-    }
-
-    private List<WeightedProfile> expandTileWeightedProfiles(List<WeightedProfile> tileWeightedProfiles) {
-        List<WeightedProfile> expandedProfiles = new ArrayList<>(tileWeightedProfiles.size());
-        for (WeightedProfile tileWeightedProfile : tileWeightedProfiles) {
-            double[] columnWeights = expandTileWeightsToColumns(tileWeightedProfile.columnWeights);
-            double averageWeight = computeAverageWeight(columnWeights, CHUNK_AREA);
-            expandedProfiles.add(new WeightedProfile(tileWeightedProfile.profile, columnWeights, averageWeight, tileWeightedProfile.worldYRange));
-        }
-        expandedProfiles.sort(MantleCarvingComponent::compareByCarveOrder);
-        return expandedProfiles;
-    }
-
-    private static double[] expandTileWeightsToColumns(double[] tileWeights) {
-        double[] columnWeights = new double[CHUNK_AREA];
-        if (tileWeights == null || tileWeights.length == 0) {
-            return columnWeights;
-        }
-
-        for (int tileX = 0; tileX < TILE_COUNT; tileX++) {
-            int columnX = tileX * TILE_SIZE;
-            int columnX2 = columnX + 1;
-            for (int tileZ = 0; tileZ < TILE_COUNT; tileZ++) {
-                int tileIndex = tileIndex(tileX, tileZ);
-                double weight = tileWeights[tileIndex];
-                if (weight <= 0D) {
-                    continue;
-                }
-
-                int columnZ = tileZ * TILE_SIZE;
-                int columnZ2 = columnZ + 1;
-                columnWeights[(columnX << 4) | columnZ] = weight;
-                columnWeights[(columnX << 4) | columnZ2] = weight;
-                columnWeights[(columnX2 << 4) | columnZ] = weight;
-                columnWeights[(columnX2 << 4) | columnZ2] = weight;
-            }
-        }
-
-        return columnWeights;
-    }
-
-    private static int tileIndex(int tileX, int tileZ) {
-        return (tileX * TILE_COUNT) + tileZ;
     }
 
     private void fillProfileField(IrisCaveProfile[] profileField, int chunkX, int chunkZ, IrisComplex complex, IrisDimensionCarvingResolver.State resolverState, Long2ObjectOpenHashMap<IrisBiome> caveBiomeCache) {
@@ -554,8 +506,8 @@ public class MantleCarvingComponent extends IrisMantleComponent {
         private final IrisCaveProfile[] profileField = new IrisCaveProfile[FIELD_SIZE * FIELD_SIZE];
         private final IrisCaveProfile[] kernelProfiles = new IrisCaveProfile[KERNEL_SIZE];
         private final double[] kernelProfileWeights = new double[KERNEL_SIZE];
-        private final IdentityHashMap<IrisCaveProfile, double[]> tileProfileWeights = new IdentityHashMap<>();
-        private final IdentityHashMap<IrisDimensionCarvingEntry, IrisDimensionCarvingEntry[]> dimensionTilePlans = new IdentityHashMap<>();
+        private final IdentityHashMap<IrisCaveProfile, double[]> columnProfileWeights = new IdentityHashMap<>();
+        private final IdentityHashMap<IrisDimensionCarvingEntry, IrisDimensionCarvingEntry[]> dimensionColumnPlans = new IdentityHashMap<>();
         private final IdentityHashMap<IrisCaveProfile, Boolean> activeProfiles = new IdentityHashMap<>();
         private final int[] chunkSurfaceHeights = new int[CHUNK_AREA];
     }

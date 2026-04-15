@@ -22,6 +22,7 @@ import art.arcane.iris.Iris;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.tools.IrisToolbelt;
+import art.arcane.iris.engine.platform.PlatformChunkGenerator;
 import art.arcane.volmlib.util.board.Board;
 import art.arcane.volmlib.util.board.BoardProvider;
 import art.arcane.volmlib.util.board.BoardSettings;
@@ -97,9 +98,12 @@ public class BoardSVC implements IrisService, BoardProvider {
             return;
         }
 
-        if (IrisToolbelt.isIrisStudioWorld(p.getWorld())) {
+        if (isEligibleWorld(p)) {
             boards.computeIfAbsent(p, PlayerBoard::new);
-        } else remove(p);
+            return;
+        }
+
+        remove(p);
     }
 
     private void remove(Player player) {
@@ -132,6 +136,20 @@ public class BoardSVC implements IrisService, BoardProvider {
         return board.lines;
     }
 
+    private boolean isEligibleWorld(Player player) {
+        if (player == null) {
+            return false;
+        }
+
+        World world = player.getWorld();
+        if (!IrisToolbelt.isIrisWorld(world)) {
+            return false;
+        }
+
+        PlatformChunkGenerator access = IrisToolbelt.access(world);
+        return access != null && access.getEngine() != null;
+    }
+
     @Data
     public class PlayerBoard {
         private final Player player;
@@ -159,15 +177,9 @@ public class BoardSVC implements IrisService, BoardProvider {
                 return;
             }
 
-            if (!IrisToolbelt.isIrisStudioWorld(player.getWorld())) {
+            if (!isEligibleWorld(player)) {
                 boards.remove(player);
                 cancel();
-                return;
-            }
-
-            if (!Iris.service(StudioSVC.class).isProjectOpen()) {
-                board.update();
-                schedule(20);
                 return;
             }
 

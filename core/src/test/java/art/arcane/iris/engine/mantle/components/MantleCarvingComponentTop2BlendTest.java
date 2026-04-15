@@ -17,7 +17,6 @@ import static org.junit.Assert.assertEquals;
 public class MantleCarvingComponentTop2BlendTest {
     private static Constructor<?> weightedProfileConstructor;
     private static Method limitMethod;
-    private static Method expandTileMethod;
     private static Field profileField;
     private static Field columnWeightsField;
 
@@ -28,8 +27,6 @@ public class MantleCarvingComponentTop2BlendTest {
         weightedProfileConstructor.setAccessible(true);
         limitMethod = MantleCarvingComponent.class.getDeclaredMethod("limitAndMergeBlendedProfiles", List.class, int.class, int.class);
         limitMethod.setAccessible(true);
-        expandTileMethod = MantleCarvingComponent.class.getDeclaredMethod("expandTileWeightsToColumns", double[].class);
-        expandTileMethod.setAccessible(true);
         profileField = weightedProfileClass.getDeclaredField("profile");
         profileField.setAccessible(true);
         columnWeightsField = weightedProfileClass.getDeclaredField("columnWeights");
@@ -67,21 +64,16 @@ public class MantleCarvingComponentTop2BlendTest {
     }
 
     @Test
-    public void tileWeightsExpandIntoFourColumnsPerTile() throws Exception {
-        double[] tileWeights = new double[64];
-        tileWeights[0] = 0.42D;
-        tileWeights[9] = 0.73D;
-        double[] expanded = invokeExpand(tileWeights);
+    public void topTwoMergePreservesIndependentWeightsAtHighColumnIndexes() throws Exception {
+        WeightedInput input = createWeightedProfiles();
+        List<?> limited = invokeLimit(input.weightedProfiles(), 2);
 
-        assertEquals(0.42D, expanded[(0 << 4) | 0], 0D);
-        assertEquals(0.42D, expanded[(0 << 4) | 1], 0D);
-        assertEquals(0.42D, expanded[(1 << 4) | 0], 0D);
-        assertEquals(0.42D, expanded[(1 << 4) | 1], 0D);
+        Map<IrisCaveProfile, double[]> byProfile = extractWeightsByProfile(limited);
+        IrisCaveProfile first = input.profiles().first();
+        IrisCaveProfile second = input.profiles().second();
 
-        assertEquals(0.73D, expanded[(2 << 4) | 2], 0D);
-        assertEquals(0.73D, expanded[(2 << 4) | 3], 0D);
-        assertEquals(0.73D, expanded[(3 << 4) | 2], 0D);
-        assertEquals(0.73D, expanded[(3 << 4) | 3], 0D);
+        assertEquals(1.0D, byProfile.get(first)[255], 0D);
+        assertEquals(1.0D, byProfile.get(second)[254], 0D);
     }
 
     private WeightedInput createWeightedProfiles() throws Exception {
@@ -90,17 +82,21 @@ public class MantleCarvingComponentTop2BlendTest {
         IrisCaveProfile third = new IrisCaveProfile().setEnabled(true).setBaseWeight(0.93D);
         Profiles profiles = new Profiles(first, second, third);
 
-        double[] firstWeights = new double[64];
+        double[] firstWeights = new double[256];
         firstWeights[0] = 0.2D;
         firstWeights[1] = 0.8D;
+        firstWeights[255] = 0.6D;
 
-        double[] secondWeights = new double[64];
+        double[] secondWeights = new double[256];
         secondWeights[0] = 0.7D;
         secondWeights[1] = 0.1D;
+        secondWeights[254] = 0.7D;
 
-        double[] thirdWeights = new double[64];
+        double[] thirdWeights = new double[256];
         thirdWeights[0] = 0.3D;
         thirdWeights[1] = 0.4D;
+        thirdWeights[254] = 0.3D;
+        thirdWeights[255] = 0.4D;
 
         List<Object> weighted = new ArrayList<>();
         weighted.add(weightedProfileConstructor.newInstance(first, firstWeights, average(firstWeights), null));
@@ -110,11 +106,7 @@ public class MantleCarvingComponentTop2BlendTest {
     }
 
     private List<?> invokeLimit(List<Object> weightedProfiles, int limit) throws Exception {
-        return (List<?>) limitMethod.invoke(null, weightedProfiles, limit, 64);
-    }
-
-    private double[] invokeExpand(double[] tileWeights) throws Exception {
-        return (double[]) expandTileMethod.invoke(null, (Object) tileWeights);
+        return (List<?>) limitMethod.invoke(null, weightedProfiles, limit, 256);
     }
 
     private Map<IrisCaveProfile, double[]> extractWeightsByProfile(List<?> weightedProfiles) throws Exception {

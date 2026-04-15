@@ -104,20 +104,20 @@ public class IrisDimensionCarvingResolverParityTest {
     }
 
     @Test
-    public void tileAnchoredChunkPlanResolutionIsStableAcrossRepeatedBuilds() {
+    public void columnAnchoredChunkPlanResolutionIsStableAcrossRepeatedBuilds() {
         Fixture fixture = createMixedDepthFixture();
         IrisDimensionCarvingResolver.State state = new IrisDimensionCarvingResolver.State();
         IrisDimensionCarvingEntry root = legacyResolveRootEntry(fixture.engine, 80);
 
         for (int chunkX = -24; chunkX <= 24; chunkX += 6) {
             for (int chunkZ = -24; chunkZ <= 24; chunkZ += 6) {
-                IrisDimensionCarvingEntry[] firstPlan = buildTilePlan(fixture.engine, root, chunkX, chunkZ, state);
-                IrisDimensionCarvingEntry[] secondPlan = buildTilePlan(fixture.engine, root, chunkX, chunkZ, state);
-                for (int tileIndex = 0; tileIndex < firstPlan.length; tileIndex++) {
+                IrisDimensionCarvingEntry[] firstPlan = buildColumnPlan(fixture.engine, root, chunkX, chunkZ, state);
+                IrisDimensionCarvingEntry[] secondPlan = buildColumnPlan(fixture.engine, root, chunkX, chunkZ, state);
+                for (int columnIndex = 0; columnIndex < firstPlan.length; columnIndex++) {
                     assertSame(
-                            "tile plan mismatch at chunkX=" + chunkX + " chunkZ=" + chunkZ + " tileIndex=" + tileIndex,
-                            firstPlan[tileIndex],
-                            secondPlan[tileIndex]
+                            "column plan mismatch at chunkX=" + chunkX + " chunkZ=" + chunkZ + " columnIndex=" + columnIndex,
+                            firstPlan[columnIndex],
+                            secondPlan[columnIndex]
                     );
                 }
             }
@@ -272,14 +272,14 @@ public class IrisDimensionCarvingResolverParityTest {
         return new Fixture(engine);
     }
 
-    private IrisDimensionCarvingEntry[] buildTilePlan(Engine engine, IrisDimensionCarvingEntry rootEntry, int chunkX, int chunkZ, IrisDimensionCarvingResolver.State state) {
-        IrisDimensionCarvingEntry[] plan = new IrisDimensionCarvingEntry[64];
-        for (int tileX = 0; tileX < 8; tileX++) {
-            int worldX = (chunkX << 4) + (tileX << 1);
-            for (int tileZ = 0; tileZ < 8; tileZ++) {
-                int worldZ = (chunkZ << 4) + (tileZ << 1);
-                int tileIndex = (tileX * 8) + tileZ;
-                plan[tileIndex] = IrisDimensionCarvingResolver.resolveFromRoot(engine, rootEntry, worldX, worldZ, state);
+    private IrisDimensionCarvingEntry[] buildColumnPlan(Engine engine, IrisDimensionCarvingEntry rootEntry, int chunkX, int chunkZ, IrisDimensionCarvingResolver.State state) {
+        IrisDimensionCarvingEntry[] plan = new IrisDimensionCarvingEntry[256];
+        for (int localX = 0; localX < 16; localX++) {
+            int worldX = (chunkX << 4) + localX;
+            for (int localZ = 0; localZ < 16; localZ++) {
+                int worldZ = (chunkZ << 4) + localZ;
+                int columnIndex = (localX << 4) | localZ;
+                plan[columnIndex] = IrisDimensionCarvingResolver.resolveFromRoot(engine, rootEntry, worldX, worldZ, state);
             }
         }
         return plan;

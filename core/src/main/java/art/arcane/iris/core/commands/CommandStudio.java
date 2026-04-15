@@ -134,29 +134,30 @@ public class CommandStudio implements DirectorExecutor {
 
     @Director(description = "Close an open studio project", aliases = {"x", "c"}, sync = true)
     public void close() {
+        VolmitSender commandSender = sender();
         if (!Iris.service(StudioSVC.class).isProjectOpen()) {
-            sender().sendMessage(C.RED + "No open studio projects.");
+            commandSender.sendMessage(C.RED + "No open studio projects.");
             return;
         }
 
-        sender().sendMessage(C.YELLOW + "Closing studio...");
+        commandSender.sendMessage(C.YELLOW + "Closing studio...");
         Iris.service(StudioSVC.class).close().whenComplete((result, throwable) -> J.s(() -> {
             if (throwable != null) {
-                sender().sendMessage(C.RED + "Studio close failed: " + throwable.getMessage());
+                commandSender.sendMessage(C.RED + "Studio close failed: " + throwable.getMessage());
                 return;
             }
 
             if (result != null && result.failureCause() != null) {
-                sender().sendMessage(C.RED + "Studio close failed: " + result.failureCause().getMessage());
+                commandSender.sendMessage(C.RED + "Studio close failed: " + result.failureCause().getMessage());
                 return;
             }
 
             if (result != null && result.startupCleanupQueued()) {
-                sender().sendMessage(C.YELLOW + "Studio closed. Remaining world-family cleanup was queued for startup fallback.");
+                commandSender.sendMessage(C.YELLOW + "Studio closed. Remaining world-family cleanup was queued for startup fallback.");
                 return;
             }
 
-            sender().sendMessage(C.GREEN + "Studio closed.");
+            commandSender.sendMessage(C.GREEN + "Studio closed.");
         }));
     }
 

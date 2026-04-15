@@ -66,7 +66,7 @@ public class IrisCaveProfile {
     @MinNumber(1)
     @MaxNumber(8)
     @Desc("Vertical sample step used while evaluating cave density.")
-    private int sampleStep = 2;
+    private int sampleStep = 1;
 
     @MinNumber(0)
     @MaxNumber(4096)
