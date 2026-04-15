@@ -20,12 +20,14 @@ package art.arcane.iris.engine.actuator;
 
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineAssignedActuator;
+import art.arcane.iris.core.loader.IrisData;
+import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.object.IrisBiome;
+import art.arcane.iris.engine.object.IrisDimension;
 import art.arcane.iris.engine.object.IrisRegion;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.iris.util.project.context.ChunkedDataCache;
 import art.arcane.iris.util.project.context.ChunkContext;
-import art.arcane.iris.util.project.context.ChunkedDoubleDataCache;
 import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.volmlib.util.math.RNG;
@@ -171,11 +173,14 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
     private void terrainSliverOptimized(int x, int z, int xf, Hunk<BlockData> h, ChunkContext context) {
         int chunkHeight = h.getHeight();
         int chunkDepth = h.getDepth();
-        int fluidHeight = getDimension().getFluidHeight();
-        boolean bedrockEnabled = getDimension().isBedrock();
+        IrisDimension dimension = getDimension();
+        IrisData data = getData();
+        IrisComplex complex = getComplex();
+        RNG localRng = rng;
+        int fluidHeight = dimension.getFluidHeight();
+        boolean bedrockEnabled = dimension.isBedrock();
         ChunkedDataCache<IrisBiome> biomeCache = context.getBiome();
         ChunkedDataCache<IrisRegion> regionCache = context.getRegion();
-        ChunkedDoubleDataCache heightCache = context.getHeight();
         ChunkedDataCache<BlockData> fluidCache = context.getFluid();
         ChunkedDataCache<BlockData> rockCache = context.getRock();
         int realX = xf + x;
@@ -193,6 +198,8 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
             int topY = Math.min(hf, chunkHeight - 1);
             BlockData fluid = fluidCache.get(xf, zf);
             BlockData rock = rockCache.get(xf, zf);
+            boolean hasSurfaceOres = biome.hasSurfaceOres() || region.hasSurfaceOres() || dimension.hasSurfaceOres();
+            boolean hasUndergroundOres = biome.hasUndergroundOres() || region.hasUndergroundOres() || dimension.hasUndergroundOres();
             KList<BlockData> blocks = null;
             KList<BlockData> fblocks = null;
 
@@ -203,9 +210,12 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                     continue;
                 }
 
-                BlockData ore = biome.generateOres(realX, i, realZ, rng, getData(), true);
-                ore = ore == null ? region.generateOres(realX, i, realZ, rng, getData(), true) : ore;
-                ore = ore == null ? getDimension().generateOres(realX, i, realZ, rng, getData(), true) : ore;
+                BlockData ore = null;
+                if (hasSurfaceOres) {
+                    ore = biome.generateSurfaceOres(realX, i, realZ, localRng, data);
+                    ore = ore == null ? region.generateSurfaceOres(realX, i, realZ, localRng, data) : ore;
+                    ore = ore == null ? dimension.generateSurfaceOres(realX, i, realZ, localRng, data) : ore;
+                }
                 if (ore != null) {
                     h.set(xf, i, zf, ore);
                     continue;
@@ -214,7 +224,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                 if (i > he && i <= hf) {
                     int fdepth = hf - i;
                     if (fblocks == null) {
-                        fblocks = biome.generateSeaLayers(realX, realZ, rng, hf - he, getData());
+                        fblocks = biome.generateSeaLayers(realX, realZ, localRng, hf - he, data);
                     }
 
                     if (fblocks.hasIndex(fdepth)) {
@@ -228,7 +238,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                 if (i <= he) {
                     int depth = he - i;
                     if (blocks == null) {
-                        blocks = biome.generateLayers(getDimension(), realX, realZ, rng, he, he, getData(), getComplex());
+                        blocks = biome.generateLayers(dimension, realX, realZ, localRng, he, he, data, complex);
                     }
 
                     if (blocks.hasIndex(depth)) {
@@ -236,9 +246,11 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                         continue;
                     }
 
-                    ore = biome.generateOres(realX, i, realZ, rng, getData(), false);
-                    ore = ore == null ? region.generateOres(realX, i, realZ, rng, getData(), false) : ore;
-                    ore = ore == null ? getDimension().generateOres(realX, i, realZ, rng, getData(), false) : ore;
+                    if (hasUndergroundOres) {
+                        ore = biome.generateUndergroundOres(realX, i, realZ, localRng, data);
+                        ore = ore == null ? region.generateUndergroundOres(realX, i, realZ, localRng, data) : ore;
+                        ore = ore == null ? dimension.generateUndergroundOres(realX, i, realZ, localRng, data) : ore;
+                    }
 
                     if (ore != null) {
                         h.set(xf, i, zf, ore);

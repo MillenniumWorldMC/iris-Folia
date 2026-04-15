@@ -32,6 +32,7 @@ import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.collection.KSet;
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.iris.util.common.data.B;
+import art.arcane.iris.util.project.stream.ProceduralStream;
 import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.volmlib.util.documentation.ChunkCoordinates;
 import art.arcane.volmlib.util.format.Form;
@@ -71,6 +72,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
         IrisBiome surfaceBiome = complex.getTrueBiomeStream().get(xxx, zzz);
         int surfaceY = getEngineMantle().getEngine().getHeight(xxx, zzz, true);
         IrisBiome caveBiome = resolveCaveObjectBiome(xxx, zzz, surfaceY, surfaceBiome);
+        SurfaceHeightLookup surfaceHeightLookup = new SurfaceHeightLookup(context);
         if (traceRegen) {
             Iris.info("Regen object layer start: chunk=" + x + "," + z
                     + " surfaceBiome=" + surfaceBiome.getLoadKey()
@@ -81,7 +83,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
                     + " regionSurfacePlacers=" + region.getSurfaceObjects().size()
                     + " regionCavePlacers=" + region.getCarvingObjects().size());
         }
-        ObjectPlacementSummary summary = placeObjects(writer, rng, x, z, surfaceBiome, caveBiome, region, complex, traceRegen);
+        ObjectPlacementSummary summary = placeObjects(writer, rng, x, z, surfaceBiome, caveBiome, region, complex, traceRegen, surfaceHeightLookup);
         if (traceRegen) {
             Iris.info("Regen object layer done: chunk=" + x + "," + z
                     + " biomeSurfacePlacersChecked=" + summary.biomeSurfacePlacersChecked()
@@ -141,7 +143,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
     }
 
     @ChunkCoordinates
-    private ObjectPlacementSummary placeObjects(MantleWriter writer, RNG rng, int x, int z, IrisBiome surfaceBiome, IrisBiome caveBiome, IrisRegion region, IrisComplex complex, boolean traceRegen) {
+    private ObjectPlacementSummary placeObjects(MantleWriter writer, RNG rng, int x, int z, IrisBiome surfaceBiome, IrisBiome caveBiome, IrisRegion region, IrisComplex complex, boolean traceRegen, SurfaceHeightLookup surfaceHeightLookup) {
         int biomeSurfaceChecked = 0;
         int biomeSurfaceTriggered = 0;
         int biomeCaveChecked = 0;
@@ -174,7 +176,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
             if (chance) {
                 biomeSurfaceTriggered++;
                 try {
-                    ObjectPlacementResult result = placeObject(writer, rng, x << 4, z << 4, i, biomeSurfaceExclusionDepth, complex, traceRegen, x, z, "biome-surface");
+                    ObjectPlacementResult result = placeObject(writer, rng, x << 4, z << 4, i, biomeSurfaceExclusionDepth, complex, traceRegen, x, z, "biome-surface", surfaceHeightLookup);
                     attempts += result.attempts();
                     placed += result.placed();
                     rejected += result.rejected();
@@ -239,7 +241,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
             if (chance) {
                 regionSurfaceTriggered++;
                 try {
-                    ObjectPlacementResult result = placeObject(writer, rng, x << 4, z << 4, i, regionSurfaceExclusionDepth, complex, traceRegen, x, z, "region-surface");
+                    ObjectPlacementResult result = placeObject(writer, rng, x << 4, z << 4, i, regionSurfaceExclusionDepth, complex, traceRegen, x, z, "region-surface", surfaceHeightLookup);
                     attempts += result.attempts();
                     placed += result.placed();
                     rejected += result.rejected();
@@ -319,7 +321,8 @@ public class MantleObjectComponent extends IrisMantleComponent {
             boolean traceRegen,
             int chunkX,
             int chunkZ,
-            String scope
+            String scope,
+            SurfaceHeightLookup surfaceHeightLookup
     ) {
         int attempts = 0;
         int placed = 0;
@@ -345,7 +348,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
             int xx = rng.i(x, x + 15);
             int zz = rng.i(z, z + 15);
             int surfaceObjectExclusionRadius = resolveSurfaceObjectExclusionRadius(v);
-            if (surfaceObjectExclusionDepth > 0 && hasSurfaceCarveExposure(writer, xx, zz, surfaceObjectExclusionDepth, surfaceObjectExclusionRadius)) {
+            if (surfaceObjectExclusionDepth > 0 && hasSurfaceCarveExposure(writer, surfaceHeightLookup, xx, zz, surfaceObjectExclusionDepth, surfaceObjectExclusionRadius)) {
                 rejected++;
                 continue;
             }
@@ -817,15 +820,16 @@ public class MantleObjectComponent extends IrisMantleComponent {
         return Math.max(1, caveProfile.getAnchorSearchAttempts());
     }
 
-    private boolean hasSurfaceCarveExposure(MantleWriter writer, int x, int z, int depth, int radius) {
+    private boolean hasSurfaceCarveExposure(MantleWriter writer, SurfaceHeightLookup surfaceHeightLookup, int x, int z, int depth, int radius) {
         int horizontalRadius = Math.max(0, radius);
+        int maxY = getEngineMantle().getEngine().getHeight() - 1;
         for (int dx = -horizontalRadius; dx <= horizontalRadius; dx++) {
             for (int dz = -horizontalRadius; dz <= horizontalRadius; dz++) {
                 int columnX = x + dx;
                 int columnZ = z + dz;
-                int surfaceY = getEngineMantle().getEngine().getHeight(columnX, columnZ, true);
+                int surfaceY = surfaceHeightLookup.getRoundedHeight(columnX, columnZ);
                 int fromY = Math.max(1, surfaceY - Math.max(0, depth));
-                int toY = Math.min(getEngineMantle().getEngine().getHeight() - 1, surfaceY + 1);
+                int toY = Math.min(maxY, surfaceY + 1);
                 for (int y = fromY; y <= toY; y++) {
                     if (writer.isCarved(columnX, y, columnZ)) {
                         return true;
@@ -984,5 +988,34 @@ public class MantleObjectComponent extends IrisMantleComponent {
 
             return null;
         });
+    }
+
+    private static final class SurfaceHeightLookup {
+        private final ChunkContext context;
+        private final ProceduralStream<Double> heightStream;
+        private final KMap<Long, Integer> columnHeights;
+
+        private SurfaceHeightLookup(ChunkContext context) {
+            this.context = context;
+            this.heightStream = context.getComplex().getHeightStream();
+            this.columnHeights = new KMap<>();
+        }
+
+        private int getRoundedHeight(int worldX, int worldZ) {
+            int chunkBlockX = worldX & ~15;
+            int chunkBlockZ = worldZ & ~15;
+            if (chunkBlockX == context.getX() && chunkBlockZ == context.getZ()) {
+                return context.getRoundedHeight(worldX & 15, worldZ & 15);
+            }
+
+            long columnKey = Cache.key(worldX, worldZ);
+            Integer columnHeight = columnHeights.get(columnKey);
+            if (columnHeight == null) {
+                columnHeight = (int) Math.round(heightStream.getDouble(worldX, worldZ));
+                columnHeights.put(columnKey, columnHeight);
+            }
+
+            return columnHeight;
+        }
     }
 }

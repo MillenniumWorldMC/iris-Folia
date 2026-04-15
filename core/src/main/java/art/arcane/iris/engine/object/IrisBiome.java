@@ -178,7 +178,27 @@ public class IrisBiome extends IrisRegistrant implements IRare {
     private KList<IrisOreGenerator> ores = new KList<>();
 
     public BlockData generateOres(int x, int y, int z, RNG rng, IrisData data, boolean surface) {
-        KList<IrisOreGenerator> localOres = getOres(surface);
+        KList<IrisOreGenerator> localOres = surface ? getSurfaceOres() : getUndergroundOres();
+        return generateOres(localOres, x, y, z, rng, data);
+    }
+
+    public BlockData generateSurfaceOres(int x, int y, int z, RNG rng, IrisData data) {
+        return generateOres(getSurfaceOres(), x, y, z, rng, data);
+    }
+
+    public BlockData generateUndergroundOres(int x, int y, int z, RNG rng, IrisData data) {
+        return generateOres(getUndergroundOres(), x, y, z, rng, data);
+    }
+
+    public boolean hasSurfaceOres() {
+        return !getSurfaceOres().isEmpty();
+    }
+
+    public boolean hasUndergroundOres() {
+        return !getUndergroundOres().isEmpty();
+    }
+
+    private BlockData generateOres(KList<IrisOreGenerator> localOres, int x, int y, int z, RNG rng, IrisData data) {
         if (localOres.isEmpty()) {
             return null;
         }
@@ -198,6 +218,14 @@ public class IrisBiome extends IrisRegistrant implements IRare {
         this.ores = ores == null ? new KList<>() : ores;
         surfaceOreCache.reset();
         undergroundOreCache.reset();
+    }
+
+    private KList<IrisOreGenerator> getSurfaceOres() {
+        return getOres(true);
+    }
+
+    private KList<IrisOreGenerator> getUndergroundOres() {
+        return getOres(false);
     }
 
     private KList<IrisOreGenerator> getOres(boolean surface) {
