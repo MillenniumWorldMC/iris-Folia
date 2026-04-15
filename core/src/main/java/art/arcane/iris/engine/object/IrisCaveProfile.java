@@ -68,6 +68,19 @@ public class IrisCaveProfile {
     @Desc("Vertical sample step used while evaluating cave density.")
     private int sampleStep = 1;
 
+    @Desc("Use adaptive cave density prediction so only threshold-adjacent cells fall back to full-resolution evaluation.")
+    private boolean adaptiveSampling = true;
+
+    @MinNumber(2)
+    @MaxNumber(4)
+    @Desc("Horizontal adaptive predictor grid step used while classifying cave density planes.")
+    private int adaptiveSampleStep = 2;
+
+    @MinNumber(0)
+    @MaxNumber(1)
+    @Desc("Additional adaptive ambiguity margin used before the cave predictor falls back to exact sampling.")
+    private double adaptiveThresholdMargin = 0.04;
+
     @MinNumber(0)
     @MaxNumber(4096)
     @Desc("Minimum carved cells expected from this profile before recovery boost applies.")

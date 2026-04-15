@@ -41,6 +41,8 @@ public class IrisCaveCarver3D {
     private static final byte LIQUID_AIR = 0;
     private static final byte LIQUID_LAVA = 2;
     private static final byte LIQUID_FORCED_AIR = 3;
+    private static final int ADAPTIVE_MIN_PLANE_COLUMNS = 48;
+    private static final double ADAPTIVE_LOCAL_RANGE_SCALE = 0.25D;
     private static final ThreadLocal<Scratch> SCRATCH = ThreadLocal.withInitial(Scratch::new);
 
     private final Engine engine;
@@ -171,6 +173,9 @@ public class IrisCaveCarver3D {
             }
             int sampleStep = Math.max(1, profile.getSampleStep());
             boolean exactSampling = sampleStep <= 2;
+            boolean adaptiveSampling = exactSampling && profile.isAdaptiveSampling();
+            int adaptiveSampleStep = Math.max(2, profile.getAdaptiveSampleStep());
+            double adaptiveThresholdMargin = Math.max(0D, profile.getAdaptiveThresholdMargin());
             int surfaceClearance = Math.max(0, profile.getSurfaceClearance());
             int surfaceBreakDepth = Math.max(0, profile.getSurfaceBreakDepth());
             double surfaceBreakNoiseThreshold = profile.getSurfaceBreakNoiseThreshold();
@@ -226,27 +231,53 @@ public class IrisCaveCarver3D {
             double recoveryThresholdBoost = Math.max(0, profile.getRecoveryThresholdBoost());
             int carved;
             if (exactSampling) {
-                carved = carvePassExact(
-                        chunk,
-                        x0,
-                        z0,
-                        minY,
-                        maxY,
-                        surfaceBreakThresholdBoost,
-                        columnMaxY,
-                        surfaceBreakFloorY,
-                        surfaceBreakColumn,
-                        columnThreshold,
-                        clampedWeights,
-                        verticalEdgeFade,
-                        matterByY,
-                        resolvedMinWeight,
-                        resolvedThresholdPenalty,
-                        0D,
-                        false
-                );
-                if (carved < minCarveCells && recoveryThresholdBoost > 0D) {
-                    carved += carvePassExact(
+                if (adaptiveSampling) {
+                    carved = carvePassAdaptive(
+                            chunk,
+                            x0,
+                            z0,
+                            minY,
+                            maxY,
+                            adaptiveSampleStep,
+                            adaptiveThresholdMargin,
+                            surfaceBreakThresholdBoost,
+                            columnMaxY,
+                            surfaceBreakFloorY,
+                            surfaceBreakColumn,
+                            columnThreshold,
+                            clampedWeights,
+                            verticalEdgeFade,
+                            matterByY,
+                            resolvedMinWeight,
+                            resolvedThresholdPenalty,
+                            0D,
+                            false
+                    );
+                    if (carved < minCarveCells && recoveryThresholdBoost > 0D) {
+                        carved += carvePassAdaptive(
+                                chunk,
+                                x0,
+                                z0,
+                                minY,
+                                maxY,
+                                adaptiveSampleStep,
+                                adaptiveThresholdMargin,
+                                surfaceBreakThresholdBoost,
+                                columnMaxY,
+                                surfaceBreakFloorY,
+                                surfaceBreakColumn,
+                                columnThreshold,
+                                clampedWeights,
+                                verticalEdgeFade,
+                                matterByY,
+                                resolvedMinWeight,
+                                resolvedThresholdPenalty,
+                                recoveryThresholdBoost,
+                                true
+                        );
+                    }
+                } else {
+                    carved = carvePassExact(
                             chunk,
                             x0,
                             z0,
@@ -262,9 +293,30 @@ public class IrisCaveCarver3D {
                             matterByY,
                             resolvedMinWeight,
                             resolvedThresholdPenalty,
-                            recoveryThresholdBoost,
-                            true
+                            0D,
+                            false
                     );
+                    if (carved < minCarveCells && recoveryThresholdBoost > 0D) {
+                        carved += carvePassExact(
+                                chunk,
+                                x0,
+                                z0,
+                                minY,
+                                maxY,
+                                surfaceBreakThresholdBoost,
+                                columnMaxY,
+                                surfaceBreakFloorY,
+                                surfaceBreakColumn,
+                                columnThreshold,
+                                clampedWeights,
+                                verticalEdgeFade,
+                                matterByY,
+                                resolvedMinWeight,
+                                resolvedThresholdPenalty,
+                                recoveryThresholdBoost,
+                                true
+                        );
+                    }
                 }
             } else {
                 int latticeStep = sampleStep;
@@ -439,6 +491,135 @@ public class IrisCaveCarver3D {
                 }
 
                 classifyDensityPlane(x0, z0, y, planeColumnIndices, planeThresholdLimit, planeCount, planeCarve);
+                int fadeIndex = y - minY;
+                int localY = y & 15;
+                MatterCavern matter = matterByY[fadeIndex];
+
+                if (skipExistingCarved) {
+                    for (int planeIndex = 0; planeIndex < planeCount; planeIndex++) {
+                        if (!planeCarve[planeIndex]) {
+                            continue;
+                        }
+
+                        int columnIndex = planeColumnIndices[planeIndex];
+                        int localX = PowerOfTwoCoordinates.unpackLocal16X(columnIndex);
+                        int localZ = columnIndex & 15;
+                        if (cavernSlice.get(localX, localY, localZ) != null) {
+                            continue;
+                        }
+
+                        cavernSlice.set(localX, localY, localZ, matter);
+                        carved++;
+                    }
+                    continue;
+                }
+
+                for (int planeIndex = 0; planeIndex < planeCount; planeIndex++) {
+                    if (!planeCarve[planeIndex]) {
+                        continue;
+                    }
+
+                    int columnIndex = planeColumnIndices[planeIndex];
+                    int localX = PowerOfTwoCoordinates.unpackLocal16X(columnIndex);
+                    int localZ = columnIndex & 15;
+                    cavernSlice.set(localX, localY, localZ, matter);
+                    carved++;
+                }
+            }
+        }
+
+        return carved;
+    }
+
+    private int carvePassAdaptive(
+            MantleChunk<Matter> chunk,
+            int x0,
+            int z0,
+            int minY,
+            int maxY,
+            int adaptiveSampleStep,
+            double adaptiveThresholdMargin,
+            double surfaceBreakThresholdBoost,
+            int[] columnMaxY,
+            int[] surfaceBreakFloorY,
+            boolean[] surfaceBreakColumn,
+            double[] columnThreshold,
+            double[] clampedWeights,
+            double[] verticalEdgeFade,
+            MatterCavern[] matterByY,
+            double minWeight,
+            double thresholdPenalty,
+            double thresholdBoost,
+            boolean skipExistingCarved
+    ) {
+        int carved = 0;
+        Scratch scratch = SCRATCH.get();
+        double[] passThreshold = scratch.passThreshold;
+        int[] activeColumnIndices = scratch.activeColumnIndices;
+        int[] activeColumnTopY = scratch.activeColumnTopY;
+        int activeColumnCount = 0;
+
+        for (int index = 0; index < 256; index++) {
+            double columnWeight = clampedWeights[index];
+            if (columnWeight <= minWeight || columnMaxY[index] < minY) {
+                passThreshold[index] = Double.NaN;
+                continue;
+            }
+
+            passThreshold[index] = columnThreshold[index] + thresholdBoost - ((1D - columnWeight) * thresholdPenalty);
+            activeColumnIndices[activeColumnCount] = index;
+            activeColumnTopY[activeColumnCount] = columnMaxY[index];
+            activeColumnCount++;
+        }
+
+        if (activeColumnCount == 0) {
+            return 0;
+        }
+
+        int[] planeColumnIndices = scratch.planeColumnIndices;
+        double[] planeThresholdLimit = scratch.planeThresholdLimit;
+        boolean[] planeCarve = scratch.planeCarve;
+        int minSection = PowerOfTwoCoordinates.floorDivPow2(minY, 4);
+        int maxSection = PowerOfTwoCoordinates.floorDivPow2(maxY, 4);
+
+        for (int sectionIndex = minSection; sectionIndex <= maxSection; sectionIndex++) {
+            int sectionMinY = Math.max(minY, PowerOfTwoCoordinates.chunkToBlock(sectionIndex));
+            int sectionMaxY = Math.min(maxY, PowerOfTwoCoordinates.chunkToBlock(sectionIndex) + 15);
+            MatterSlice<MatterCavern> cavernSlice = resolveCavernSlice(scratch, chunk, sectionIndex);
+
+            for (int y = sectionMinY; y <= sectionMaxY; y++) {
+                int planeCount = 0;
+                for (int activeIndex = 0; activeIndex < activeColumnCount; activeIndex++) {
+                    if (activeColumnTopY[activeIndex] < y) {
+                        continue;
+                    }
+
+                    int columnIndex = activeColumnIndices[activeIndex];
+                    planeColumnIndices[planeCount] = columnIndex;
+                    double localThreshold = passThreshold[columnIndex];
+                    if (surfaceBreakColumn[columnIndex] && y >= surfaceBreakFloorY[columnIndex]) {
+                        localThreshold += surfaceBreakThresholdBoost;
+                    }
+                    localThreshold -= verticalEdgeFade[y - minY];
+                    planeThresholdLimit[planeCount] = localThreshold * normalizationFactor;
+                    planeCount++;
+                }
+
+                if (planeCount == 0) {
+                    continue;
+                }
+
+                classifyDensityPlaneAdaptive(
+                        x0,
+                        z0,
+                        y,
+                        planeColumnIndices,
+                        planeThresholdLimit,
+                        planeCount,
+                        planeCarve,
+                        adaptiveSampleStep,
+                        adaptiveThresholdMargin
+                );
                 int fadeIndex = y - minY;
                 int localY = y & 15;
                 MatterCavern matter = matterByY[fadeIndex];
@@ -743,37 +924,50 @@ public class IrisCaveCarver3D {
         classifyDensityPlaneWarpModules(x0, z0, y, planeColumnIndices, planeThresholdLimit, planeCount, planeCarve);
     }
 
-    private void classifyDensityPlaneNoWarpNoModules(int x0, int z0, int y, int[] planeColumnIndices, double[] planeThresholdLimit, int planeCount, boolean[] planeCarve) {
-        CNG localBaseDensity = baseDensity;
-        CNG localDetailDensity = detailDensity;
-        double localBaseWeight = baseWeight;
-        double localDetailWeight = detailWeight;
-        double detailMin = detailMinContribution;
-        double detailMax = detailMaxContribution;
+    private void classifyDensityPlaneAdaptive(
+            int x0,
+            int z0,
+            int y,
+            int[] planeColumnIndices,
+            double[] planeThresholdLimit,
+            int planeCount,
+            boolean[] planeCarve,
+            int adaptiveSampleStep,
+            double adaptiveThresholdMargin
+    ) {
+        if (adaptiveSampleStep <= 1 || planeCount < ADAPTIVE_MIN_PLANE_COLUMNS) {
+            classifyDensityPlane(x0, z0, y, planeColumnIndices, planeThresholdLimit, planeCount, planeCarve);
+            return;
+        }
 
+        if (!hasWarp) {
+            if (!hasModules) {
+                classifyDensityPlaneAdaptiveNoWarpNoModules(x0, z0, y, planeColumnIndices, planeThresholdLimit, planeCount, planeCarve, adaptiveSampleStep, adaptiveThresholdMargin);
+                return;
+            }
+
+            classifyDensityPlaneAdaptiveNoWarpModules(x0, z0, y, planeColumnIndices, planeThresholdLimit, planeCount, planeCarve, adaptiveSampleStep, adaptiveThresholdMargin);
+            return;
+        }
+
+        if (!hasModules) {
+            classifyDensityPlaneAdaptiveWarpOnly(x0, z0, y, planeColumnIndices, planeThresholdLimit, planeCount, planeCarve, adaptiveSampleStep, adaptiveThresholdMargin);
+            return;
+        }
+
+        classifyDensityPlaneAdaptiveWarpModules(x0, z0, y, planeColumnIndices, planeThresholdLimit, planeCount, planeCarve, adaptiveSampleStep, adaptiveThresholdMargin);
+    }
+
+    private void classifyDensityPlaneNoWarpNoModules(int x0, int z0, int y, int[] planeColumnIndices, double[] planeThresholdLimit, int planeCount, boolean[] planeCarve) {
         for (int planeIndex = 0; planeIndex < planeCount; planeIndex++) {
             int columnIndex = planeColumnIndices[planeIndex];
             int x = x0 + PowerOfTwoCoordinates.unpackLocal16X(columnIndex);
             int z = z0 + (columnIndex & 15);
-            double thresholdLimit = planeThresholdLimit[planeIndex];
-            double density = localBaseDensity.noiseFastSigned3D(x, y, z) * localBaseWeight;
-            if ((density + detailMin) > thresholdLimit) {
-                planeCarve[planeIndex] = false;
-                continue;
-            }
-            if ((density + detailMax) <= thresholdLimit) {
-                planeCarve[planeIndex] = true;
-                continue;
-            }
-
-            density += localDetailDensity.noiseFastSigned3D(x, y, z) * localDetailWeight;
-            planeCarve[planeIndex] = density <= thresholdLimit;
+            planeCarve[planeIndex] = classifyDensityPointNoWarpNoModules(x, y, z, planeThresholdLimit[planeIndex]);
         }
     }
 
     private void classifyDensityPlaneNoWarpModules(int x0, int z0, int y, int[] planeColumnIndices, double[] planeThresholdLimit, int planeCount, boolean[] planeCarve) {
-        CNG localBaseDensity = baseDensity;
-        CNG localDetailDensity = detailDensity;
         Scratch scratch = SCRATCH.get();
         int activeModuleCount = prepareActiveModules(scratch, y);
         if (activeModuleCount == 0) {
@@ -784,92 +978,34 @@ public class IrisCaveCarver3D {
         ModuleState[] localModules = scratch.activeModules;
         double[] remainingMin = scratch.activeModuleRemainingMin;
         double[] remainingMax = scratch.activeModuleRemainingMax;
-        double localBaseWeight = baseWeight;
-        double localDetailWeight = detailWeight;
-        double detailMin = detailMinContribution;
-        double detailMax = detailMaxContribution;
 
         for (int planeIndex = 0; planeIndex < planeCount; planeIndex++) {
             int columnIndex = planeColumnIndices[planeIndex];
             int x = x0 + PowerOfTwoCoordinates.unpackLocal16X(columnIndex);
             int z = z0 + (columnIndex & 15);
-            double thresholdLimit = planeThresholdLimit[planeIndex];
-            double density = localBaseDensity.noiseFastSigned3D(x, y, z) * localBaseWeight;
-            if ((density + detailMin + remainingMin[0]) > thresholdLimit) {
-                planeCarve[planeIndex] = false;
-                continue;
-            }
-            if ((density + detailMax + remainingMax[0]) <= thresholdLimit) {
-                planeCarve[planeIndex] = true;
-                continue;
-            }
-
-            density += localDetailDensity.noiseFastSigned3D(x, y, z) * localDetailWeight;
-            if ((density + remainingMin[0]) > thresholdLimit) {
-                planeCarve[planeIndex] = false;
-                continue;
-            }
-            if ((density + remainingMax[0]) <= thresholdLimit) {
-                planeCarve[planeIndex] = true;
-                continue;
-            }
-
-            for (int moduleIndex = 0; moduleIndex < activeModuleCount; moduleIndex++) {
-                ModuleState module = localModules[moduleIndex];
-                density += module.sample(x, y, z);
-                if ((density + remainingMin[moduleIndex + 1]) > thresholdLimit) {
-                    density = Double.POSITIVE_INFINITY;
-                    break;
-                }
-                if ((density + remainingMax[moduleIndex + 1]) <= thresholdLimit) {
-                    density = Double.NEGATIVE_INFINITY;
-                    break;
-                }
-            }
-
-            planeCarve[planeIndex] = density <= thresholdLimit;
+            planeCarve[planeIndex] = classifyDensityPointNoWarpModules(
+                    x,
+                    y,
+                    z,
+                    planeThresholdLimit[planeIndex],
+                    localModules,
+                    activeModuleCount,
+                    remainingMin,
+                    remainingMax
+            );
         }
     }
 
     private void classifyDensityPlaneWarpOnly(int x0, int z0, int y, int[] planeColumnIndices, double[] planeThresholdLimit, int planeCount, boolean[] planeCarve) {
-        CNG localBaseDensity = baseDensity;
-        CNG localDetailDensity = detailDensity;
-        CNG localWarpDensity = warpDensity;
-        double localBaseWeight = baseWeight;
-        double localDetailWeight = detailWeight;
-        double localWarpStrength = warpStrength;
-        double detailMin = detailMinContribution;
-        double detailMax = detailMaxContribution;
-
         for (int planeIndex = 0; planeIndex < planeCount; planeIndex++) {
             int columnIndex = planeColumnIndices[planeIndex];
-            double x = x0 + PowerOfTwoCoordinates.unpackLocal16X(columnIndex);
-            double z = z0 + (columnIndex & 15);
-            double thresholdLimit = planeThresholdLimit[planeIndex];
-            double warpA = localWarpDensity.noiseFastSigned3D(x, y, z);
-            double warpB = localWarpDensity.noiseFastSigned3D(x + 31.37D, y - 17.21D, z + 23.91D);
-            double warpedX = x + (warpA * localWarpStrength);
-            double warpedY = y + (warpB * localWarpStrength);
-            double warpedZ = z + ((warpA - warpB) * 0.5D * localWarpStrength);
-            double density = localBaseDensity.noiseFastSigned3D(warpedX, warpedY, warpedZ) * localBaseWeight;
-            if ((density + detailMin) > thresholdLimit) {
-                planeCarve[planeIndex] = false;
-                continue;
-            }
-            if ((density + detailMax) <= thresholdLimit) {
-                planeCarve[planeIndex] = true;
-                continue;
-            }
-
-            density += localDetailDensity.noiseFastSigned3D(warpedX, warpedY, warpedZ) * localDetailWeight;
-            planeCarve[planeIndex] = density <= thresholdLimit;
+            int x = x0 + PowerOfTwoCoordinates.unpackLocal16X(columnIndex);
+            int z = z0 + (columnIndex & 15);
+            planeCarve[planeIndex] = classifyDensityPointWarpOnly(x, y, z, planeThresholdLimit[planeIndex]);
         }
     }
 
     private void classifyDensityPlaneWarpModules(int x0, int z0, int y, int[] planeColumnIndices, double[] planeThresholdLimit, int planeCount, boolean[] planeCarve) {
-        CNG localBaseDensity = baseDensity;
-        CNG localDetailDensity = detailDensity;
-        CNG localWarpDensity = warpDensity;
         Scratch scratch = SCRATCH.get();
         int activeModuleCount = prepareActiveModules(scratch, y);
         if (activeModuleCount == 0) {
@@ -880,56 +1016,593 @@ public class IrisCaveCarver3D {
         ModuleState[] localModules = scratch.activeModules;
         double[] remainingMin = scratch.activeModuleRemainingMin;
         double[] remainingMax = scratch.activeModuleRemainingMax;
-        double localBaseWeight = baseWeight;
-        double localDetailWeight = detailWeight;
-        double localWarpStrength = warpStrength;
-        double detailMin = detailMinContribution;
-        double detailMax = detailMaxContribution;
 
         for (int planeIndex = 0; planeIndex < planeCount; planeIndex++) {
             int columnIndex = planeColumnIndices[planeIndex];
-            double x = x0 + PowerOfTwoCoordinates.unpackLocal16X(columnIndex);
-            double z = z0 + (columnIndex & 15);
-            double thresholdLimit = planeThresholdLimit[planeIndex];
-            double warpA = localWarpDensity.noiseFastSigned3D(x, y, z);
-            double warpB = localWarpDensity.noiseFastSigned3D(x + 31.37D, y - 17.21D, z + 23.91D);
-            double warpedX = x + (warpA * localWarpStrength);
-            double warpedY = y + (warpB * localWarpStrength);
-            double warpedZ = z + ((warpA - warpB) * 0.5D * localWarpStrength);
-            double density = localBaseDensity.noiseFastSigned3D(warpedX, warpedY, warpedZ) * localBaseWeight;
-            if ((density + detailMin + remainingMin[0]) > thresholdLimit) {
-                planeCarve[planeIndex] = false;
-                continue;
+            int x = x0 + PowerOfTwoCoordinates.unpackLocal16X(columnIndex);
+            int z = z0 + (columnIndex & 15);
+            planeCarve[planeIndex] = classifyDensityPointWarpModules(
+                    x,
+                    y,
+                    z,
+                    planeThresholdLimit[planeIndex],
+                    localModules,
+                    activeModuleCount,
+                    remainingMin,
+                    remainingMax
+            );
+        }
+    }
+
+    private void classifyDensityPlaneAdaptiveNoWarpNoModules(
+            int x0,
+            int z0,
+            int y,
+            int[] planeColumnIndices,
+            double[] planeThresholdLimit,
+            int planeCount,
+            boolean[] planeCarve,
+            int adaptiveSampleStep,
+            double adaptiveThresholdMargin
+    ) {
+        Scratch scratch = SCRATCH.get();
+        double[] adaptivePlaneDensity = scratch.adaptivePlaneDensity;
+        int axisCells = (16 + adaptiveSampleStep - 1) / adaptiveSampleStep;
+        int axisSamples = axisCells + 1;
+        for (int sampleXIndex = 0; sampleXIndex < axisSamples; sampleXIndex++) {
+            int sampleLocalX = Math.min(sampleXIndex * adaptiveSampleStep, 16);
+            int x = x0 + sampleLocalX;
+            int rowOffset = sampleXIndex * axisSamples;
+            for (int sampleZIndex = 0; sampleZIndex < axisSamples; sampleZIndex++) {
+                int sampleLocalZ = Math.min(sampleZIndex * adaptiveSampleStep, 16);
+                adaptivePlaneDensity[rowOffset + sampleZIndex] = sampleDensityNoWarpNoModules(x, y, z0 + sampleLocalZ);
             }
-            if ((density + detailMax + remainingMax[0]) <= thresholdLimit) {
+        }
+
+        classifyAdaptivePlaneColumnsNoWarpNoModules(
+                x0,
+                z0,
+                y,
+                planeColumnIndices,
+                planeThresholdLimit,
+                planeCount,
+                planeCarve,
+                adaptiveSampleStep,
+                adaptiveThresholdMargin,
+                adaptivePlaneDensity,
+                axisCells,
+                axisSamples
+        );
+    }
+
+    private void classifyDensityPlaneAdaptiveNoWarpModules(
+            int x0,
+            int z0,
+            int y,
+            int[] planeColumnIndices,
+            double[] planeThresholdLimit,
+            int planeCount,
+            boolean[] planeCarve,
+            int adaptiveSampleStep,
+            double adaptiveThresholdMargin
+    ) {
+        Scratch scratch = SCRATCH.get();
+        int activeModuleCount = prepareActiveModules(scratch, y);
+        if (activeModuleCount == 0) {
+            classifyDensityPlaneAdaptiveNoWarpNoModules(x0, z0, y, planeColumnIndices, planeThresholdLimit, planeCount, planeCarve, adaptiveSampleStep, adaptiveThresholdMargin);
+            return;
+        }
+
+        ModuleState[] localModules = scratch.activeModules;
+        double[] remainingMin = scratch.activeModuleRemainingMin;
+        double[] remainingMax = scratch.activeModuleRemainingMax;
+        double[] adaptivePlaneDensity = scratch.adaptivePlaneDensity;
+        int axisCells = (16 + adaptiveSampleStep - 1) / adaptiveSampleStep;
+        int axisSamples = axisCells + 1;
+        for (int sampleXIndex = 0; sampleXIndex < axisSamples; sampleXIndex++) {
+            int sampleLocalX = Math.min(sampleXIndex * adaptiveSampleStep, 16);
+            int x = x0 + sampleLocalX;
+            int rowOffset = sampleXIndex * axisSamples;
+            for (int sampleZIndex = 0; sampleZIndex < axisSamples; sampleZIndex++) {
+                int sampleLocalZ = Math.min(sampleZIndex * adaptiveSampleStep, 16);
+                adaptivePlaneDensity[rowOffset + sampleZIndex] = sampleDensityNoWarpNoModules(x, y, z0 + sampleLocalZ);
+            }
+        }
+
+        classifyAdaptivePlaneColumnsNoWarpModules(
+                x0,
+                z0,
+                y,
+                planeColumnIndices,
+                planeThresholdLimit,
+                planeCount,
+                planeCarve,
+                adaptiveSampleStep,
+                adaptiveThresholdMargin,
+                adaptivePlaneDensity,
+                axisCells,
+                axisSamples,
+                localModules,
+                activeModuleCount,
+                remainingMin,
+                remainingMax
+        );
+    }
+
+    private void classifyDensityPlaneAdaptiveWarpOnly(
+            int x0,
+            int z0,
+            int y,
+            int[] planeColumnIndices,
+            double[] planeThresholdLimit,
+            int planeCount,
+            boolean[] planeCarve,
+            int adaptiveSampleStep,
+            double adaptiveThresholdMargin
+    ) {
+        Scratch scratch = SCRATCH.get();
+        double[] adaptivePlaneDensity = scratch.adaptivePlaneDensity;
+        int axisCells = (16 + adaptiveSampleStep - 1) / adaptiveSampleStep;
+        int axisSamples = axisCells + 1;
+        for (int sampleXIndex = 0; sampleXIndex < axisSamples; sampleXIndex++) {
+            int sampleLocalX = Math.min(sampleXIndex * adaptiveSampleStep, 16);
+            int x = x0 + sampleLocalX;
+            int rowOffset = sampleXIndex * axisSamples;
+            for (int sampleZIndex = 0; sampleZIndex < axisSamples; sampleZIndex++) {
+                int sampleLocalZ = Math.min(sampleZIndex * adaptiveSampleStep, 16);
+                adaptivePlaneDensity[rowOffset + sampleZIndex] = sampleDensityWarpOnly(x, y, z0 + sampleLocalZ);
+            }
+        }
+
+        classifyAdaptivePlaneColumnsWarpOnly(
+                x0,
+                z0,
+                y,
+                planeColumnIndices,
+                planeThresholdLimit,
+                planeCount,
+                planeCarve,
+                adaptiveSampleStep,
+                adaptiveThresholdMargin,
+                adaptivePlaneDensity,
+                axisCells,
+                axisSamples
+        );
+    }
+
+    private void classifyDensityPlaneAdaptiveWarpModules(
+            int x0,
+            int z0,
+            int y,
+            int[] planeColumnIndices,
+            double[] planeThresholdLimit,
+            int planeCount,
+            boolean[] planeCarve,
+            int adaptiveSampleStep,
+            double adaptiveThresholdMargin
+    ) {
+        Scratch scratch = SCRATCH.get();
+        int activeModuleCount = prepareActiveModules(scratch, y);
+        if (activeModuleCount == 0) {
+            classifyDensityPlaneAdaptiveWarpOnly(x0, z0, y, planeColumnIndices, planeThresholdLimit, planeCount, planeCarve, adaptiveSampleStep, adaptiveThresholdMargin);
+            return;
+        }
+
+        ModuleState[] localModules = scratch.activeModules;
+        double[] remainingMin = scratch.activeModuleRemainingMin;
+        double[] remainingMax = scratch.activeModuleRemainingMax;
+        double[] adaptivePlaneDensity = scratch.adaptivePlaneDensity;
+        int axisCells = (16 + adaptiveSampleStep - 1) / adaptiveSampleStep;
+        int axisSamples = axisCells + 1;
+        for (int sampleXIndex = 0; sampleXIndex < axisSamples; sampleXIndex++) {
+            int sampleLocalX = Math.min(sampleXIndex * adaptiveSampleStep, 16);
+            int x = x0 + sampleLocalX;
+            int rowOffset = sampleXIndex * axisSamples;
+            for (int sampleZIndex = 0; sampleZIndex < axisSamples; sampleZIndex++) {
+                int sampleLocalZ = Math.min(sampleZIndex * adaptiveSampleStep, 16);
+                adaptivePlaneDensity[rowOffset + sampleZIndex] = sampleDensityWarpOnly(x, y, z0 + sampleLocalZ);
+            }
+        }
+
+        classifyAdaptivePlaneColumnsWarpModules(
+                x0,
+                z0,
+                y,
+                planeColumnIndices,
+                planeThresholdLimit,
+                planeCount,
+                planeCarve,
+                adaptiveSampleStep,
+                adaptiveThresholdMargin,
+                adaptivePlaneDensity,
+                axisCells,
+                axisSamples,
+                localModules,
+                activeModuleCount,
+                remainingMin,
+                remainingMax
+        );
+    }
+
+    private void classifyAdaptivePlaneColumnsNoWarpNoModules(
+            int x0,
+            int z0,
+            int y,
+            int[] planeColumnIndices,
+            double[] planeThresholdLimit,
+            int planeCount,
+            boolean[] planeCarve,
+            int adaptiveSampleStep,
+            double adaptiveThresholdMargin,
+            double[] adaptivePlaneDensity,
+            int axisCells,
+            int axisSamples
+    ) {
+        Scratch scratch = SCRATCH.get();
+        double[] adaptivePlanePrediction = scratch.adaptivePlanePrediction;
+        double[] adaptivePlaneAmbiguity = scratch.adaptivePlaneAmbiguity;
+        prepareAdaptivePlaneColumns(
+                planeColumnIndices,
+                planeCount,
+                adaptiveSampleStep,
+                adaptiveThresholdMargin,
+                adaptivePlaneDensity,
+                axisCells,
+                axisSamples,
+                adaptivePlanePrediction,
+                adaptivePlaneAmbiguity
+        );
+        for (int planeIndex = 0; planeIndex < planeCount; planeIndex++) {
+            int columnIndex = planeColumnIndices[planeIndex];
+            int localX = PowerOfTwoCoordinates.unpackLocal16X(columnIndex);
+            int localZ = columnIndex & 15;
+            double threshold = planeThresholdLimit[planeIndex] * inverseNormalization;
+            double predictedDensity = adaptivePlanePrediction[planeIndex];
+            double ambiguityMargin = adaptivePlaneAmbiguity[planeIndex];
+            if (predictedDensity <= threshold - ambiguityMargin) {
                 planeCarve[planeIndex] = true;
                 continue;
             }
-
-            density += localDetailDensity.noiseFastSigned3D(warpedX, warpedY, warpedZ) * localDetailWeight;
-            if ((density + remainingMin[0]) > thresholdLimit) {
+            if (predictedDensity > threshold + ambiguityMargin) {
                 planeCarve[planeIndex] = false;
                 continue;
             }
-            if ((density + remainingMax[0]) <= thresholdLimit) {
+
+            planeCarve[planeIndex] = classifyDensityPointNoWarpNoModules(x0 + localX, y, z0 + localZ, planeThresholdLimit[planeIndex]);
+        }
+    }
+
+    private void classifyAdaptivePlaneColumnsNoWarpModules(
+            int x0,
+            int z0,
+            int y,
+            int[] planeColumnIndices,
+            double[] planeThresholdLimit,
+            int planeCount,
+            boolean[] planeCarve,
+            int adaptiveSampleStep,
+            double adaptiveThresholdMargin,
+            double[] adaptivePlaneDensity,
+            int axisCells,
+            int axisSamples,
+            ModuleState[] localModules,
+            int activeModuleCount,
+            double[] remainingMin,
+            double[] remainingMax
+    ) {
+        Scratch scratch = SCRATCH.get();
+        double[] adaptivePlanePrediction = scratch.adaptivePlanePrediction;
+        double[] adaptivePlaneAmbiguity = scratch.adaptivePlaneAmbiguity;
+        prepareAdaptivePlaneColumns(
+                planeColumnIndices,
+                planeCount,
+                adaptiveSampleStep,
+                adaptiveThresholdMargin,
+                adaptivePlaneDensity,
+                axisCells,
+                axisSamples,
+                adaptivePlanePrediction,
+                adaptivePlaneAmbiguity
+        );
+        double minRemaining = remainingMin[0] * inverseNormalization;
+        double maxRemaining = remainingMax[0] * inverseNormalization;
+        for (int planeIndex = 0; planeIndex < planeCount; planeIndex++) {
+            int columnIndex = planeColumnIndices[planeIndex];
+            int localX = PowerOfTwoCoordinates.unpackLocal16X(columnIndex);
+            int localZ = columnIndex & 15;
+            double threshold = planeThresholdLimit[planeIndex] * inverseNormalization;
+            double predictedDensity = adaptivePlanePrediction[planeIndex];
+            double ambiguityMargin = adaptivePlaneAmbiguity[planeIndex];
+            if ((predictedDensity + maxRemaining) <= threshold - ambiguityMargin) {
                 planeCarve[planeIndex] = true;
                 continue;
             }
-
-            for (int moduleIndex = 0; moduleIndex < activeModuleCount; moduleIndex++) {
-                ModuleState module = localModules[moduleIndex];
-                density += module.sample(warpedX, warpedY, warpedZ);
-                if ((density + remainingMin[moduleIndex + 1]) > thresholdLimit) {
-                    density = Double.POSITIVE_INFINITY;
-                    break;
-                }
-                if ((density + remainingMax[moduleIndex + 1]) <= thresholdLimit) {
-                    density = Double.NEGATIVE_INFINITY;
-                    break;
-                }
+            if ((predictedDensity + minRemaining) > threshold + ambiguityMargin) {
+                planeCarve[planeIndex] = false;
+                continue;
             }
 
-            planeCarve[planeIndex] = density <= thresholdLimit;
+            planeCarve[planeIndex] = classifyDensityPointNoWarpModules(
+                    x0 + localX,
+                    y,
+                    z0 + localZ,
+                    planeThresholdLimit[planeIndex],
+                    localModules,
+                    activeModuleCount,
+                    remainingMin,
+                    remainingMax
+            );
+        }
+    }
+
+    private void classifyAdaptivePlaneColumnsWarpOnly(
+            int x0,
+            int z0,
+            int y,
+            int[] planeColumnIndices,
+            double[] planeThresholdLimit,
+            int planeCount,
+            boolean[] planeCarve,
+            int adaptiveSampleStep,
+            double adaptiveThresholdMargin,
+            double[] adaptivePlaneDensity,
+            int axisCells,
+            int axisSamples
+    ) {
+        Scratch scratch = SCRATCH.get();
+        double[] adaptivePlanePrediction = scratch.adaptivePlanePrediction;
+        double[] adaptivePlaneAmbiguity = scratch.adaptivePlaneAmbiguity;
+        prepareAdaptivePlaneColumns(
+                planeColumnIndices,
+                planeCount,
+                adaptiveSampleStep,
+                adaptiveThresholdMargin,
+                adaptivePlaneDensity,
+                axisCells,
+                axisSamples,
+                adaptivePlanePrediction,
+                adaptivePlaneAmbiguity
+        );
+        for (int planeIndex = 0; planeIndex < planeCount; planeIndex++) {
+            int columnIndex = planeColumnIndices[planeIndex];
+            int localX = PowerOfTwoCoordinates.unpackLocal16X(columnIndex);
+            int localZ = columnIndex & 15;
+            double threshold = planeThresholdLimit[planeIndex] * inverseNormalization;
+            double predictedDensity = adaptivePlanePrediction[planeIndex];
+            double ambiguityMargin = adaptivePlaneAmbiguity[planeIndex];
+            if (predictedDensity <= threshold - ambiguityMargin) {
+                planeCarve[planeIndex] = true;
+                continue;
+            }
+            if (predictedDensity > threshold + ambiguityMargin) {
+                planeCarve[planeIndex] = false;
+                continue;
+            }
+
+            planeCarve[planeIndex] = classifyDensityPointWarpOnly(x0 + localX, y, z0 + localZ, planeThresholdLimit[planeIndex]);
+        }
+    }
+
+    private void classifyAdaptivePlaneColumnsWarpModules(
+            int x0,
+            int z0,
+            int y,
+            int[] planeColumnIndices,
+            double[] planeThresholdLimit,
+            int planeCount,
+            boolean[] planeCarve,
+            int adaptiveSampleStep,
+            double adaptiveThresholdMargin,
+            double[] adaptivePlaneDensity,
+            int axisCells,
+            int axisSamples,
+            ModuleState[] localModules,
+            int activeModuleCount,
+            double[] remainingMin,
+            double[] remainingMax
+    ) {
+        Scratch scratch = SCRATCH.get();
+        double[] adaptivePlanePrediction = scratch.adaptivePlanePrediction;
+        double[] adaptivePlaneAmbiguity = scratch.adaptivePlaneAmbiguity;
+        prepareAdaptivePlaneColumns(
+                planeColumnIndices,
+                planeCount,
+                adaptiveSampleStep,
+                adaptiveThresholdMargin,
+                adaptivePlaneDensity,
+                axisCells,
+                axisSamples,
+                adaptivePlanePrediction,
+                adaptivePlaneAmbiguity
+        );
+        double minRemaining = remainingMin[0] * inverseNormalization;
+        double maxRemaining = remainingMax[0] * inverseNormalization;
+        for (int planeIndex = 0; planeIndex < planeCount; planeIndex++) {
+            int columnIndex = planeColumnIndices[planeIndex];
+            int localX = PowerOfTwoCoordinates.unpackLocal16X(columnIndex);
+            int localZ = columnIndex & 15;
+            double threshold = planeThresholdLimit[planeIndex] * inverseNormalization;
+            double predictedDensity = adaptivePlanePrediction[planeIndex];
+            double ambiguityMargin = adaptivePlaneAmbiguity[planeIndex];
+            if ((predictedDensity + maxRemaining) <= threshold - ambiguityMargin) {
+                planeCarve[planeIndex] = true;
+                continue;
+            }
+            if ((predictedDensity + minRemaining) > threshold + ambiguityMargin) {
+                planeCarve[planeIndex] = false;
+                continue;
+            }
+
+            planeCarve[planeIndex] = classifyDensityPointWarpModules(
+                    x0 + localX,
+                    y,
+                    z0 + localZ,
+                    planeThresholdLimit[planeIndex],
+                    localModules,
+                    activeModuleCount,
+                    remainingMin,
+                    remainingMax
+            );
+        }
+    }
+
+    private boolean classifyDensityPointNoWarpNoModules(int x, int y, int z, double thresholdLimit) {
+        double density = baseDensity.noiseFastSigned3D(x, y, z) * baseWeight;
+        if ((density + detailMinContribution) > thresholdLimit) {
+            return false;
+        }
+        if ((density + detailMaxContribution) <= thresholdLimit) {
+            return true;
+        }
+
+        density += detailDensity.noiseFastSigned3D(x, y, z) * detailWeight;
+        return density <= thresholdLimit;
+    }
+
+    private boolean classifyDensityPointNoWarpModules(
+            int x,
+            int y,
+            int z,
+            double thresholdLimit,
+            ModuleState[] localModules,
+            int activeModuleCount,
+            double[] remainingMin,
+            double[] remainingMax
+    ) {
+        if (activeModuleCount == 0) {
+            return classifyDensityPointNoWarpNoModules(x, y, z, thresholdLimit);
+        }
+
+        double density = baseDensity.noiseFastSigned3D(x, y, z) * baseWeight;
+        if ((density + detailMinContribution + remainingMin[0]) > thresholdLimit) {
+            return false;
+        }
+        if ((density + detailMaxContribution + remainingMax[0]) <= thresholdLimit) {
+            return true;
+        }
+
+        density += detailDensity.noiseFastSigned3D(x, y, z) * detailWeight;
+        if ((density + remainingMin[0]) > thresholdLimit) {
+            return false;
+        }
+        if ((density + remainingMax[0]) <= thresholdLimit) {
+            return true;
+        }
+
+        for (int moduleIndex = 0; moduleIndex < activeModuleCount; moduleIndex++) {
+            density += localModules[moduleIndex].sample(x, y, z);
+            if ((density + remainingMin[moduleIndex + 1]) > thresholdLimit) {
+                return false;
+            }
+            if ((density + remainingMax[moduleIndex + 1]) <= thresholdLimit) {
+                return true;
+            }
+        }
+
+        return density <= thresholdLimit;
+    }
+
+    private boolean classifyDensityPointWarpOnly(int x, int y, int z, double thresholdLimit) {
+        double warpA = warpDensity.noiseFastSigned3D(x, y, z);
+        double warpB = warpDensity.noiseFastSigned3D(x + 31.37D, y - 17.21D, z + 23.91D);
+        double warpedX = x + (warpA * warpStrength);
+        double warpedY = y + (warpB * warpStrength);
+        double warpedZ = z + ((warpA - warpB) * 0.5D * warpStrength);
+        double density = baseDensity.noiseFastSigned3D(warpedX, warpedY, warpedZ) * baseWeight;
+        if ((density + detailMinContribution) > thresholdLimit) {
+            return false;
+        }
+        if ((density + detailMaxContribution) <= thresholdLimit) {
+            return true;
+        }
+
+        density += detailDensity.noiseFastSigned3D(warpedX, warpedY, warpedZ) * detailWeight;
+        return density <= thresholdLimit;
+    }
+
+    private boolean classifyDensityPointWarpModules(
+            int x,
+            int y,
+            int z,
+            double thresholdLimit,
+            ModuleState[] localModules,
+            int activeModuleCount,
+            double[] remainingMin,
+            double[] remainingMax
+    ) {
+        if (activeModuleCount == 0) {
+            return classifyDensityPointWarpOnly(x, y, z, thresholdLimit);
+        }
+
+        double warpA = warpDensity.noiseFastSigned3D(x, y, z);
+        double warpB = warpDensity.noiseFastSigned3D(x + 31.37D, y - 17.21D, z + 23.91D);
+        double warpedX = x + (warpA * warpStrength);
+        double warpedY = y + (warpB * warpStrength);
+        double warpedZ = z + ((warpA - warpB) * 0.5D * warpStrength);
+        double density = baseDensity.noiseFastSigned3D(warpedX, warpedY, warpedZ) * baseWeight;
+        if ((density + detailMinContribution + remainingMin[0]) > thresholdLimit) {
+            return false;
+        }
+        if ((density + detailMaxContribution + remainingMax[0]) <= thresholdLimit) {
+            return true;
+        }
+
+        density += detailDensity.noiseFastSigned3D(warpedX, warpedY, warpedZ) * detailWeight;
+        if ((density + remainingMin[0]) > thresholdLimit) {
+            return false;
+        }
+        if ((density + remainingMax[0]) <= thresholdLimit) {
+            return true;
+        }
+
+        for (int moduleIndex = 0; moduleIndex < activeModuleCount; moduleIndex++) {
+            density += localModules[moduleIndex].sample(warpedX, warpedY, warpedZ);
+            if ((density + remainingMin[moduleIndex + 1]) > thresholdLimit) {
+                return false;
+            }
+            if ((density + remainingMax[moduleIndex + 1]) <= thresholdLimit) {
+                return true;
+            }
+        }
+
+        return density <= thresholdLimit;
+    }
+
+    private void prepareAdaptivePlaneColumns(
+            int[] planeColumnIndices,
+            int planeCount,
+            int adaptiveSampleStep,
+            double adaptiveThresholdMargin,
+            double[] adaptivePlaneDensity,
+            int axisCells,
+            int axisSamples,
+            double[] adaptivePlanePrediction,
+            double[] adaptivePlaneAmbiguity
+    ) {
+        for (int planeIndex = 0; planeIndex < planeCount; planeIndex++) {
+            int columnIndex = planeColumnIndices[planeIndex];
+            int localX = PowerOfTwoCoordinates.unpackLocal16X(columnIndex);
+            int localZ = columnIndex & 15;
+            int cellX = Math.min(localX / adaptiveSampleStep, axisCells - 1);
+            int cellZ = Math.min(localZ / adaptiveSampleStep, axisCells - 1);
+            int x0 = cellX * adaptiveSampleStep;
+            int z0 = cellZ * adaptiveSampleStep;
+            int x1 = Math.min(x0 + adaptiveSampleStep, 16);
+            int z1 = Math.min(z0 + adaptiveSampleStep, 16);
+            double tx = x1 == x0 ? 0D : (localX - x0) / (double) (x1 - x0);
+            double tz = z1 == z0 ? 0D : (localZ - z0) / (double) (z1 - z0);
+            int row0 = cellX * axisSamples;
+            int row1 = (cellX + 1) * axisSamples;
+            double d00 = adaptivePlaneDensity[row0 + cellZ];
+            double d01 = adaptivePlaneDensity[row0 + cellZ + 1];
+            double d10 = adaptivePlaneDensity[row1 + cellZ];
+            double d11 = adaptivePlaneDensity[row1 + cellZ + 1];
+            double dx0 = d00 + ((d10 - d00) * tx);
+            double dx1 = d01 + ((d11 - d01) * tx);
+            adaptivePlanePrediction[planeIndex] = dx0 + ((dx1 - dx0) * tz);
+            double minDensity = Math.min(Math.min(d00, d01), Math.min(d10, d11));
+            double maxDensity = Math.max(Math.max(d00, d01), Math.max(d10, d11));
+            adaptivePlaneAmbiguity[planeIndex] = adaptiveThresholdMargin + ((maxDensity - minDensity) * ADAPTIVE_LOCAL_RANGE_SCALE);
         }
     }
 
@@ -1206,6 +1879,9 @@ public class IrisCaveCarver3D {
         private final int[] planeColumnIndices = new int[256];
         private final double[] planeThresholdLimit = new double[256];
         private final boolean[] planeCarve = new boolean[256];
+        private final double[] adaptivePlaneDensity = new double[81];
+        private final double[] adaptivePlanePrediction = new double[256];
+        private final double[] adaptivePlaneAmbiguity = new double[256];
         private final int[] tileIndices = new int[4];
         private final int[] tileLocalX = new int[4];
         private final int[] tileLocalZ = new int[4];

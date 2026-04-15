@@ -130,12 +130,12 @@ public class IrisCaveCarver3DNearParityTest {
 
     @Test
     public void exactPathMatchesNaiveReferenceWithoutWarpOrModules() throws Exception {
-        assertExactParity(false, false);
+        assertExactParity(false, false, false);
     }
 
     @Test
     public void exactPathMatchesNaiveReferenceWithWarpAndModules() throws Exception {
-        assertExactParity(true, true);
+        assertExactParity(true, true, false);
     }
 
     @Test
@@ -145,12 +145,12 @@ public class IrisCaveCarver3DNearParityTest {
         int[] precomputedSurfaceHeights = filledHeights(90);
         IrisRange worldYRange = new IrisRange(0D, 88D);
 
-        IrisCaveProfile exactProfile = createProfile(true, true).setSampleStep(1);
+        IrisCaveProfile exactProfile = createProfile(true, true).setSampleStep(1).setAdaptiveSampling(false);
         IrisCaveCarver3D exactCarver = new IrisCaveCarver3D(engine, exactProfile);
         WriterCapture exactCapture = createWriterCapture(96);
         int exactCarved = exactCarver.carve(exactCapture.writer, 5, -1, columnWeights, 0D, 0D, worldYRange, precomputedSurfaceHeights);
 
-        IrisCaveProfile legacyProfile = createProfile(true, true).setSampleStep(2);
+        IrisCaveProfile legacyProfile = createProfile(true, true).setSampleStep(2).setAdaptiveSampling(false);
         IrisCaveCarver3D legacyCarver = new IrisCaveCarver3D(engine, legacyProfile);
         WriterCapture legacyCapture = createWriterCapture(96);
         int legacyCarved = legacyCarver.carve(legacyCapture.writer, 5, -1, columnWeights, 0D, 0D, worldYRange, precomputedSurfaceHeights);
@@ -185,8 +185,8 @@ public class IrisCaveCarver3DNearParityTest {
     @Test
     public void optimizedExactPathOutperformsNaiveReference() throws Exception {
         Engine engine = createEngine(128, 92);
-        IrisCaveCarver3D optimizedCarver = new IrisCaveCarver3D(engine, createProfile(true, true));
-        IrisCaveCarver3D naiveCarver = new IrisCaveCarver3D(engine, createProfile(true, true));
+        IrisCaveCarver3D optimizedCarver = new IrisCaveCarver3D(engine, createProfile(true, true).setAdaptiveSampling(false));
+        IrisCaveCarver3D naiveCarver = new IrisCaveCarver3D(engine, createProfile(true, true).setAdaptiveSampling(false));
         double[] columnWeights = fullWeights();
         int[] precomputedSurfaceHeights = filledHeights(92);
         IrisRange worldYRange = new IrisRange(0D, 96D);
@@ -213,17 +213,45 @@ public class IrisCaveCarver3DNearParityTest {
         assertTrue("expected at least 2.0x speedup but was " + speedup, speedup >= 2D);
     }
 
-    private void assertExactParity(boolean warp, boolean modules) throws Exception {
+    @Test
+    public void adaptivePathStaysNearExactReferenceWithWarpAndModules() throws Exception {
         Engine engine = createEngine(96, 90);
         double[] columnWeights = fullWeights();
         int[] precomputedSurfaceHeights = filledHeights(90);
         IrisRange worldYRange = new IrisRange(0D, 88D);
 
-        IrisCaveCarver3D optimizedCarver = new IrisCaveCarver3D(engine, createProfile(warp, modules));
+        IrisCaveCarver3D adaptiveCarver = new IrisCaveCarver3D(engine, createProfile(true, true).setAdaptiveSampling(true));
+        WriterCapture adaptiveCapture = createWriterCapture(96);
+        int adaptiveCarved = adaptiveCarver.carve(adaptiveCapture.writer, 5, -1, columnWeights, 0D, 0D, worldYRange, precomputedSurfaceHeights);
+
+        IrisCaveCarver3D exactCarver = new IrisCaveCarver3D(engine, createProfile(true, true).setAdaptiveSampling(false));
+        WriterCapture exactCapture = createWriterCapture(96);
+        int exactCarved = exactCarver.carve(exactCapture.writer, 5, -1, columnWeights, 0D, 0D, worldYRange, precomputedSurfaceHeights);
+
+        Set<String> differingCells = new HashSet<>(adaptiveCapture.carvedCells);
+        differingCells.addAll(exactCapture.carvedCells);
+        Set<String> sharedCells = new HashSet<>(adaptiveCapture.carvedCells);
+        sharedCells.retainAll(exactCapture.carvedCells);
+        differingCells.removeAll(sharedCells);
+
+        int baselineCells = Math.max(1, exactCapture.carvedCells.size());
+        double carveDeltaRatio = Math.abs(adaptiveCarved - exactCarved) / (double) baselineCells;
+        double differingRatio = differingCells.size() / (double) baselineCells;
+        assertTrue("expected carve count delta below 2.5% but was " + carveDeltaRatio, carveDeltaRatio <= 0.025D);
+        assertTrue("expected carved cell delta below 3.5% but was " + differingRatio, differingRatio <= 0.035D);
+    }
+
+    private void assertExactParity(boolean warp, boolean modules, boolean adaptiveSampling) throws Exception {
+        Engine engine = createEngine(96, 90);
+        double[] columnWeights = fullWeights();
+        int[] precomputedSurfaceHeights = filledHeights(90);
+        IrisRange worldYRange = new IrisRange(0D, 88D);
+
+        IrisCaveCarver3D optimizedCarver = new IrisCaveCarver3D(engine, createProfile(warp, modules).setAdaptiveSampling(adaptiveSampling));
         WriterCapture optimizedCapture = createWriterCapture(96);
         int optimizedCarved = optimizedCarver.carve(optimizedCapture.writer, 5, -1, columnWeights, 0D, 0D, worldYRange, precomputedSurfaceHeights);
 
-        IrisCaveCarver3D naiveCarver = new IrisCaveCarver3D(engine, createProfile(warp, modules));
+        IrisCaveCarver3D naiveCarver = new IrisCaveCarver3D(engine, createProfile(warp, modules).setAdaptiveSampling(false));
         WriterCapture naiveCapture = createWriterCapture(96);
         int naiveCarved = carveNaiveExact(naiveCarver, naiveCapture.writer, 5, -1, columnWeights, worldYRange, precomputedSurfaceHeights);
 
