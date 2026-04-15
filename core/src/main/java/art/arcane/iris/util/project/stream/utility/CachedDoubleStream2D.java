@@ -9,7 +9,7 @@ import art.arcane.iris.util.project.stream.ProceduralStream;
 import art.arcane.volmlib.util.cache.WorldCache2DDouble;
 import art.arcane.volmlib.util.data.KCache;
 
-public class CachedDoubleStream2D extends BasicStream<Double> implements ProceduralStream<Double>, MeteredCache, ChunkFillableStream2D {
+public class CachedDoubleStream2D extends BasicStream<Double> implements ProceduralStream<Double>, MeteredCache, ChunkFillableStream2D, ChunkFillableDoubleStream2D {
     private final ProceduralStream<Double> stream;
     private final WorldCache2DDouble cache;
     private final Engine engine;
@@ -69,6 +69,13 @@ public class CachedDoubleStream2D extends BasicStream<Double> implements Procedu
 
     @Override
     public void fillChunkRaw(int worldX, int worldZ, Object[] target) {
+        int chunkX = worldX >> 4;
+        int chunkZ = worldZ >> 4;
+        cache.fillChunk(chunkX, chunkZ, target);
+    }
+
+    @Override
+    public void fillChunkDoubles(int worldX, int worldZ, double[] target) {
         int chunkX = worldX >> 4;
         int chunkZ = worldZ >> 4;
         cache.fillChunk(chunkX, chunkZ, target);

@@ -19,6 +19,7 @@
 package art.arcane.iris.engine.framework;
 
 import art.arcane.iris.core.tools.IrisToolbelt;
+import art.arcane.iris.core.gui.PregeneratorJob;
 import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.mantle.EngineMantle;
 import art.arcane.iris.util.project.context.ChunkContext;
@@ -75,7 +76,7 @@ public interface EngineMode extends Staged {
         boolean cacheContext = true;
         if (J.isFolia()) {
             org.bukkit.World world = getEngine().getWorld().realWorld();
-            if (world != null && IrisToolbelt.isWorldMaintenanceActive(world)) {
+            if (world != null && shouldDisableContextCacheForMaintenance(world)) {
                 cacheContext = false;
             }
         }
@@ -87,5 +88,20 @@ public interface EngineMode extends Staged {
         for (EngineStage i : stages) {
             i.generate(x, z, blocks, biomes, multicore, ctx);
         }
+    }
+
+    static boolean shouldDisableContextCacheForMaintenance(boolean maintenanceActive, boolean pregeneratorTargetsWorld) {
+        return maintenanceActive && !pregeneratorTargetsWorld;
+    }
+
+    private boolean shouldDisableContextCacheForMaintenance(org.bukkit.World world) {
+        boolean maintenanceActive = IrisToolbelt.isWorldMaintenanceActive(world);
+        if (!maintenanceActive) {
+            return false;
+        }
+
+        PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
+        boolean pregeneratorTargetsWorld = pregeneratorJob != null && pregeneratorJob.targetsWorld(world);
+        return shouldDisableContextCacheForMaintenance(maintenanceActive, pregeneratorTargetsWorld);
     }
 }

@@ -31,11 +31,12 @@ import art.arcane.iris.engine.object.IrisDimensionCarvingResolver;
 import art.arcane.iris.engine.object.IrisRegion;
 import art.arcane.iris.engine.object.IrisRange;
 import art.arcane.iris.util.project.context.ChunkContext;
+import art.arcane.iris.util.project.stream.ProceduralStream;
+import art.arcane.iris.util.project.stream.utility.ChunkFillableDoubleStream2D;
 import art.arcane.volmlib.util.documentation.ChunkCoordinates;
 import art.arcane.volmlib.util.mantle.flag.ReservedFlag;
 import art.arcane.volmlib.util.math.PowerOfTwoCoordinates;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -82,11 +83,10 @@ public class MantleCarvingComponent extends IrisMantleComponent {
     public void generateLayer(MantleWriter writer, int x, int z, ChunkContext context) {
         IrisComplex complex = context.getComplex();
         IrisDimensionCarvingResolver.State resolverState = new IrisDimensionCarvingResolver.State();
-        Long2ObjectOpenHashMap<IrisBiome> caveBiomeCache = new Long2ObjectOpenHashMap<>(FIELD_SIZE * FIELD_SIZE);
         BlendScratch blendScratch = BLEND_SCRATCH.get();
         int[] chunkSurfaceHeights = prepareChunkSurfaceHeights(x, z, context, blendScratch.chunkSurfaceHeights);
         PrecisionStopwatch resolveStopwatch = PrecisionStopwatch.start();
-        List<WeightedProfile> weightedProfiles = resolveWeightedProfiles(x, z, complex, resolverState, caveBiomeCache);
+        List<WeightedProfile> weightedProfiles = resolveWeightedProfiles(x, z, complex, resolverState);
         getEngineMantle().getEngine().getMetrics().getCarveResolve().put(resolveStopwatch.getMilliseconds());
         for (WeightedProfile weightedProfile : weightedProfiles) {
             carveProfile(weightedProfile, writer, x, z, chunkSurfaceHeights);
@@ -99,7 +99,7 @@ public class MantleCarvingComponent extends IrisMantleComponent {
         carver.carve(writer, cx, cz, weightedProfile.columnWeights, MIN_WEIGHT, THRESHOLD_PENALTY, weightedProfile.worldYRange, chunkSurfaceHeights);
     }
 
-    private List<WeightedProfile> resolveWeightedProfiles(int chunkX, int chunkZ, IrisComplex complex, IrisDimensionCarvingResolver.State resolverState, Long2ObjectOpenHashMap<IrisBiome> caveBiomeCache) {
+    private List<WeightedProfile> resolveWeightedProfiles(int chunkX, int chunkZ, IrisComplex complex, IrisDimensionCarvingResolver.State resolverState) {
         BlendScratch blendScratch = BLEND_SCRATCH.get();
         IrisCaveProfile[] profileField = blendScratch.profileField;
         Map<IrisCaveProfile, double[]> columnProfileWeights = blendScratch.columnProfileWeights;
@@ -107,7 +107,7 @@ public class MantleCarvingComponent extends IrisMantleComponent {
         IrisCaveProfile[] kernelProfiles = blendScratch.kernelProfiles;
         double[] kernelProfileWeights = blendScratch.kernelProfileWeights;
         activeProfiles.clear();
-        fillProfileField(profileField, chunkX, chunkZ, complex, resolverState, caveBiomeCache);
+        fillProfileField(profileField, chunkX, chunkZ, complex, resolverState, blendScratch);
 
         for (int localX = 0; localX < CHUNK_SIZE; localX++) {
             for (int localZ = 0; localZ < CHUNK_SIZE; localZ++) {
@@ -268,15 +268,25 @@ public class MantleCarvingComponent extends IrisMantleComponent {
         }
     }
 
-    private void fillProfileField(IrisCaveProfile[] profileField, int chunkX, int chunkZ, IrisComplex complex, IrisDimensionCarvingResolver.State resolverState, Long2ObjectOpenHashMap<IrisBiome> caveBiomeCache) {
+    private void fillProfileField(IrisCaveProfile[] profileField, int chunkX, int chunkZ, IrisComplex complex, IrisDimensionCarvingResolver.State resolverState, BlendScratch blendScratch) {
         int startX = PowerOfTwoCoordinates.chunkToBlock(chunkX) - BLEND_RADIUS;
         int startZ = PowerOfTwoCoordinates.chunkToBlock(chunkZ) - BLEND_RADIUS;
+        prefillProfileFieldSamples(startX, startZ, complex, blendScratch);
 
         for (int fieldX = 0; fieldX < FIELD_SIZE; fieldX++) {
             int worldX = startX + fieldX;
             for (int fieldZ = 0; fieldZ < FIELD_SIZE; fieldZ++) {
                 int worldZ = startZ + fieldZ;
-                profileField[(fieldX * FIELD_SIZE) + fieldZ] = resolveColumnProfile(worldX, worldZ, complex, resolverState, caveBiomeCache);
+                int fieldIndex = (fieldX * FIELD_SIZE) + fieldZ;
+                profileField[fieldIndex] = resolveColumnProfile(
+                        worldX,
+                        worldZ,
+                        blendScratch.fieldSurfaceHeights[fieldIndex],
+                        blendScratch.fieldRegions[fieldIndex],
+                        blendScratch.fieldSurfaceBiomes[fieldIndex],
+                        blendScratch.fieldCaveBiomes[fieldIndex],
+                        resolverState
+                );
             }
         }
     }
@@ -291,14 +301,21 @@ public class MantleCarvingComponent extends IrisMantleComponent {
         return -1;
     }
 
-    private IrisCaveProfile resolveColumnProfile(int worldX, int worldZ, IrisComplex complex, IrisDimensionCarvingResolver.State resolverState, Long2ObjectOpenHashMap<IrisBiome> caveBiomeCache) {
+    private IrisCaveProfile resolveColumnProfile(
+            int worldX,
+            int worldZ,
+            double surfaceHeight,
+            IrisRegion region,
+            IrisBiome surfaceBiome,
+            IrisBiome caveBiome,
+            IrisDimensionCarvingResolver.State resolverState
+    ) {
         IrisCaveProfile resolved = null;
         IrisCaveProfile dimensionProfile = getDimension().getCaveProfile();
         if (isProfileEnabled(dimensionProfile)) {
             resolved = dimensionProfile;
         }
 
-        IrisRegion region = complex.getRegionStream().get(worldX, worldZ);
         if (region != null) {
             IrisCaveProfile regionProfile = region.getCaveProfile();
             if (isProfileEnabled(regionProfile)) {
@@ -306,7 +323,6 @@ public class MantleCarvingComponent extends IrisMantleComponent {
             }
         }
 
-        IrisBiome surfaceBiome = complex.getTrueBiomeStream().get(worldX, worldZ);
         if (surfaceBiome != null) {
             IrisCaveProfile surfaceProfile = surfaceBiome.getCaveProfile();
             if (isProfileEnabled(surfaceProfile)) {
@@ -314,24 +330,67 @@ public class MantleCarvingComponent extends IrisMantleComponent {
             }
         }
 
-        int surfaceY = getEngineMantle().getEngine().getHeight(worldX, worldZ, true);
-        int sampleY = Math.max(1, surfaceY - 56);
-        long cacheKey = Cache.key(worldX, worldZ);
-        IrisBiome caveBiome = caveBiomeCache.get(cacheKey);
-        if (caveBiome == null) {
-            caveBiome = getEngineMantle().getEngine().getCaveBiome(worldX, sampleY, worldZ, resolverState);
-            if (caveBiome != null) {
-                caveBiomeCache.put(cacheKey, caveBiome);
+        int roundedSurfaceY = (int) Math.round(surfaceHeight);
+        int sampleY = Math.max(1, roundedSurfaceY - 56);
+        int worldY = sampleY + getEngineMantle().getEngine().getWorld().minHeight();
+        IrisDimensionCarvingEntry rootCarvingEntry = IrisDimensionCarvingResolver.resolveRootEntry(getEngineMantle().getEngine(), worldY, resolverState);
+        IrisBiome resolvedCarvingBiome = null;
+        if (rootCarvingEntry != null) {
+            IrisDimensionCarvingEntry resolvedCarvingEntry = IrisDimensionCarvingResolver.resolveFromRoot(getEngineMantle().getEngine(), rootCarvingEntry, worldX, worldZ, resolverState);
+            resolvedCarvingBiome = IrisDimensionCarvingResolver.resolveEntryBiome(getEngineMantle().getEngine(), resolvedCarvingEntry, resolverState);
+            if (resolvedCarvingBiome != null) {
+                caveBiome = resolvedCarvingBiome;
             }
         }
         if (caveBiome != null) {
-            IrisCaveProfile caveProfile = caveBiome.getCaveProfile();
+            IrisBiome effectiveCaveBiome = caveBiome;
+            if (resolvedCarvingBiome == null && surfaceBiome != null) {
+                if (surfaceBiome != null) {
+                    int truncatedSurfaceY = (int) surfaceHeight;
+                    int depthBelowSurface = truncatedSurfaceY - sampleY;
+                    if (depthBelowSurface <= 0) {
+                        effectiveCaveBiome = surfaceBiome;
+                    } else {
+                        int minDepth = Math.max(0, caveBiome.getCaveMinDepthBelowSurface());
+                        if (depthBelowSurface < minDepth) {
+                            effectiveCaveBiome = surfaceBiome;
+                        }
+                    }
+                }
+            }
+
+            IrisCaveProfile caveProfile = effectiveCaveBiome.getCaveProfile();
             if (isProfileEnabled(caveProfile)) {
                 resolved = caveProfile;
             }
         }
 
         return resolved;
+    }
+
+    private void prefillProfileFieldSamples(int startX, int startZ, IrisComplex complex, BlendScratch blendScratch) {
+        fillFieldHeights(complex.getHeightStream(), startX, startZ, blendScratch.fieldSurfaceHeights);
+        fillFieldObjects(complex.getRegionStream(), startX, startZ, blendScratch.fieldRegions);
+        fillFieldObjects(complex.getTrueBiomeStream(), startX, startZ, blendScratch.fieldSurfaceBiomes);
+        fillFieldObjects(complex.getCaveBiomeStream(), startX, startZ, blendScratch.fieldCaveBiomes);
+    }
+
+    private <T> void fillFieldObjects(ProceduralStream<T> stream, int startX, int startZ, T[] target) {
+        for (int fieldX = 0; fieldX < FIELD_SIZE; fieldX++) {
+            int worldX = startX + fieldX;
+            for (int fieldZ = 0; fieldZ < FIELD_SIZE; fieldZ++) {
+                target[(fieldX * FIELD_SIZE) + fieldZ] = stream.get(worldX, startZ + fieldZ);
+            }
+        }
+    }
+
+    private void fillFieldHeights(ProceduralStream<Double> stream, int startX, int startZ, double[] target) {
+        for (int fieldX = 0; fieldX < FIELD_SIZE; fieldX++) {
+            int worldX = startX + fieldX;
+            for (int fieldZ = 0; fieldZ < FIELD_SIZE; fieldZ++) {
+                target[(fieldX * FIELD_SIZE) + fieldZ] = stream.getDouble(worldX, startZ + fieldZ);
+            }
+        }
     }
 
     private IrisCaveCarver3D getCarver(IrisCaveProfile profile) {
@@ -363,6 +422,14 @@ public class MantleCarvingComponent extends IrisMantleComponent {
                 && context.getHeight() != null
                 && context.getX() == baseX
                 && context.getZ() == baseZ;
+        double[] cachedChunkHeights = null;
+        if (!useContextHeight && context != null) {
+            ProceduralStream<Double> heightStream = context.getComplex().getHeightStream();
+            if (heightStream instanceof ChunkFillableDoubleStream2D cachedHeightStream) {
+                cachedChunkHeights = BLEND_SCRATCH.get().chunkSurfaceHeightSamples;
+                cachedHeightStream.fillChunkDoubles(baseX, baseZ, cachedChunkHeights);
+            }
+        }
         for (int localX = 0; localX < CHUNK_SIZE; localX++) {
             int worldX = baseX + localX;
             for (int localZ = 0; localZ < CHUNK_SIZE; localZ++) {
@@ -374,6 +441,10 @@ public class MantleCarvingComponent extends IrisMantleComponent {
                         surfaceHeights[columnIndex] = (int) Math.round(cachedHeight);
                         continue;
                     }
+                }
+                if (cachedChunkHeights != null) {
+                    surfaceHeights[columnIndex] = (int) Math.round(cachedChunkHeights[columnIndex]);
+                    continue;
                 }
                 surfaceHeights[columnIndex] = getEngineMantle().getEngine().getHeight(worldX, worldZ);
             }
@@ -510,6 +581,11 @@ public class MantleCarvingComponent extends IrisMantleComponent {
         private final IdentityHashMap<IrisCaveProfile, double[]> columnProfileWeights = new IdentityHashMap<>();
         private final IdentityHashMap<IrisDimensionCarvingEntry, IrisDimensionCarvingEntry[]> dimensionColumnPlans = new IdentityHashMap<>();
         private final IdentityHashMap<IrisCaveProfile, Boolean> activeProfiles = new IdentityHashMap<>();
+        private final double[] fieldSurfaceHeights = new double[FIELD_SIZE * FIELD_SIZE];
+        private final IrisRegion[] fieldRegions = new IrisRegion[FIELD_SIZE * FIELD_SIZE];
+        private final IrisBiome[] fieldSurfaceBiomes = new IrisBiome[FIELD_SIZE * FIELD_SIZE];
+        private final IrisBiome[] fieldCaveBiomes = new IrisBiome[FIELD_SIZE * FIELD_SIZE];
         private final int[] chunkSurfaceHeights = new int[CHUNK_AREA];
+        private final double[] chunkSurfaceHeightSamples = new double[CHUNK_AREA];
     }
 }
