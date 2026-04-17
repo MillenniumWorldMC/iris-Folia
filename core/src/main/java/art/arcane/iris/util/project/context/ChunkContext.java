@@ -60,7 +60,7 @@ public class ChunkContext {
             long totalStartNanos = capturePrefillMetric ? System.nanoTime() : 0L;
             List<Runnable> fillTasks = new ArrayList<>(6);
             if (resolvedPlan.height) {
-                fillTasks.add(height::fill);
+                fillTasks.add(() -> height.fillRounded(roundedHeight));
             }
             if (resolvedPlan.biome) {
                 fillTasks.add(new PrefillFillTask(biome));
@@ -91,13 +91,8 @@ public class ChunkContext {
                     future.join();
                 }
             }
-
             if (capturePrefillMetric) {
                 metrics.getContextPrefill().put((System.nanoTime() - totalStartNanos) / 1_000_000D);
-            }
-
-            if (resolvedPlan.height) {
-                fillRoundedHeight();
             }
         }
     }
@@ -187,15 +182,6 @@ public class ChunkContext {
         @Override
         public void run() {
             dataCache.fill();
-        }
-    }
-
-    private void fillRoundedHeight() {
-        for (int z = 0; z < 16; z++) {
-            int rowOffset = z << 4;
-            for (int x = 0; x < 16; x++) {
-                roundedHeight[rowOffset + x] = (int) Math.round(height.getDouble(x, z));
-            }
         }
     }
 }

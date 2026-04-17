@@ -52,6 +52,9 @@ import java.util.concurrent.atomic.AtomicLong;
 public class AsyncPregenMethod implements PregeneratorMethod {
     private static final AtomicInteger THREAD_COUNT = new AtomicInteger();
     private static final int ADAPTIVE_TIMEOUT_STEP = 3;
+    private static final int ADAPTIVE_RECOVERY_INTERVAL = 8;
+    private static final long CHUNK_CLEANUP_INTERVAL_MS = 15_000L;
+    private static final long CHUNK_CLEANUP_MIN_AGE_MS = 5_000L;
     private final World world;
     private final IrisRuntimeSchedulerMode runtimeSchedulerMode;
     private final IrisPaperLikeBackendMode paperLikeBackendMode;
@@ -84,6 +87,7 @@ public class AsyncPregenMethod implements PregeneratorMethod {
     private final AtomicLong failed = new AtomicLong();
     private final AtomicLong lastProgressAt = new AtomicLong(M.ms());
     private final AtomicLong lastPermitWaitLog = new AtomicLong(0L);
+    private final AtomicLong lastChunkCleanup = new AtomicLong(M.ms());
     private final Object permitMonitor = new Object();
     private volatile Engine metricsEngine;
 
@@ -120,8 +124,11 @@ public class AsyncPregenMethod implements PregeneratorMethod {
                 this.backendMode = "paper-ticket";
             }
         }
+        int runtimeMaxConcurrency = foliaRuntime
+                ? pregen.getFoliaMaxConcurrency()
+                : pregen.getPaperLikeMaxConcurrency();
         int configuredThreads = applyRuntimeConcurrencyCap(
-                pregen.getMaxConcurrency(),
+                runtimeMaxConcurrency,
                 foliaRuntime,
                 workerThreadsForCap
         );
@@ -206,6 +213,48 @@ public class AsyncPregenMethod implements PregeneratorMethod {
         }
     }
 
+    private void periodicChunkCleanup() {
+        long now = M.ms();
+        long lastCleanup = lastChunkCleanup.get();
+        if (now - lastCleanup < CHUNK_CLEANUP_INTERVAL_MS) {
+            return;
+        }
+
+        if (!lastChunkCleanup.compareAndSet(lastCleanup, now)) {
+            return;
+        }
+
+        if (foliaRuntime) {
+            int sizeBefore = lastUse.size();
+            if (sizeBefore > 0) {
+                lastUse.clear();
+                Iris.info("Periodic chunk cleanup: cleared " + sizeBefore + " Folia chunk references");
+            }
+            return;
+        }
+
+        int sizeBefore = lastUse.size();
+        if (sizeBefore == 0) {
+            return;
+        }
+
+        long minTime = now - CHUNK_CLEANUP_MIN_AGE_MS;
+        AtomicInteger removed = new AtomicInteger();
+        lastUse.entrySet().removeIf(entry -> {
+            Long lastUseTime = entry.getValue();
+            if (lastUseTime == null || lastUseTime < minTime) {
+                removed.incrementAndGet();
+                return true;
+            }
+            return false;
+        });
+
+        int removedCount = removed.get();
+        if (removedCount > 0) {
+            Iris.info("Periodic chunk cleanup: removed " + removedCount + "/" + sizeBefore + " stale chunk references");
+        }
+    }
+
     private Chunk onChunkFutureFailure(int x, int z, Throwable throwable) {
         Throwable root = throwable;
         while (root.getCause() != null) {
@@ -246,11 +295,14 @@ public class AsyncPregenMethod implements PregeneratorMethod {
     private void onSuccess() {
         int streak = timeoutStreak.get();
         if (streak > 0) {
-            timeoutStreak.compareAndSet(streak, streak - 1);
-            return;
+            int newStreak = Math.max(0, streak - 2);
+            timeoutStreak.compareAndSet(streak, newStreak);
+            if (newStreak > 0) {
+                return;
+            }
         }
 
-        if ((completed.get() & 31L) == 0L) {
+        if ((completed.get() & (ADAPTIVE_RECOVERY_INTERVAL - 1)) == 0L) {
             raiseAdaptiveInFlightLimit();
         }
     }
@@ -278,7 +330,9 @@ public class AsyncPregenMethod implements PregeneratorMethod {
                 return;
             }
 
-            int next = Math.min(threads, current + 1);
+            int deficit = threads - current;
+            int step = deficit > (threads / 2) ? Math.max(2, threads / 8) : 1;
+            int next = Math.min(threads, current + step);
             if (adaptiveInFlightLimit.compareAndSet(current, next)) {
                 logAdaptiveLimit("increase", next);
                 notifyPermitWaiters();
@@ -301,13 +355,13 @@ public class AsyncPregenMethod implements PregeneratorMethod {
 
     static int computePaperLikeRecommendedCap(int workerThreads) {
         int normalizedWorkers = Math.max(1, workerThreads);
-        int recommendedCap = normalizedWorkers * 2;
+        int recommendedCap = normalizedWorkers * 4;
         if (recommendedCap < 8) {
             return 8;
         }
 
-        if (recommendedCap > 96) {
-            return 96;
+        if (recommendedCap > 128) {
+            return 128;
         }
 
         return recommendedCap;
@@ -400,6 +454,16 @@ public class AsyncPregenMethod implements PregeneratorMethod {
         }
     }
 
+    private void cleanupMantleChunk(int x, int z) {
+        Engine engine = resolveMetricsEngine();
+        if (engine != null) {
+            try {
+                engine.getMantle().forceCleanupChunk(x, z);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
     private Engine resolveMetricsEngine() {
         Engine cachedEngine = metricsEngine;
         if (cachedEngine != null) {
@@ -488,13 +552,14 @@ public class AsyncPregenMethod implements PregeneratorMethod {
     @Override
     public void generateChunk(int x, int z, PregenListener listener) {
         listener.onChunkGenerating(x, z);
+        periodicChunkCleanup();
         try {
             long waitStart = M.ms();
             synchronized (permitMonitor) {
                 while (inFlight.get() >= adaptiveInFlightLimit.get()) {
                     long waited = Math.max(0L, M.ms() - waitStart);
                     logPermitWaitIfNeeded(x, z, waited);
-                    permitMonitor.wait(5000L);
+                    permitMonitor.wait(500L);
                 }
             }
             long adaptiveWait = Math.max(0L, M.ms() - waitStart);
@@ -503,7 +568,7 @@ public class AsyncPregenMethod implements PregeneratorMethod {
             }
 
             long permitWaitStart = M.ms();
-            while (!semaphore.tryAcquire(5, TimeUnit.SECONDS)) {
+            while (!semaphore.tryAcquire(1, TimeUnit.SECONDS)) {
                 logPermitWaitIfNeeded(x, z, Math.max(0L, M.ms() - waitStart));
             }
             long permitWait = Math.max(0L, M.ms() - permitWaitStart);
@@ -698,6 +763,7 @@ public class AsyncPregenMethod implements PregeneratorMethod {
                 }
 
                 listener.onChunkGenerated(x, z);
+                cleanupMantleChunk(x, z);
                 listener.onChunkCleaned(x, z);
                 lastUse.put(chunk, M.ms());
                 success = true;
@@ -730,6 +796,7 @@ public class AsyncPregenMethod implements PregeneratorMethod {
                     }
 
                     listener.onChunkGenerated(x, z);
+                    cleanupMantleChunk(x, z);
                     listener.onChunkCleaned(x, z);
                     lastUse.put(i, M.ms());
                     success = true;
@@ -765,6 +832,7 @@ public class AsyncPregenMethod implements PregeneratorMethod {
                             }
 
                             listener.onChunkGenerated(x, z);
+                            cleanupMantleChunk(x, z);
                             listener.onChunkCleaned(x, z);
                             lastUse.put(i, M.ms());
                             success = true;

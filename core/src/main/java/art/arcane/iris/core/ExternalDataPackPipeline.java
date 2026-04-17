@@ -979,6 +979,11 @@ public final class ExternalDataPackPipeline {
         packSourceFolder.mkdirs();
         cacheFolder.mkdirs();
 
+        RequestSyncResult metadataRestore = restoreRequestFromMetadata(packSourceFolder, request);
+        if (metadataRestore.success()) {
+            return metadataRestore;
+        }
+
         try {
             ResolvedRemoteFile remoteFile = resolveRemoteFile(url);
             File output = new File(packSourceFolder, remoteFile.outputFileName());
@@ -1012,10 +1017,6 @@ public final class ExternalDataPackPipeline {
             writeRequestMetadata(packSourceFolder, request, output.getName(), remoteFile.sha1());
             return RequestSyncResult.downloaded(output);
         } catch (Throwable e) {
-            RequestSyncResult restored = restoreRequestFromMetadata(packSourceFolder, request);
-            if (restored.success()) {
-                return restored;
-            }
             String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             return RequestSyncResult.failure(message);
         }
@@ -1194,6 +1195,18 @@ public final class ExternalDataPackPipeline {
             return ProjectionResult.success(managedName, 0, 0, Set.copyOf(request.resolvedLocateStructures()), 0, Set.of(), 0, 0, 0);
         }
 
+        String projectionCacheKey = buildProjectionCacheKey(sourceDescriptor.fingerprint(), request);
+        File projectionCacheDir = Iris.instance.getDataFolder("cache", "projected-datapacks");
+        File cachedZip = new File(projectionCacheDir, projectionCacheKey + ".zip");
+        File cachedMeta = new File(projectionCacheDir, projectionCacheKey + ".json");
+
+        if (cachedZip.exists() && cachedZip.length() > 0 && cachedMeta.exists()) {
+            ProjectionResult cachedResult = restoreCachedProjection(cachedZip, cachedMeta, managedName, worldDatapackFolders);
+            if (cachedResult != null) {
+                return cachedResult;
+            }
+        }
+
         ProjectionAssetSummary projectionAssetSummary;
         try {
             projectionAssetSummary = buildProjectedAssets(source, sourceDescriptor, request);
@@ -1219,6 +1232,7 @@ public final class ExternalDataPackPipeline {
 
         int installedDatapacks = 0;
         int installedAssets = 0;
+        boolean firstWrite = true;
         for (File worldDatapackFolder : worldDatapackFolders) {
             if (worldDatapackFolder == null) {
                 continue;
@@ -1242,6 +1256,11 @@ public final class ExternalDataPackPipeline {
                 }
                 installedDatapacks++;
                 installedAssets += copiedAssets;
+
+                if (firstWrite && managedZip.exists()) {
+                    cacheProjection(managedZip, cachedZip, cachedMeta, projectionAssetSummary);
+                    firstWrite = false;
+                }
             } catch (Throwable e) {
                 Iris.warn("Failed to project external datapack source " + sourceDescriptor.sourceName() + " into " + worldDatapackFolder.getPath());
                 Iris.reportError(e);
@@ -4089,6 +4108,112 @@ public final class ExternalDataPackPipeline {
             builder.append(String.format("%02x", b));
         }
         return builder.toString();
+    }
+
+    private static String buildProjectionCacheKey(String sourceFingerprint, DatapackRequest request) {
+        StringBuilder keyBuilder = new StringBuilder();
+        keyBuilder.append(sourceFingerprint);
+        keyBuilder.append('|').append(request.getDedupeKey());
+        keyBuilder.append('|').append(request.alongsideMode());
+        keyBuilder.append('|').append(request.templateAliases());
+        keyBuilder.append('|').append(request.structureStartHeights());
+        keyBuilder.append('|').append(request.structureSetAliases());
+        keyBuilder.append('|').append(request.structureAliases());
+        keyBuilder.append('|').append(request.structures());
+        keyBuilder.append('|').append(request.structureSets());
+        keyBuilder.append('|').append(request.templatePools());
+        keyBuilder.append('|').append(request.processorLists());
+        keyBuilder.append('|').append(request.configuredFeatures());
+        keyBuilder.append('|').append(request.placedFeatures());
+        keyBuilder.append('|').append(request.biomeHasStructureTags());
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-1");
+            byte[] bytes = digest.digest(keyBuilder.toString().getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (Throwable e) {
+            return shortHash(keyBuilder.toString());
+        }
+    }
+
+    private static ProjectionResult restoreCachedProjection(File cachedZip, File cachedMeta, String managedName, KList<File> worldDatapackFolders) {
+        try {
+            JSONObject meta = new JSONObject(Files.readString(cachedMeta.toPath(), StandardCharsets.UTF_8));
+            int installedDatapacks = 0;
+            int installedAssets = 0;
+            for (File worldDatapackFolder : worldDatapackFolders) {
+                if (worldDatapackFolder == null) {
+                    continue;
+                }
+                worldDatapackFolder.mkdirs();
+                String baseManagedName = managedName.endsWith(".zip") ? managedName.substring(0, managedName.length() - 4) : managedName;
+                deleteFolder(new File(worldDatapackFolder, baseManagedName));
+                File managedZip = new File(worldDatapackFolder, managedName);
+                if (managedZip.exists()) {
+                    managedZip.delete();
+                }
+                Files.copy(cachedZip.toPath(), managedZip.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                if (managedZip.exists() && managedZip.length() > 0) {
+                    installedDatapacks++;
+                    installedAssets += meta.optInt("installedAssets", 0);
+                }
+            }
+            Set<String> resolvedLocateStructures = readJsonStringSet(meta, "resolvedLocateStructures");
+            Set<String> projectedStructureKeys = readJsonStringSet(meta, "projectedStructureKeys");
+            return ProjectionResult.success(
+                    managedName,
+                    installedDatapacks,
+                    installedAssets,
+                    resolvedLocateStructures,
+                    meta.optInt("syntheticStructureSets", 0),
+                    projectedStructureKeys,
+                    meta.optInt("templateAliasesApplied", 0),
+                    meta.optInt("emptyElementConversions", 0),
+                    meta.optInt("unresolvedTemplateRefs", 0)
+            );
+        } catch (Throwable e) {
+            Iris.verbose("Projection cache miss: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static void cacheProjection(File sourceZip, File cachedZip, File cachedMeta, ProjectionAssetSummary summary) {
+        try {
+            File parent = cachedZip.getParentFile();
+            if (parent != null) {
+                parent.mkdirs();
+            }
+            Files.copy(sourceZip.toPath(), cachedZip.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            JSONObject meta = new JSONObject();
+            meta.put("installedAssets", summary.assets().size());
+            meta.put("syntheticStructureSets", summary.syntheticStructureSets());
+            meta.put("templateAliasesApplied", summary.templateAliasesApplied());
+            meta.put("emptyElementConversions", summary.emptyElementConversions());
+            meta.put("unresolvedTemplateRefs", summary.unresolvedTemplateRefs());
+            meta.put("resolvedLocateStructures", new JSONArray(summary.resolvedLocateStructures()));
+            meta.put("projectedStructureKeys", new JSONArray(summary.projectedStructureKeys()));
+            Files.writeString(cachedMeta.toPath(), meta.toString(2), StandardCharsets.UTF_8);
+        } catch (Throwable e) {
+            Iris.verbose("Failed to cache projection: " + e.getMessage());
+        }
+    }
+
+    private static Set<String> readJsonStringSet(JSONObject json, String key) {
+        JSONArray array = json.optJSONArray(key);
+        if (array == null) {
+            return Set.of();
+        }
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+        for (int i = 0; i < array.length(); i++) {
+            String value = array.optString(i, "");
+            if (!value.isBlank()) {
+                result.add(value);
+            }
+        }
+        return Set.copyOf(result);
     }
 
     private static String shortHash(String value) {

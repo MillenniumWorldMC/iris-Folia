@@ -14,17 +14,18 @@ import java.util.Map;
 public final class IrisDimensionCarvingResolver {
     private static final int MAX_CHILD_DEPTH = 32;
     private static final long CHILD_SEED_SALT = 0x9E3779B97F4A7C15L;
+    private static final ThreadLocal<State> THREAD_STATE = ThreadLocal.withInitial(State::new);
 
     private IrisDimensionCarvingResolver() {
 
     }
 
     public static IrisDimensionCarvingEntry resolveRootEntry(Engine engine, int worldY) {
-        return resolveRootEntry(engine, worldY, new State());
+        return resolveRootEntry(engine, worldY, THREAD_STATE.get());
     }
 
     public static IrisDimensionCarvingEntry resolveRootEntry(Engine engine, int worldY, State state) {
-        State resolvedState = state == null ? new State() : state;
+        State resolvedState = state == null ? THREAD_STATE.get() : state;
         if (resolvedState.rootEntriesByWorldY.containsKey(worldY)) {
             return resolvedState.rootEntriesByWorldY.get(worldY);
         }
@@ -50,11 +51,11 @@ public final class IrisDimensionCarvingResolver {
     }
 
     public static IrisDimensionCarvingEntry resolveFromRoot(Engine engine, IrisDimensionCarvingEntry rootEntry, int worldX, int worldZ) {
-        return resolveFromRoot(engine, rootEntry, worldX, worldZ, new State());
+        return resolveFromRoot(engine, rootEntry, worldX, worldZ, THREAD_STATE.get());
     }
 
     public static IrisDimensionCarvingEntry resolveFromRoot(Engine engine, IrisDimensionCarvingEntry rootEntry, int worldX, int worldZ, State state) {
-        State resolvedState = state == null ? new State() : state;
+        State resolvedState = state == null ? THREAD_STATE.get() : state;
         if (rootEntry == null) {
             return null;
         }

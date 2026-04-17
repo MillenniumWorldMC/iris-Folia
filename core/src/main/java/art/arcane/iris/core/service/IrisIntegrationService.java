@@ -2,8 +2,6 @@ package art.arcane.iris.core.service;
 
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.gui.PregeneratorJob;
-import art.arcane.iris.core.pregenerator.LazyPregenerator;
-import art.arcane.iris.core.pregenerator.TurboPregenerator;
 import art.arcane.iris.util.common.plugin.IrisService;
 import art.arcane.volmlib.integration.IntegrationHandshakeRequest;
 import art.arcane.volmlib.integration.IntegrationHandshakeResponse;
@@ -155,12 +153,6 @@ public class IrisIntegrationService implements IrisService, IntegrationServiceCo
         IntegrationMetricDescriptor descriptor = IntegrationMetricSchema.descriptor(IntegrationMetricSchema.IRIS_CHUNK_STREAM_MS);
 
         double chunksPerSecond = PregeneratorJob.chunksPerSecond();
-        if (chunksPerSecond <= 0D) {
-            chunksPerSecond = TurboPregenerator.chunksPerSecond();
-        }
-        if (chunksPerSecond <= 0D) {
-            chunksPerSecond = LazyPregenerator.chunksPerSecond();
-        }
 
         if (chunksPerSecond > 0D) {
             return IntegrationMetricSample.available(descriptor, 1000D / chunksPerSecond, now);
@@ -185,18 +177,6 @@ public class IrisIntegrationService implements IrisService, IntegrationServiceCo
         long pregenRemaining = PregeneratorJob.chunksRemaining();
         if (pregenRemaining >= 0L) {
             totalQueue += pregenRemaining;
-            hasAnySource = true;
-        }
-
-        long turboRemaining = TurboPregenerator.remainingChunks();
-        if (turboRemaining >= 0L) {
-            totalQueue += turboRemaining;
-            hasAnySource = true;
-        }
-
-        long lazyRemaining = LazyPregenerator.remainingChunks();
-        if (lazyRemaining >= 0L) {
-            totalQueue += lazyRemaining;
             hasAnySource = true;
         }
 

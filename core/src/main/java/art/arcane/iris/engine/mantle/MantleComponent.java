@@ -62,6 +62,12 @@ public interface MantleComponent extends Comparable<MantleComponent> {
 
     MantleFlag getFlag();
 
+    default MantleFlag[] getPrerequisiteFlags() {
+        return EMPTY_PREREQUISITES;
+    }
+
+    MantleFlag[] EMPTY_PREREQUISITES = new MantleFlag[0];
+
     boolean isEnabled();
 
     void setEnabled(boolean b);

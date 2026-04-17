@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class IrisEngineSVC implements IrisService {
     private static final int TRIM_PERIOD = 2_000;
+    private static final long ACTIVE_PREGEN_IDLE_MILLIS = 500L;
     private final AtomicInteger tectonicLimit = new AtomicInteger(30);
     private final AtomicInteger tectonicPlates = new AtomicInteger();
     private final AtomicInteger queuedTectonicPlates = new AtomicInteger();
@@ -298,7 +299,7 @@ public class IrisEngineSVC implements IrisService {
                     }
 
                     try {
-                        engine.getMantle().trim(tectonicLimit());
+                        engine.getMantle().trim(activeIdleDuration(engineWorld), activeTectonicLimit(engineWorld));
                     } catch (Throwable e) {
                         if (isMantleClosed(e)) {
                             close();
@@ -326,7 +327,7 @@ public class IrisEngineSVC implements IrisService {
 
                     try {
                         long unloadStart = System.currentTimeMillis();
-                        int count = engine.getMantle().unloadTectonicPlate(IrisSettings.get().getPerformance().getEngineSVC().forceMulticoreWrite ? 0 : tectonicLimit());
+                        int count = engine.getMantle().unloadTectonicPlate(IrisSettings.get().getPerformance().getEngineSVC().forceMulticoreWrite ? 0 : activeTectonicLimit(engineWorld));
                         if (count > 0) {
                             Iris.debug(C.GOLD + "Unloaded " + C.YELLOW + count + " TectonicPlates in " + C.RED + Form.duration(System.currentTimeMillis() - unloadStart, 2));
                         }
@@ -345,6 +346,33 @@ public class IrisEngineSVC implements IrisService {
 
         private int tectonicLimit() {
             return tectonicLimit.get() / Math.max(worlds.size(), 1);
+        }
+
+        private int activeTectonicLimit(@Nullable World world) {
+            int limit = tectonicLimit();
+            if (world == null) {
+                return limit;
+            }
+
+            PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
+            if (pregeneratorJob == null || !pregeneratorJob.targetsWorld(world)) {
+                return limit;
+            }
+
+            return Math.max(1, Math.min(limit, Math.max(2, limit / 8)));
+        }
+
+        private long activeIdleDuration(@Nullable World world) {
+            if (world == null) {
+                return TimeUnit.SECONDS.toMillis(IrisSettings.get().getPerformance().getMantleKeepAlive());
+            }
+
+            PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
+            if (pregeneratorJob == null || !pregeneratorJob.targetsWorld(world)) {
+                return TimeUnit.SECONDS.toMillis(IrisSettings.get().getPerformance().getMantleKeepAlive());
+            }
+
+            return ACTIVE_PREGEN_IDLE_MILLIS;
         }
 
         @Synchronized

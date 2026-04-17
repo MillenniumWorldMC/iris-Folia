@@ -338,7 +338,7 @@ public class IrisProject {
 
     public CompletableFuture<StudioOpenCoordinator.StudioCloseResult> close() {
         if (activeProvider == null) {
-            return CompletableFuture.completedFuture(new StudioOpenCoordinator.StudioCloseResult(null, true, true, false, null, null));
+            return CompletableFuture.completedFuture(new StudioOpenCoordinator.StudioCloseResult(null, true, true, false, null));
         }
 
         return StudioOpenCoordinator.get().closeProject(this);

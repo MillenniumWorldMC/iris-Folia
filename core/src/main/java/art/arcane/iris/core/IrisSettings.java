@@ -25,9 +25,7 @@ import art.arcane.volmlib.util.json.JSONException;
 import art.arcane.volmlib.util.json.JSONObject;
 import art.arcane.iris.util.common.misc.getHardware;
 import art.arcane.iris.util.common.plugin.VolmitSender;
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,7 +42,6 @@ public class IrisSettings {
     private IrisSettingsConcurrency concurrency = new IrisSettingsConcurrency();
     private IrisSettingsStudio studio = new IrisSettingsStudio();
     private IrisSettingsPerformance performance = new IrisSettingsPerformance();
-    private IrisSettingsUpdater updater = new IrisSettingsUpdater();
     private IrisSettingsPregen pregen = new IrisSettingsPregen();
     private IrisSettingsSentry sentry = new IrisSettingsSentry();
 
@@ -158,7 +155,7 @@ public class IrisSettings {
         public int foliaMaxConcurrency = 32;
         public int chunkLoadTimeoutSeconds = 15;
         public int timeoutWarnIntervalMs = 500;
-        public int saveIntervalMs = 120_000;
+        public int saveIntervalMs = 30_000;
         public boolean enablePregenPerformanceProfile = true;
         public int pregenProfileNoiseCacheSize = 4_096;
         public boolean pregenProfileEnableFastCache = true;
@@ -213,37 +210,6 @@ public class IrisSettings {
     }
 
     @Data
-    public static class IrisSettingsUpdater {
-        public int maxConcurrency = 256;
-        public boolean nativeThreads = false;
-        public double threadMultiplier = 2;
-
-        public double chunkLoadSensitivity = 0.7;
-        public MsRange emptyMsRange = new MsRange(80, 100);
-        public MsRange defaultMsRange = new MsRange(20, 40);
-
-        public int getMaxConcurrency() {
-            return Math.max(Math.abs(maxConcurrency), 1);
-        }
-
-        public double getThreadMultiplier() {
-            return Math.min(Math.abs(threadMultiplier), 0.1);
-        }
-
-        public double getChunkLoadSensitivity() {
-            return Math.min(chunkLoadSensitivity, 0.9);
-        }
-    }
-
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class MsRange {
-        public int min = 20;
-        public int max = 40;
-    }
-
-    @Data
     public static class IrisSettingsGeneral {
         public boolean commandSounds = true;
         public boolean debug = false;
@@ -256,6 +222,22 @@ public class IrisSettings {
         public boolean adjustVanillaHeight = false;
         public boolean importExternalDatapacks = true;
         public boolean autoGenerateIntrinsicStructures = true;
+        public boolean intrinsicStructureFoundations = true;
+        public int intrinsicFoundationMaxDepth = 96;
+        public java.util.List<String> intrinsicStructureAllowlist = new java.util.ArrayList<>(java.util.List.of(
+                "minecraft:village_plains",
+                "minecraft:village_desert",
+                "minecraft:village_savanna",
+                "minecraft:village_snowy",
+                "minecraft:village_taiga",
+                "minecraft:pillager_outpost",
+                "minecraft:desert_pyramid",
+                "minecraft:jungle_temple",
+                "minecraft:swamp_hut",
+                "minecraft:igloo",
+                "minecraft:mansion",
+                "minecraft:ruined_portal*"
+        ));
         public String forceMainWorld = "";
         public int spinh = -20;
         public int spins = 7;

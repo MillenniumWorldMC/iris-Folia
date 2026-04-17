@@ -5,7 +5,6 @@ import art.arcane.iris.core.lifecycle.WorldLifecycleService;
 import art.arcane.iris.core.project.IrisProject;
 import art.arcane.iris.core.tools.IrisCreator;
 import art.arcane.iris.core.tools.IrisToolbelt;
-import art.arcane.iris.engine.IrisEngine;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
 import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
@@ -31,10 +30,7 @@ import java.util.function.Consumer;
 public final class StudioOpenCoordinator {
     private static volatile StudioOpenCoordinator instance;
 
-    private final SmokeDiagnosticsService diagnostics;
-
     private StudioOpenCoordinator() {
-        this.diagnostics = SmokeDiagnosticsService.get();
     }
 
     public static StudioOpenCoordinator get() {
@@ -67,94 +63,54 @@ public final class StudioOpenCoordinator {
 
     private StudioCloseResult executeClose(IrisProject project) {
         if (project == null) {
-            return new StudioCloseResult(null, true, true, false, null, null);
+            return new StudioCloseResult(null, true, true, false, null);
         }
 
         PlatformChunkGenerator provider = project.getActiveProvider();
         if (provider == null) {
-            return new StudioCloseResult(null, true, true, false, null, null);
+            return new StudioCloseResult(null, true, true, false, null);
         }
 
         World world = provider.getTarget().getWorld().realWorld();
         String worldName = world == null ? provider.getTarget().getWorld().name() : world.getName();
-        SmokeDiagnosticsService.SmokeRunHandle handle = diagnostics.beginRun(
-                SmokeDiagnosticsService.SmokeRunMode.STUDIO_CLOSE,
-                worldName,
-                true,
-                true,
-                null,
-                false
-        );
-        StudioCloseResult result;
         try {
-            handle.setRuntimeBackend(WorldRuntimeControlService.get().backendName());
-            if (world != null) {
-                handle.setLifecycleBackend(WorldLifecycleService.get().backendNameForWorld(world.getName()));
-                captureGenerationSession(provider, handle);
-            }
-            result = closeWorld(provider, worldName, world, true, handle, project);
-            handle.setCloseState(result.unloadCompletedLive(), result.folderDeletionCompletedLive(), result.startupCleanupQueued());
-            if (result.failureCause() != null) {
-                handle.completeFailure("finalize_close", result.failureCause(), result.folderDeletionCompletedLive() || result.startupCleanupQueued());
-            } else {
-                handle.completeSuccess("finalize_close", result.folderDeletionCompletedLive() || result.startupCleanupQueued());
-            }
+            return closeWorld(provider, worldName, world, true, project);
         } catch (Throwable e) {
             project.setActiveProvider(null);
-            handle.completeFailure("finalize_close", e, false);
-            result = new StudioCloseResult(worldName, false, false, false, e, handle.runId());
+            return new StudioCloseResult(worldName, false, false, false, e);
         }
-
-        return result;
     }
 
     private void executeOpen(StudioOpenRequest request, CompletableFuture<StudioOpenResult> future) {
-        boolean ownsHandle = request.runHandle() == null;
-        SmokeDiagnosticsService.SmokeRunHandle handle = ownsHandle
-                ? diagnostics.beginRun(
-                request.mode(),
-                request.worldName(),
-                true,
-                request.playerName() == null || request.playerName().isBlank(),
-                request.playerName(),
-                request.retainOnFailure()
-        )
-                : request.runHandle();
         World world = null;
         PlatformChunkGenerator provider = null;
-        boolean cleanupApplied = false;
         try {
-            updateStage(handle, request, "resolve_dimension", 0.04D);
+            updateStage(request, "resolve_dimension", 0.04D);
             if (IrisToolbelt.getDimension(request.dimensionKey()) == null) {
                 throw new IrisException("Dimension cannot be found for id " + request.dimensionKey() + ".");
             }
 
-            updateStage(handle, request, "prepare_world_pack", 0.10D);
+            updateStage(request, "prepare_world_pack", 0.10D);
             cleanupStaleTransientWorlds(request.worldName());
 
-            updateStage(handle, request, "install_datapacks", 0.18D);
+            updateStage(request, "install_datapacks", 0.18D);
             IrisCreator creator = IrisToolbelt.createWorld()
                     .seed(request.seed())
                     .sender(request.sender())
                     .studio(true)
                     .name(request.worldName())
                     .dimension(request.dimensionKey())
-                    .studioProgressConsumer((progress, stage) -> updateStage(handle, request, mapCreatorStage(stage), progress));
+                    .studioProgressConsumer((progress, stage) -> updateStage(request, mapCreatorStage(stage), progress));
             world = creator.create();
             provider = IrisToolbelt.access(world);
             if (provider == null) {
                 throw new IllegalStateException("Studio runtime provider is unavailable for world \"" + request.worldName() + "\".");
             }
 
-            handle.setLifecycleBackend(WorldLifecycleService.get().backendNameForWorld(world.getName()));
-            handle.setRuntimeBackend(WorldRuntimeControlService.get().backendName());
-            handle.setDatapackReadiness(creator.getLastDatapackReadinessResult());
-            captureGenerationSession(provider, handle);
-
-            updateStage(handle, request, "apply_world_rules", 0.72D);
+            updateStage(request, "apply_world_rules", 0.72D);
             WorldRuntimeControlService.get().applyStudioWorldRules(world);
 
-            updateStage(handle, request, "prepare_generator", 0.78D);
+            updateStage(request, "prepare_generator", 0.78D);
             WorldRuntimeControlService.get().prepareGenerator(world);
 
             Location entryAnchor = WorldRuntimeControlService.get().resolveEntryAnchor(world);
@@ -163,17 +119,17 @@ public final class StudioOpenCoordinator {
             }
 
             long deadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(120L);
-            updateStage(handle, request, "request_entry_chunk", 0.84D);
-            requestEntryChunk(world, entryAnchor, deadline, handle);
+            updateStage(request, "request_entry_chunk", 0.84D);
+            requestEntryChunk(world, entryAnchor, deadline);
 
-            updateStage(handle, request, "resolve_safe_entry", 0.90D);
+            updateStage(request, "resolve_safe_entry", 0.90D);
             Location safeEntry = resolveSafeEntry(world, entryAnchor, deadline);
             if (safeEntry == null) {
                 throw new IllegalStateException("Studio safe entry resolution timed out.");
             }
 
             if (request.playerName() != null && !request.playerName().isBlank()) {
-                updateStage(handle, request, "teleport_player", 0.96D);
+                updateStage(request, "teleport_player", 0.96D);
                 Player player = resolvePlayer(request.playerName());
                 if (player == null) {
                     throw new IllegalStateException("Player \"" + request.playerName() + "\" is not online.");
@@ -186,7 +142,7 @@ public final class StudioOpenCoordinator {
                 }
             }
 
-            updateStage(handle, request, "finalize_open", 1.00D);
+            updateStage(request, "finalize_open", 1.00D);
             if (request.project() != null) {
                 request.project().setActiveProvider(provider);
             }
@@ -197,36 +153,24 @@ public final class StudioOpenCoordinator {
                 request.onDone().accept(world);
             }
 
-            if (request.completeHandle()) {
-                handle.completeSuccess("finalize_open", false);
-            } else {
-                handle.stage("finalize_open");
-            }
-            future.complete(new StudioOpenResult(world, handle.runId(), safeEntry, creator.getLastDatapackReadinessResult()));
+            future.complete(new StudioOpenResult(world, safeEntry, creator.getLastDatapackReadinessResult()));
         } catch (Throwable e) {
             Iris.reportError("Studio open failed for world \"" + request.worldName() + "\".", e);
             if (!request.retainOnFailure()) {
                 try {
-                    updateStage(handle, request, "cleanup", 1.00D);
-                    StudioCloseResult cleanupResult = closeWorld(provider, request.worldName(), world, true, handle, request.project());
-                    cleanupApplied = cleanupResult.folderDeletionCompletedLive() || cleanupResult.startupCleanupQueued();
+                    updateStage(request, "cleanup", 1.00D);
+                    closeWorld(provider, request.worldName(), world, true, request.project());
                 } catch (Throwable cleanupError) {
                     Iris.reportError("Studio cleanup failed for world \"" + request.worldName() + "\".", cleanupError);
                 }
-            }
-            if (request.completeHandle()) {
-                handle.completeFailure("cleanup", e, cleanupApplied);
-            } else {
-                handle.stage("cleanup", String.valueOf(e.getMessage()));
             }
             future.completeExceptionally(e);
         }
     }
 
-    private void requestEntryChunk(World world, Location entryAnchor, long deadline, SmokeDiagnosticsService.SmokeRunHandle handle) throws Exception {
+    private void requestEntryChunk(World world, Location entryAnchor, long deadline) throws Exception {
         int chunkX = entryAnchor.getBlockX() >> 4;
         int chunkZ = entryAnchor.getBlockZ() >> 4;
-        handle.setEntryChunk(chunkX, chunkZ);
         long remaining = Math.max(1000L, deadline - System.currentTimeMillis());
         waitForEntryChunk(world, chunkX, chunkZ, deadline, null).get(remaining, TimeUnit.MILLISECONDS);
     }
@@ -241,25 +185,15 @@ public final class StudioOpenCoordinator {
             String worldName,
             World world,
             boolean deleteFolder,
-            SmokeDiagnosticsService.SmokeRunHandle handle,
             IrisProject project
     ) {
         Throwable failure = null;
         boolean unloadCompletedLive = world == null || !isWorldFamilyLoaded(worldName);
         boolean folderDeletionCompletedLive = !deleteFolder;
         boolean startupCleanupQueued = false;
-        CompletableFuture<Void> closeFuture = provider == null ? CompletableFuture.completedFuture(null) : CompletableFuture.completedFuture(null);
-
-        updateCloseStage(handle, "prepare_close");
-        if (world != null) {
-            handle.setWorldName(world.getName());
-            handle.setLifecycleBackend(WorldLifecycleService.get().backendNameForWorld(world.getName()));
-            handle.setRuntimeBackend(WorldRuntimeControlService.get().backendName());
-            captureGenerationSession(provider, handle);
-        }
+        CompletableFuture<Void> closeFuture = CompletableFuture.completedFuture(null);
 
         if (world != null) {
-            updateCloseStage(handle, "evacuate_players");
             try {
                 evacuatePlayers(world);
             } catch (Throwable e) {
@@ -272,21 +206,17 @@ public final class StudioOpenCoordinator {
         }
 
         try {
-            updateCloseStage(handle, "seal_runtime");
             if (project != null) {
                 project.setActiveProvider(null);
             }
             if (provider != null) {
-                captureGenerationSession(provider, handle);
                 closeFuture = provider.closeAsync();
             }
 
-            updateCloseStage(handle, "request_unload");
             if (worldName != null && !worldName.isBlank()) {
                 requestWorldFamilyUnload(worldName);
             }
 
-            updateCloseStage(handle, "await_unload");
             if (worldName != null && !worldName.isBlank()) {
                 long unloadDeadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(20L);
                 CompletableFuture<Void> unloadFuture = waitForWorldFamilyUnload(worldName, unloadDeadline);
@@ -310,21 +240,17 @@ public final class StudioOpenCoordinator {
             }
 
             if (deleteFolder && worldName != null && !worldName.isBlank()) {
-                updateCloseStage(handle, "delete_world_family");
                 WorldFamilyDeleteResult deleteResult = deleteWorldFamily(worldName, unloadCompletedLive);
                 folderDeletionCompletedLive = deleteResult.liveDeleted();
                 startupCleanupQueued = deleteResult.startupCleanupQueued();
             }
-
-            updateCloseStage(handle, "finalize_close");
         } finally {
             if (world != null) {
                 IrisToolbelt.endWorldMaintenance(world, "studio-close");
             }
         }
 
-        handle.setCloseState(unloadCompletedLive, folderDeletionCompletedLive, startupCleanupQueued);
-        return new StudioCloseResult(worldName, unloadCompletedLive, folderDeletionCompletedLive, startupCleanupQueued, failure, handle.runId());
+        return new StudioCloseResult(worldName, unloadCompletedLive, folderDeletionCompletedLive, startupCleanupQueued, failure);
     }
 
     private void evacuatePlayers(World world) throws Exception {
@@ -414,18 +340,7 @@ public final class StudioOpenCoordinator {
         }
     }
 
-    private void captureGenerationSession(PlatformChunkGenerator provider, SmokeDiagnosticsService.SmokeRunHandle handle) {
-        if (provider == null || provider.getEngine() == null) {
-            return;
-        }
-
-        if (provider.getEngine() instanceof IrisEngine irisEngine) {
-            handle.setGenerationSession(irisEngine.getGenerationSessionId(), irisEngine.getGenerationSessions().activeLeases());
-        }
-    }
-
-    private void updateStage(SmokeDiagnosticsService.SmokeRunHandle handle, StudioOpenRequest request, String stage, double progress) {
-        handle.stage(stage);
+    private void updateStage(StudioOpenRequest request, String stage, double progress) {
         if (request.progressConsumer() != null) {
             request.progressConsumer().accept(new StudioOpenProgress(progress, stage));
         }
@@ -583,10 +498,6 @@ public final class StudioOpenCoordinator {
         return null;
     }
 
-    private void updateCloseStage(SmokeDiagnosticsService.SmokeRunHandle handle, String stage) {
-        handle.stage(stage);
-    }
-
     private boolean isWorldFamilyLoaded(String worldName) {
         if (worldName == null || worldName.isBlank()) {
             return false;
@@ -610,9 +521,6 @@ public final class StudioOpenCoordinator {
             String playerName,
             boolean openWorkspace,
             boolean retainOnFailure,
-            SmokeDiagnosticsService.SmokeRunMode mode,
-            SmokeDiagnosticsService.SmokeRunHandle runHandle,
-            boolean completeHandle,
             Consumer<StudioOpenProgress> progressConsumer,
             Consumer<World> onDone
     ) {
@@ -627,9 +535,6 @@ public final class StudioOpenCoordinator {
                     playerName,
                     true,
                     false,
-                    SmokeDiagnosticsService.SmokeRunMode.STUDIO_OPEN,
-                    null,
-                    true,
                     progressConsumer,
                     onDone
             );
@@ -639,7 +544,7 @@ public final class StudioOpenCoordinator {
     public record StudioOpenProgress(double progress, String stage) {
     }
 
-    public record StudioOpenResult(World world, String runId, Location entryLocation, DatapackReadinessResult datapackReadiness) {
+    public record StudioOpenResult(World world, Location entryLocation, DatapackReadinessResult datapackReadiness) {
     }
 
     public record StudioCloseResult(
@@ -647,8 +552,7 @@ public final class StudioOpenCoordinator {
             boolean unloadCompletedLive,
             boolean folderDeletionCompletedLive,
             boolean startupCleanupQueued,
-            Throwable failureCause,
-            String runId
+            Throwable failureCause
     ) {
         public boolean successful() {
             return failureCause == null;

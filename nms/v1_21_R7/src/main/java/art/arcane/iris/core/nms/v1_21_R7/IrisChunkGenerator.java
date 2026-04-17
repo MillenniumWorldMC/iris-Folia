@@ -204,6 +204,10 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
         List<StructureStart> starts = new ArrayList<>(structureManager.startsForStructure(chunkAccess.getPos(), structure -> true));
         starts.sort(Comparator.comparingInt(start -> structureOrder.getOrDefault(start.getStructure(), Integer.MAX_VALUE)));
         Set<String> externalSmartBoreStructures = ExternalDataPackPipeline.snapshotSmartBoreStructureKeys();
+        IrisSettings.IrisSettingsGeneral general = IrisSettings.get().getGeneral();
+        boolean intrinsicFoundationsEnabled = general.isIntrinsicStructureFoundations();
+        int intrinsicFoundationDepth = Math.max(0, general.getIntrinsicFoundationMaxDepth());
+        List<String> intrinsicAllowlist = general.getIntrinsicStructureAllowlist();
 
         int seededStructureIndex = Integer.MIN_VALUE;
         for (int j = 0; j < starts.size(); j++) {
@@ -217,16 +221,23 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
             Supplier<String> supplier = () -> structureRegistry.getResourceKey(structure).map(Object::toString).orElseGet(structure::toString);
             String structureKey = resolveStructureKey(structureRegistry, structure);
             boolean isExternalSmartBoreStructure = externalSmartBoreStructures.contains(structureKey);
+            boolean isIntrinsicFoundationStructure = !isExternalSmartBoreStructure
+                    && intrinsicFoundationsEnabled
+                    && intrinsicFoundationDepth > 0
+                    && matchesIntrinsicAllowlist(structureKey, intrinsicAllowlist);
+            int foundationDepth = isExternalSmartBoreStructure
+                    ? EXTERNAL_FOUNDATION_MAX_DEPTH
+                    : (isIntrinsicFoundationStructure ? intrinsicFoundationDepth : 0);
             BitSet[] beforeSolidColumns = null;
-            if (isExternalSmartBoreStructure) {
+            if (foundationDepth > 0) {
                 beforeSolidColumns = snapshotChunkSolidColumns(level, chunkAccess);
             }
 
             try {
                 level.setCurrentlyGenerating(supplier);
                 start.placeInChunk(level, structureManager, this, random, getWritableArea(chunkAccess), chunkAccess.getPos());
-                if (isExternalSmartBoreStructure && beforeSolidColumns != null) {
-                    applyExternalStructureFoundations(level, chunkAccess, beforeSolidColumns, EXTERNAL_FOUNDATION_MAX_DEPTH);
+                if (beforeSolidColumns != null) {
+                    applyStructureFoundations(level, chunkAccess, beforeSolidColumns, foundationDepth);
                 }
                 if (shouldLogExternalStructureFingerprint(structureKey)) {
                     logExternalStructureFingerprint(structureKey, start);
@@ -300,7 +311,31 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
         return columns;
     }
 
-    private static void applyExternalStructureFoundations(
+    private static boolean matchesIntrinsicAllowlist(String structureKey, List<String> allowlist) {
+        if (structureKey == null || structureKey.isBlank() || allowlist == null || allowlist.isEmpty()) {
+            return false;
+        }
+        String key = structureKey.toLowerCase(Locale.ROOT);
+        for (String raw : allowlist) {
+            if (raw == null) {
+                continue;
+            }
+            String pattern = raw.trim().toLowerCase(Locale.ROOT);
+            if (pattern.isEmpty()) {
+                continue;
+            }
+            if (pattern.endsWith("*")) {
+                if (key.startsWith(pattern.substring(0, pattern.length() - 1))) {
+                    return true;
+                }
+            } else if (key.equals(pattern)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void applyStructureFoundations(
             WorldGenLevel level,
             ChunkAccess chunkAccess,
             BitSet[] beforeSolidColumns,

@@ -32,7 +32,6 @@ import art.arcane.iris.core.link.IrisPapiExpansion;
 import art.arcane.iris.core.link.MultiverseCoreLink;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.nms.INMS;
-import art.arcane.iris.core.pregenerator.LazyPregenerator;
 import art.arcane.iris.core.service.StudioSVC;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.EnginePanic;
@@ -565,7 +564,6 @@ public class Iris extends VolmitPlugin implements Listener {
 
         J.s(() -> {
             J.a(() -> IO.delete(getTemp()));
-            J.a(LazyPregenerator::loadLazyGenerators, 100);
             J.a(this::bstats);
             J.ar(this::checkConfigHotload, 60);
             J.sr(this::tickQueue, 0);

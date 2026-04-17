@@ -41,8 +41,13 @@ public class IrisCaveCarver3D {
     private static final byte LIQUID_AIR = 0;
     private static final byte LIQUID_LAVA = 2;
     private static final byte LIQUID_FORCED_AIR = 3;
-    private static final int ADAPTIVE_MIN_PLANE_COLUMNS = 48;
+    private static final int ADAPTIVE_MIN_PLANE_COLUMNS = 32;
+    private static final int ADAPTIVE_DEEP_MIN_PLANE_COLUMNS = 64;
+    private static final int ADAPTIVE_DEEP_SAMPLE_STEP = 8;
+    private static final int ADAPTIVE_DEEP_SURFACE_MARGIN = 12;
+    private static final int ADAPTIVE_DEEP_NEAR_SURFACE_DIVISOR = 4;
     private static final double ADAPTIVE_LOCAL_RANGE_SCALE = 0.25D;
+    private static final double ADAPTIVE_DEEP_MARGIN_BOOST = 0.015D;
     private static final ThreadLocal<Scratch> SCRATCH = ThreadLocal.withInitial(Scratch::new);
 
     private final Engine engine;
@@ -609,6 +614,19 @@ public class IrisCaveCarver3D {
                     continue;
                 }
 
+                int effectiveAdaptiveSampleStep = resolveAdaptivePlaneSampleStep(
+                        y,
+                        planeColumnIndices,
+                        planeCount,
+                        adaptiveSampleStep,
+                        surfaceBreakColumn,
+                        surfaceBreakFloorY
+                );
+                double effectiveAdaptiveThresholdMargin = resolveAdaptivePlaneThresholdMargin(
+                        adaptiveThresholdMargin,
+                        adaptiveSampleStep,
+                        effectiveAdaptiveSampleStep
+                );
                 classifyDensityPlaneAdaptive(
                         x0,
                         z0,
@@ -617,8 +635,8 @@ public class IrisCaveCarver3D {
                         planeThresholdLimit,
                         planeCount,
                         planeCarve,
-                        adaptiveSampleStep,
-                        adaptiveThresholdMargin
+                        effectiveAdaptiveSampleStep,
+                        effectiveAdaptiveThresholdMargin
                 );
                 int fadeIndex = y - minY;
                 int localY = y & 15;
@@ -658,6 +676,45 @@ public class IrisCaveCarver3D {
         }
 
         return carved;
+    }
+
+    private int resolveAdaptivePlaneSampleStep(
+            int y,
+            int[] planeColumnIndices,
+            int planeCount,
+            int adaptiveSampleStep,
+            boolean[] surfaceBreakColumn,
+            int[] surfaceBreakFloorY
+    ) {
+        if (adaptiveSampleStep >= ADAPTIVE_DEEP_SAMPLE_STEP || planeCount < ADAPTIVE_DEEP_MIN_PLANE_COLUMNS) {
+            return adaptiveSampleStep;
+        }
+
+        int nearSurfaceColumns = 0;
+        int allowedNearSurfaceColumns = Math.max(8, planeCount / ADAPTIVE_DEEP_NEAR_SURFACE_DIVISOR);
+        for (int planeIndex = 0; planeIndex < planeCount; planeIndex++) {
+            int columnIndex = planeColumnIndices[planeIndex];
+            if (surfaceBreakColumn[columnIndex] || y > (surfaceBreakFloorY[columnIndex] - ADAPTIVE_DEEP_SURFACE_MARGIN)) {
+                nearSurfaceColumns++;
+                if (nearSurfaceColumns > allowedNearSurfaceColumns) {
+                    return adaptiveSampleStep;
+                }
+            }
+        }
+
+        return ADAPTIVE_DEEP_SAMPLE_STEP;
+    }
+
+    private double resolveAdaptivePlaneThresholdMargin(
+            double adaptiveThresholdMargin,
+            int adaptiveSampleStep,
+            int effectiveAdaptiveSampleStep
+    ) {
+        if (effectiveAdaptiveSampleStep <= adaptiveSampleStep) {
+            return adaptiveThresholdMargin;
+        }
+
+        return adaptiveThresholdMargin + ((effectiveAdaptiveSampleStep - adaptiveSampleStep) * ADAPTIVE_DEEP_MARGIN_BOOST);
     }
 
     private int carvePassLattice(
@@ -1285,6 +1342,10 @@ public class IrisCaveCarver3D {
                 planeCarve[planeIndex] = false;
                 continue;
             }
+            if (adaptiveSampleStep >= ADAPTIVE_DEEP_SAMPLE_STEP) {
+                planeCarve[planeIndex] = predictedDensity <= threshold;
+                continue;
+            }
 
             planeCarve[planeIndex] = classifyDensityPointNoWarpNoModules(x0 + localX, y, z0 + localZ, planeThresholdLimit[planeIndex]);
         }
@@ -1353,6 +1414,10 @@ public class IrisCaveCarver3D {
                 planeCarve[planeIndex] = false;
                 continue;
             }
+            if (adaptiveSampleStep >= ADAPTIVE_DEEP_SAMPLE_STEP) {
+                planeCarve[planeIndex] = predictedDensity <= threshold;
+                continue;
+            }
 
             planeCarve[planeIndex] = classifyDensityPointNoWarpModules(
                     x0 + localX,
@@ -1412,6 +1477,10 @@ public class IrisCaveCarver3D {
             }
             if (predictedDensity > threshold + ambiguityMargin) {
                 planeCarve[planeIndex] = false;
+                continue;
+            }
+            if (adaptiveSampleStep >= ADAPTIVE_DEEP_SAMPLE_STEP) {
+                planeCarve[planeIndex] = predictedDensity <= threshold;
                 continue;
             }
 
@@ -1545,6 +1614,10 @@ public class IrisCaveCarver3D {
             }
             if (predictedDensity > threshold + ambiguityMargin) {
                 planeCarve[planeIndex] = false;
+                continue;
+            }
+            if (adaptiveSampleStep >= ADAPTIVE_DEEP_SAMPLE_STEP) {
+                planeCarve[planeIndex] = predictedDensity <= threshold;
                 continue;
             }
 

@@ -23,12 +23,12 @@ import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.events.IrisLootEvent;
 import art.arcane.iris.core.gui.components.RenderType;
 import art.arcane.iris.core.gui.components.Renderer;
+import art.arcane.iris.core.gui.PregeneratorJob;
 import art.arcane.iris.core.link.Identifier;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.loader.IrisRegistrant;
 import art.arcane.iris.core.nms.container.BlockPos;
 import art.arcane.iris.core.nms.container.Pair;
-import art.arcane.iris.core.pregenerator.ChunkUpdater;
 import art.arcane.iris.core.service.ExternalDataSVC;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.IrisComplex;
@@ -333,16 +333,14 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
                 if (c.getWorld().isChunkLoaded(c.getX() + x, c.getZ() + z))
                     continue;
                 var msg = "Chunk %s, %s [%s, %s] is not loaded".formatted(c.getX() + x, c.getZ() + z, x, z);
-                if (W.getStack().getCallerClass().equals(ChunkUpdater.class)) Iris.warn(msg);
-                else Iris.debug(msg);
+                Iris.debug(msg);
                 return;
             }
         }
         var mantle = getMantle().getMantle();
         if (!mantle.isLoaded(c)) {
             var msg = "Mantle Chunk " + c.getX() + "," + c.getZ() + " is not loaded";
-            if (W.getStack().getCallerClass().equals(ChunkUpdater.class)) Iris.warn(msg);
-            else Iris.debug(msg);
+            Iris.debug(msg);
             return;
         }
 
@@ -1081,7 +1079,10 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
     default void cleanupMantleChunk(int x, int z) {
         World world = getWorld().realWorld();
         if (world != null && IrisToolbelt.isWorldMaintenanceActive(world)) {
-            return;
+            PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
+            if (pregeneratorJob == null || !pregeneratorJob.targetsWorld(world)) {
+                return;
+            }
         }
         if (IrisSettings.get().getPerformance().isTrimMantleInStudio() || !isStudio()) {
             getMantle().cleanupChunk(x, z);

@@ -86,6 +86,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
         int zf, realX, realZ, hf, he;
         IrisBiome biome;
         IrisRegion region;
+        int clampedFluidHeight = Math.min(h.getHeight(), getDimension().getFluidHeight());
 
         for (zf = 0; zf < h.getDepth(); zf++) {
             realX = xf + x;
@@ -93,7 +94,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
             biome = context.getBiome().get(xf, zf);
             region = context.getRegion().get(xf, zf);
             he = Math.min(h.getHeight(), context.getRoundedHeight(xf, zf));
-            hf = Math.round(Math.max(Math.min(h.getHeight(), getDimension().getFluidHeight()), he));
+            hf = Math.max(clampedFluidHeight, he);
 
             if (hf < 0) {
                 continue;
@@ -109,7 +110,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
 
                 if (i == 0) {
                     if (getDimension().isBedrock()) {
-                        h.set(xf, i, zf, BEDROCK);
+                        h.setRaw(xf, i, zf, BEDROCK);
                         lastBedrock = i;
                         continue;
                     }
@@ -119,7 +120,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                 ore = ore == null ? region.generateOres(realX, i, realZ, rng, getData(), true) : ore;
                 ore = ore == null ? getDimension().generateOres(realX, i, realZ, rng, getData(), true) : ore;
                 if (ore != null) {
-                    h.set(xf, i, zf, ore);
+                    h.setRaw(xf, i, zf, ore);
                     continue;
                 }
 
@@ -131,11 +132,11 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                     }
 
                     if (fblocks.hasIndex(fdepth)) {
-                        h.set(xf, i, zf, fblocks.get(fdepth));
+                        h.setRaw(xf, i, zf, fblocks.get(fdepth));
                         continue;
                     }
 
-                    h.set(xf, i, zf, context.getFluid().get(xf, zf));
+                    h.setRaw(xf, i, zf, context.getFluid().get(xf, zf));
                     continue;
                 }
 
@@ -151,7 +152,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
 
 
                     if (blocks.hasIndex(depth)) {
-                        h.set(xf, i, zf, blocks.get(depth));
+                        h.setRaw(xf, i, zf, blocks.get(depth));
                         continue;
                     }
 
@@ -160,9 +161,9 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                     ore = ore == null ? getDimension().generateOres(realX, i, realZ, rng, getData(), false) : ore;
 
                     if (ore != null) {
-                        h.set(xf, i, zf, ore);
+                        h.setRaw(xf, i, zf, ore);
                     } else {
-                        h.set(xf, i, zf, context.getRock().get(xf, zf));
+                        h.setRaw(xf, i, zf, context.getRock().get(xf, zf));
                     }
                 }
             }
@@ -178,6 +179,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
         IrisComplex complex = getComplex();
         RNG localRng = rng;
         int fluidHeight = dimension.getFluidHeight();
+        int clampedFluidHeight = Math.min(chunkHeight, fluidHeight);
         boolean bedrockEnabled = dimension.isBedrock();
         ChunkedDataCache<IrisBiome> biomeCache = context.getBiome();
         ChunkedDataCache<IrisRegion> regionCache = context.getRegion();
@@ -190,7 +192,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
             IrisBiome biome = biomeCache.get(xf, zf);
             IrisRegion region = regionCache.get(xf, zf);
             int he = Math.min(chunkHeight, context.getRoundedHeight(xf, zf));
-            int hf = Math.round(Math.max(Math.min(chunkHeight, fluidHeight), he));
+            int hf = Math.max(clampedFluidHeight, he);
             if (hf < 0) {
                 continue;
             }
@@ -205,7 +207,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
 
             for (int i = topY; i >= 0; i--) {
                 if (i == 0 && bedrockEnabled) {
-                    h.set(xf, i, zf, BEDROCK);
+                    h.setRaw(xf, i, zf, BEDROCK);
                     lastBedrock = i;
                     continue;
                 }
@@ -217,7 +219,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                     ore = ore == null ? dimension.generateSurfaceOres(realX, i, realZ, localRng, data) : ore;
                 }
                 if (ore != null) {
-                    h.set(xf, i, zf, ore);
+                    h.setRaw(xf, i, zf, ore);
                     continue;
                 }
 
@@ -228,9 +230,9 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                     }
 
                     if (fblocks.hasIndex(fdepth)) {
-                        h.set(xf, i, zf, fblocks.get(fdepth));
+                        h.setRaw(xf, i, zf, fblocks.get(fdepth));
                     } else {
-                        h.set(xf, i, zf, fluid);
+                        h.setRaw(xf, i, zf, fluid);
                     }
                     continue;
                 }
@@ -242,7 +244,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                     }
 
                     if (blocks.hasIndex(depth)) {
-                        h.set(xf, i, zf, blocks.get(depth));
+                        h.setRaw(xf, i, zf, blocks.get(depth));
                         continue;
                     }
 
@@ -253,9 +255,9 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                     }
 
                     if (ore != null) {
-                        h.set(xf, i, zf, ore);
+                        h.setRaw(xf, i, zf, ore);
                     } else {
-                        h.set(xf, i, zf, rock);
+                        h.setRaw(xf, i, zf, rock);
                     }
                 }
             }

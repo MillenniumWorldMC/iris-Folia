@@ -87,7 +87,7 @@ public class IrisDecorantActuator extends EngineAssignedActuator<BlockData> {
                     continue;
                 }
 
-                if (height < getDimension().getFluidHeight()) {
+                if (height < getDimension().getFluidHeight() && PREDICATE_SOLID.test(output.get(i, height, j))) {
                     getSeaSurfaceDecorator().decorate(i, j,
                             realX, Math.round(i + 1), Math.round(x + i - 1),
                             realZ, Math.round(z + j + 1), Math.round(z + j - 1),

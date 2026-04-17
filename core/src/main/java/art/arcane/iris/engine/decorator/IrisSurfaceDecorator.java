@@ -50,7 +50,7 @@ public class IrisSurfaceDecorator extends IrisEngineDecorator {
         RNG rng = getRNG(realX, realZ);
         IrisDecorator decorator = getDecorator(rng, biome, realX, realZ);
         bdx = data.get(x, height, z);
-        boolean underwater = height < getDimension().getFluidHeight();
+        boolean underwater = height < getDimension().getFluidHeight() && biome.getInferredType() != InferredType.CAVE;
 
         if (decorator != null) {
             if (!decorator.isForcePlace() && !decorator.getSlopeCondition().isDefault()

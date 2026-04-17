@@ -36,12 +36,30 @@ public class ChunkedDoubleDataCache {
     }
 
     public void fill(Executor executor) {
+        fillRounded(null);
+    }
+
+    public void fillRounded(int[] roundedTarget) {
         if (!cache) {
+            if (roundedTarget != null) {
+                for (int row = 0; row < 16; row++) {
+                    int rowOffset = row << 4;
+                    int worldZ = z + row;
+                    for (int column = 0; column < 16; column++) {
+                        roundedTarget[rowOffset + column] = (int) Math.round(stream.getDouble(x + column, worldZ));
+                    }
+                }
+            }
             return;
         }
 
         if (stream instanceof ChunkFillableDoubleStream2D cachedStream) {
             cachedStream.fillChunkDoubles(x, z, data);
+            if (roundedTarget != null) {
+                for (int index = 0; index < 256; index++) {
+                    roundedTarget[index] = (int) Math.round(data[index]);
+                }
+            }
             return;
         }
 
@@ -49,7 +67,11 @@ public class ChunkedDoubleDataCache {
             int rowOffset = row << 4;
             int worldZ = z + row;
             for (int column = 0; column < 16; column++) {
-                data[rowOffset + column] = stream.getDouble(x + column, worldZ);
+                double sampled = stream.getDouble(x + column, worldZ);
+                data[rowOffset + column] = sampled;
+                if (roundedTarget != null) {
+                    roundedTarget[rowOffset + column] = (int) Math.round(sampled);
+                }
             }
         }
     }

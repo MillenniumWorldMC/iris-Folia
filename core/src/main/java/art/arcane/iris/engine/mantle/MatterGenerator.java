@@ -142,10 +142,28 @@ public interface MatterGenerator {
                                 continue;
                             }
 
-                            int componentPassRadius = Math.ceilDiv(component.getRadius(), 16);
-                            if (Math.abs(i) > componentPassRadius || Math.abs(j) > componentPassRadius) {
-                                partialChunks.add(passKey);
-                                continue;
+                            int componentRadius = component.getRadius();
+                            if (componentRadius > 0) {
+                                int componentPassRadius = Math.ceilDiv(componentRadius, 16);
+                                if (Math.abs(i) > componentPassRadius || Math.abs(j) > componentPassRadius) {
+                                    partialChunks.add(passKey);
+                                    continue;
+                                }
+                            }
+
+                            MantleFlag[] prerequisites = component.getPrerequisiteFlags();
+                            if (prerequisites.length > 0) {
+                                boolean prerequisitesMet = true;
+                                for (MantleFlag prereq : prerequisites) {
+                                    if (!chunk.isFlagged(prereq)) {
+                                        prerequisitesMet = false;
+                                        break;
+                                    }
+                                }
+                                if (!prerequisitesMet) {
+                                    partialChunks.add(passKey);
+                                    continue;
+                                }
                             }
 
                             if (forceRegen && chunk.isFlagged(component.getFlag())) {

@@ -37,61 +37,89 @@ import lombok.experimental.Accessors;
 @Desc("Scale objects")
 @Data
 public class IrisObjectScale {
-    private static ConcurrentLinkedHashMap<IrisObject, KList<IrisObject>> cache
-            = new ConcurrentLinkedHashMap.Builder<IrisObject, KList<IrisObject>>()
+    private static final ConcurrentLinkedHashMap<CacheKey, KList<IrisObject>> cache
+            = new ConcurrentLinkedHashMap.Builder<CacheKey, KList<IrisObject>>()
             .initialCapacity(64)
             .maximumWeightedCapacity(1024)
             .concurrencyLevel(32)
             .build();
+
+    @MinNumber(0.01)
+    @MaxNumber(50)
+    @Desc("Fixed scale multiplier for this object. 0.5 shrinks to half size, 2.0 doubles the size. When set to anything other than 1, this overrides minimumScale and maximumScale. Leave at 1 to use the minimumScale/maximumScale range.")
+    private double size = 1;
+
     @MinNumber(1)
     @MaxNumber(32)
     @Desc("Iris Objects are scaled and cached to speed up placements. Because of this extra memory is used, so we evenly distribute variations across the defined scale range, then pick one randomly. If the differences is small, use a lower number. For more possibilities on the scale spectrum, increase this at the cost of memory.")
     private int variations = 7;
+
     @MinNumber(0.01)
     @MaxNumber(50)
-    @Desc("The minimum scale")
+    @Desc("The minimum scale. Used when size is 1 to pick a random scale per placement.")
     private double minimumScale = 1;
+
     @MinNumber(0.01)
     @MaxNumber(50)
-    @Desc("The maximum height for placement (top of object)")
+    @Desc("The maximum scale. Used when size is 1 to pick a random scale per placement.")
     private double maximumScale = 1;
-    @Desc("If this object is scaled up beyond its origin size, specify a 3D interpolator")
+
+    @Desc("If this object is scaled up beyond its origin size, specify a 3D interpolator. NONE keeps blocky scaled output, TRILINEAR (LERP) smooths with linear interpolation, TRICUBIC and TRIHERMITE produce smoother but slower output.")
     private IrisObjectPlacementScaleInterpolator interpolation = IrisObjectPlacementScaleInterpolator.NONE;
 
     public boolean shouldScale() {
-        return ((minimumScale == maximumScale) && maximumScale == 1) || variations <= 0;
+        if (size != 1) {
+            return true;
+        }
+        if (variations <= 0) {
+            return false;
+        }
+        return minimumScale != 1 || maximumScale != 1;
     }
 
     public int getMaxSizeFor(int indim) {
-        return (int) (getMaxScale() * indim);
+        return (int) Math.ceil(getMaxScale() * indim);
     }
 
     public double getMaxScale() {
-        double mx = 0;
-
-        for (double i = minimumScale; i < maximumScale; i += (maximumScale - minimumScale) / (double) (Math.min(variations, 32))) {
-            mx = i;
+        if (size != 1) {
+            return size;
         }
-
-        return mx;
+        return Math.max(minimumScale, maximumScale);
     }
 
     public IrisObject get(RNG rng, IrisObject origin) {
-        if (shouldScale()) {
+        if (!shouldScale()) {
             return origin;
         }
 
-        return cache.computeIfAbsent(origin, (k) -> {
+        CacheKey key = new CacheKey(origin, size, minimumScale, maximumScale, variations, interpolation);
+        return cache.computeIfAbsent(key, (k) -> {
             KList<IrisObject> c = new KList<>();
-            for (double i = minimumScale; i < maximumScale; i += (maximumScale - minimumScale) / (double) (Math.min(variations, 32))) {
-                c.add(origin.scaled(i, getInterpolation()));
+
+            if (size != 1) {
+                c.add(origin.scaled(size, interpolation));
+                return c;
             }
 
+            if (minimumScale == maximumScale) {
+                c.add(origin.scaled(minimumScale, interpolation));
+                return c;
+            }
+
+            int vs = Math.max(1, Math.min(variations, 32));
+            double step = (maximumScale - minimumScale) / (double) vs;
+            for (int v = 0; v < vs; v++) {
+                c.add(origin.scaled(minimumScale + step * v, interpolation));
+            }
             return c;
         }).getRandom(rng);
     }
 
     public boolean canScaleBeyond() {
-        return shouldScale() && maximumScale > 1;
+        return shouldScale() && getMaxScale() > 1;
+    }
+
+    private record CacheKey(IrisObject origin, double size, double minimumScale, double maximumScale, int variations, IrisObjectPlacementScaleInterpolator interpolation) {
     }
 }

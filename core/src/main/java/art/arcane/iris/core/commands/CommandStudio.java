@@ -186,113 +186,6 @@ public class CommandStudio implements DirectorExecutor {
         sender().sendMessage(C.GREEN + "The \"" + dimension.getName() + "\" pack has version: " + dimension.getVersion());
     }
 
-    @Director(name = "regen", description = "Regenerate nearby chunks.", aliases = "rg", sync = true, origin = DirectorOrigin.PLAYER)
-    public void regen(
-            @Param(name = "radius", description = "The radius of nearby cunks", defaultValue = "5")
-            int radius
-    ) {
-        World world = player().getWorld();
-        if (!IrisToolbelt.isIrisWorld(world)) {
-            sender().sendMessage(C.RED + "You must be in an Iris World to use regen!");
-        }
-
-        VolmitSender sender = sender();
-        var loc = player().getLocation().clone();
-        final int threadCount = J.isFolia() ? 1 : Runtime.getRuntime().availableProcessors();
-
-        String orchestratorName = "Iris-Studio-Regen-Orchestrator-" + world.getName() + "-" + System.nanoTime();
-        Thread orchestrator = new Thread(() -> {
-            PlatformChunkGenerator plat = IrisToolbelt.access(world);
-            Engine engine = plat.getEngine();
-            DirectorContext.touch(sender);
-            IrisToolbelt.beginWorldMaintenance(world, "studio-regen");
-            try (SyncExecutor executor = new SyncExecutor(20);
-                 var service = Executors.newFixedThreadPool(threadCount)
-            ) {
-                int x = loc.getBlockX() >> 4;
-                int z = loc.getBlockZ() >> 4;
-
-                int rad = 0;
-                var chunkMap = new KMap<Position2, MantleChunk>();
-                boolean foliaFastRegen = J.isFolia();
-                if (foliaFastRegen) {
-                    sender.sendMessage(C.YELLOW + "Folia safe default: using 1 regen worker in studio.");
-                }
-                if (!foliaFastRegen) {
-                    rad = engine.getMantle().getRadius();
-                    final var mantle = engine.getMantle().getMantle();
-                    ParallelRadiusJob prep = new ParallelRadiusJob(threadCount, service) {
-                        @Override
-                        protected void execute(int rX, int rZ) {
-                            if (Math.abs(rX) <= radius && Math.abs(rZ) <= radius) {
-                                mantle.deleteChunk(rX + x, rZ + z);
-                                return;
-                            }
-                            rX += x;
-                            rZ += z;
-                            chunkMap.put(new Position2(rX, rZ), mantle.getChunk(rX, rZ));
-                            mantle.deleteChunk(rX, rZ);
-                        }
-
-                        @Override
-                        public String getName() {
-                            return "Preparing Mantle";
-                        }
-                    }.retarget(radius + rad, 0, 0);
-                    sender.sendMessage(C.YELLOW + "Preparing mantle data for studio regen...");
-                    prep.execute();
-                } else {
-                    sender.sendMessage(C.YELLOW + "Folia fast regen: skipping outer mantle preservation stage.");
-                }
-
-                final String runId = "studio-regen-" + world.getName() + "-" + System.currentTimeMillis();
-
-                ParallelRadiusJob job = new ParallelRadiusJob(threadCount, service) {
-                    @Override
-                    protected void execute(int x, int z) {
-                        if (foliaFastRegen) {
-                            Iris.verbose("Folia fast studio regen skipping mantle delete for " + x + "," + z + ".");
-                        }
-                        plat.injectChunkReplacement(
-                                world,
-                                x,
-                                z,
-                                executor,
-                                ChunkReplacementOptions.terrain(runId, IrisSettings.get().getGeneral().isDebug()),
-                                ChunkReplacementListener.NO_OP
-                        );
-                    }
-
-                    @Override
-                    public String getName() {
-                        return "Regenerating";
-                    }
-                }.retarget(radius, x, z);
-                job.execute();
-
-                if (!foliaFastRegen) {
-                    var mantle = engine.getMantle().getMantle();
-                    chunkMap.forEach((pos, chunk) ->
-                            mantle.getChunk(pos.getX(), pos.getZ()).copyFrom(chunk));
-                }
-            } catch (Throwable e) {
-                sender().sendMessage("Error while regenerating chunks");
-                e.printStackTrace();
-            } finally {
-                IrisToolbelt.endWorldMaintenance(world, "studio-regen");
-                DirectorContext.remove();
-            }
-        }, orchestratorName);
-        orchestrator.setDaemon(true);
-        try {
-            orchestrator.start();
-            Iris.info("Studio regen worker dispatched on dedicated thread=" + orchestratorName + ".");
-        } catch (Throwable e) {
-            sender.sendMessage(C.RED + "Failed to start studio regen worker thread. See console.");
-            Iris.reportError(e);
-        }
-    }
-
     @Director(description = "Open the noise explorer (External GUI)", aliases = {"nmap", "n"})
     public void noise() {
         if (noGUI()) return;
@@ -329,16 +222,6 @@ public class CommandStudio implements DirectorExecutor {
             return (x, z) -> generator.getHeight(x, z, new RNG(seed).nextParallelRNG(3245).lmax());
         };
         NoiseExplorerGUI.launch(l, "Custom Generator");
-    }
-
-    @Director(description = "Hotload a studio", aliases = {"reload", "h"})
-    public void hotload() {
-        if (!Iris.service(StudioSVC.class).isProjectOpen()) {
-            sender().sendMessage(C.RED + "No studio world open!");
-            return;
-        }
-        Iris.service(StudioSVC.class).getActiveProject().getActiveProvider().getEngine().hotload();
-        sender().sendMessage(C.GREEN + "Hotloaded");
     }
 
     @Director(description = "Show loot if a chest were right here", origin = DirectorOrigin.PLAYER, sync = true)

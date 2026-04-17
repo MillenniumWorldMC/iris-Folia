@@ -134,6 +134,9 @@ public class IrisCaveProfile {
     @Desc("Default cave anchor mode for cave-only object placement.")
     private IrisCaveAnchorMode defaultObjectAnchor = IrisCaveAnchorMode.FLOOR;
 
+    @Desc("Default placement mode for cave objects. Stilt modes tile the object base block down to the cave floor surface. FAST_MIN_STILT is recommended for cave objects to prevent floating.")
+    private ObjectPlaceMode defaultObjectPlaceMode = null;
+
     @MinNumber(1)
     @MaxNumber(8)
     @Desc("Vertical scan step used while searching cave anchors.")

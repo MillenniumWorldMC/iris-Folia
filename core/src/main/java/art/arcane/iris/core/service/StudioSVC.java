@@ -434,7 +434,7 @@ public class StudioSVC implements IrisService {
         }
 
         if (activeProject == null) {
-            return CompletableFuture.completedFuture(new art.arcane.iris.core.runtime.StudioOpenCoordinator.StudioCloseResult(null, true, true, false, null, null));
+            return CompletableFuture.completedFuture(new art.arcane.iris.core.runtime.StudioOpenCoordinator.StudioCloseResult(null, true, true, false, null));
         }
 
         Iris.debug("Closing Active Project");

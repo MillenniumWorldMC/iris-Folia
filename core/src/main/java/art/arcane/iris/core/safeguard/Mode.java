@@ -74,7 +74,7 @@ public enum Mode {
 
         String[] info = new String[]{
                 "",
-                padd2 + color + " Iris, " + C.AQUA + "Dimension Engine " + C.RED + "[" + releaseTrain + " RC.1]",
+                padd2 + color + " Iris, " + C.AQUA + "Dimension Engine " + C.RED + "[" + releaseTrain + " RC.1.1.6]",
                 padd2 + C.GRAY + " Version: " + color + version,
                 padd2 + C.GRAY + " By: " + color + "Volmit Software (Arcane Arts)",
                 padd2 + C.GRAY + " Server: " + color + serverVersion,

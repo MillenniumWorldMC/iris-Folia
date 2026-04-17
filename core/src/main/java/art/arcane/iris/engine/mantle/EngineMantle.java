@@ -21,6 +21,7 @@ package art.arcane.iris.engine.mantle;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.nms.container.Pair;
+import art.arcane.iris.core.link.Identifier;
 import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineTarget;
@@ -32,6 +33,7 @@ import art.arcane.iris.util.common.data.B;
 import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.volmlib.util.documentation.ChunkCoordinates;
 import art.arcane.iris.util.project.hunk.Hunk;
+import art.arcane.iris.util.project.matter.TileWrapper;
 import art.arcane.volmlib.util.mantle.runtime.Mantle;
 import art.arcane.volmlib.util.mantle.runtime.MantleChunk;
 import art.arcane.volmlib.util.mantle.flag.MantleFlag;
@@ -243,13 +245,39 @@ public interface EngineMantle extends MatterGenerator {
 
     default void cleanupChunk(int x, int z) {
         if (!isCovered(x, z)) return;
+        doCleanupChunk(x, z);
+    }
+
+    default void forceCleanupChunk(int x, int z) {
         MantleChunk<Matter> chunk = getMantle().getChunk(x, z).use();
         try {
             chunk.raiseFlagUnchecked(MantleFlag.CLEANED, () -> {
                 chunk.deleteSlices(BlockData.class);
                 chunk.deleteSlices(String.class);
+                chunk.deleteSlices(TileWrapper.class);
+                chunk.deleteSlices(Identifier.class);
+                chunk.deleteSlices(UpdateMatter.class);
                 chunk.deleteSlices(MatterCavern.class);
                 chunk.deleteSlices(MatterFluidBody.class);
+                chunk.deleteSlices(MatterMarker.class);
+                chunk.trimSlices();
+            });
+        } finally {
+            chunk.release();
+        }
+    }
+
+    private void doCleanupChunk(int x, int z) {
+        MantleChunk<Matter> chunk = getMantle().getChunk(x, z).use();
+        try {
+            chunk.raiseFlagUnchecked(MantleFlag.CLEANED, () -> {
+                chunk.deleteSlices(BlockData.class);
+                chunk.deleteSlices(TileWrapper.class);
+                chunk.deleteSlices(Identifier.class);
+                chunk.deleteSlices(UpdateMatter.class);
+                chunk.deleteSlices(MatterCavern.class);
+                chunk.deleteSlices(MatterFluidBody.class);
+                chunk.trimSlices();
             });
         } finally {
             chunk.release();

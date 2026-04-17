@@ -21,6 +21,7 @@ package art.arcane.iris.core.edit;
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.framework.Engine;
+import art.arcane.iris.engine.platform.PlatformChunkGenerator;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.math.BlockPosition;
 import art.arcane.volmlib.util.math.M;
@@ -103,7 +104,11 @@ public class DustRevealer {
 
     public static void spawn(Block block, VolmitSender sender) {
         World world = block.getWorld();
-        Engine access = IrisToolbelt.access(world).getEngine();
+        PlatformChunkGenerator generator = IrisToolbelt.access(world);
+        if (generator == null) {
+            return;
+        }
+        Engine access = generator.getEngine();
 
         if (access != null) {
             String a = access.getObjectPlacementKey(block.getX(), block.getY() - block.getWorld().getMinHeight(), block.getZ());
