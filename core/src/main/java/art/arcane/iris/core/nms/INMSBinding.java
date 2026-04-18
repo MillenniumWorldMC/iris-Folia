@@ -24,7 +24,6 @@ import art.arcane.iris.core.lifecycle.WorldLifecycleRequest;
 import art.arcane.iris.core.lifecycle.WorldLifecycleService;
 import art.arcane.iris.core.nms.container.BiomeColor;
 import art.arcane.iris.core.nms.container.BlockProperty;
-import art.arcane.iris.core.nms.container.StructurePlacement;
 import art.arcane.iris.core.nms.datapack.DataVersion;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.iris.engine.framework.Engine;
@@ -155,12 +154,6 @@ public interface INMSBinding {
         return 441;
     }
 
-    KList<String> getStructureKeys();
-
-    default KMap<String, KList<String>> getVanillaStructureBiomeTags() {
-        return new KMap<>();
-    }
-
     boolean missingDimensionTypes(String... keys);
 
     default boolean injectBukkit() {
@@ -168,10 +161,6 @@ public interface INMSBinding {
     }
 
     KMap<Material, List<BlockProperty>> getBlockProperties();
-
-    void placeStructures(Chunk chunk);
-
-    KMap<Identifier, StructurePlacement> collectStructures();
 
     default Map<String, byte[]> extractVanillaDatapack() {
         return Map.of();

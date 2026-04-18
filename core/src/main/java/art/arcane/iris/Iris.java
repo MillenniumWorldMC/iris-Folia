@@ -36,15 +36,18 @@ import art.arcane.iris.core.pack.BrokenPackException;
 import art.arcane.iris.core.pack.PackValidationRegistry;
 import art.arcane.iris.core.pack.PackValidationResult;
 import art.arcane.iris.core.pack.PackValidator;
+import art.arcane.iris.core.gui.PregeneratorJob;
 import art.arcane.iris.core.service.StudioSVC;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.EnginePanic;
+import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.IrisCompat;
 import art.arcane.iris.engine.object.IrisDimension;
 import art.arcane.iris.engine.object.IrisWorld;
 import art.arcane.iris.engine.platform.BukkitChunkGenerator;
 import art.arcane.iris.core.safeguard.IrisSafeguard;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
+import art.arcane.volmlib.integration.ReloadAware;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.exceptions.IrisException;
@@ -85,12 +88,17 @@ import java.io.*;
 import java.lang.annotation.Annotation;
 import java.net.URI;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @SuppressWarnings("CanBeFinal")
-public class Iris extends VolmitPlugin implements Listener {
+public class Iris extends VolmitPlugin implements Listener, ReloadAware {
     private static final Queue<Runnable> syncJobs = new ShurikenQueue<>();
 
     public static Iris instance;
@@ -115,6 +123,7 @@ public class Iris extends VolmitPlugin implements Listener {
     }
 
     private final KList<Runnable> postShutdown = new KList<>();
+    private final AtomicBoolean alreadyDrained = new AtomicBoolean(false);
     private KMap<Class<? extends IrisService>, IrisService> services;
 
     public static VolmitSender getSender() {
@@ -868,6 +877,9 @@ public class Iris extends VolmitPlugin implements Listener {
 
     public void onDisable() {
         if (IrisSafeguard.isForceShutdown()) return;
+        if (!alreadyDrained.get()) {
+            drainWorldGenerators("onDisable", 30L);
+        }
         if (services != null) {
             services.values().forEach(IrisService::onDisable);
         }
@@ -881,6 +893,67 @@ public class Iris extends VolmitPlugin implements Listener {
         super.onDisable();
 
         J.attempt(new JarScanner(instance.getJarFile(), "", false)::scanAll);
+    }
+
+    @Override
+    public void onPreUnload(ReloadAware.PreUnloadReason reason) {
+        if (!alreadyDrained.compareAndSet(false, true)) {
+            Iris.info("Pre-unload hook skipped; Iris already drained.");
+            return;
+        }
+        Iris.info("BileTools pre-unload hook fired (" + reason + "). Freezing all Iris worlds.");
+        drainWorldGenerators("pre-unload:" + reason, 45L);
+    }
+
+    private void drainWorldGenerators(String reason, long timeoutSeconds) {
+        List<World> irisWorlds = new ArrayList<>();
+        for (World world : Bukkit.getWorlds()) {
+            if (IrisToolbelt.access(world) != null) {
+                irisWorlds.add(world);
+            }
+        }
+        if (irisWorlds.isEmpty()) {
+            Iris.info("No Iris worlds to freeze.");
+            return;
+        }
+
+        for (World world : irisWorlds) {
+            IrisToolbelt.beginWorldMaintenance(world, reason, true);
+        }
+
+        J.attempt(PregeneratorJob::shutdownInstance);
+
+        List<CompletableFuture<Void>> closes = new ArrayList<>();
+        for (World world : irisWorlds) {
+            PlatformChunkGenerator gen = IrisToolbelt.access(world);
+            if (gen == null) continue;
+
+            Engine engine = gen.getEngine();
+            if (engine != null) {
+                J.attempt(() -> engine.getMantle().saveAllNow());
+            }
+
+            try {
+                closes.add(gen.closeAsync());
+            } catch (Throwable t) {
+                Iris.reportError(t);
+            }
+        }
+
+        if (closes.isEmpty()) return;
+
+        try {
+            CompletableFuture.allOf(closes.toArray(new CompletableFuture<?>[0]))
+                    .get(timeoutSeconds, TimeUnit.SECONDS);
+            Iris.info("All Iris chunk generators parked. Safe to unload.");
+        } catch (TimeoutException e) {
+            Iris.warn("Iris generator drain timed out after " + timeoutSeconds + "s; unload proceeding anyway.");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            Iris.warn("Iris generator drain interrupted; unload proceeding.");
+        } catch (ExecutionException e) {
+            Iris.reportError(e.getCause() == null ? e : e.getCause());
+        }
     }
 
     private void setupPapi() {

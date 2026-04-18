@@ -25,12 +25,14 @@ public class UpperDimensionContext implements DataProvider {
     private final int chunkHeight;
     private final ProceduralStream<Double> heightStream;
     private final ProceduralStream<IrisBiome> biomeStream;
+    private final ProceduralStream<IrisRegion> regionStream;
     private final ProceduralStream<BlockData> rockStream;
     private final boolean selfReferencing;
 
     private UpperDimensionContext(IrisDimension dimension, IrisData data, int chunkHeight,
                                  ProceduralStream<Double> heightStream,
                                  ProceduralStream<IrisBiome> biomeStream,
+                                 ProceduralStream<IrisRegion> regionStream,
                                  ProceduralStream<BlockData> rockStream,
                                  boolean selfReferencing) {
         this.dimension = dimension;
@@ -38,6 +40,7 @@ public class UpperDimensionContext implements DataProvider {
         this.chunkHeight = chunkHeight;
         this.heightStream = heightStream;
         this.biomeStream = biomeStream;
+        this.regionStream = regionStream;
         this.rockStream = rockStream;
         this.selfReferencing = selfReferencing;
     }
@@ -59,6 +62,7 @@ public class UpperDimensionContext implements DataProvider {
                 chunkHeight,
                 complex.getHeightStream(),
                 complex.getBaseBiomeStream(),
+                complex.getRegionStream(),
                 complex.getRockStream(),
                 true
         );
@@ -233,6 +237,7 @@ public class UpperDimensionContext implements DataProvider {
                 chunkHeight,
                 heightStream,
                 baseBiomeStream,
+                regionStream,
                 rockStream,
                 false
         );
@@ -245,6 +250,10 @@ public class UpperDimensionContext implements DataProvider {
 
     public IrisBiome getUpperBiome(int x, int z) {
         return biomeStream.get((double) x, (double) z);
+    }
+
+    public IrisRegion getUpperRegion(int x, int z) {
+        return regionStream == null ? null : regionStream.get((double) x, (double) z);
     }
 
     public BlockData getRockBlock(int x, int z) {

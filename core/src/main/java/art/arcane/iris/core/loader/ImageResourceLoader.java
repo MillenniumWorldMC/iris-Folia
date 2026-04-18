@@ -144,6 +144,14 @@ public class ImageResourceLoader extends ResourceLoader<IrisImage> {
     }
 
     public File findFile(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return null;
+        }
+        if (name.equals("null")) {
+            Iris.warn("Refusing " + resourceTypeName + " lookup for literal string \"null\" (called by " + callerHint() + ")");
+            return null;
+        }
+
         for (File i : getFolders(name)) {
             for (File j : i.listFiles()) {
                 if (j.isFile() && j.getName().endsWith(".png") && j.getName().split("\\Q.\\E")[0].equals(name)) {
@@ -158,7 +166,7 @@ public class ImageResourceLoader extends ResourceLoader<IrisImage> {
             }
         }
 
-        Iris.warn("Couldn't find " + resourceTypeName + ": " + name);
+        Iris.warn("Couldn't find " + resourceTypeName + ": " + name + " (called by " + callerHint() + ")");
 
         return null;
     }
@@ -182,12 +190,19 @@ public class ImageResourceLoader extends ResourceLoader<IrisImage> {
             }
         }
 
-        Iris.warn("Couldn't find " + resourceTypeName + ": " + name);
+        Iris.warn("Couldn't find " + resourceTypeName + ": " + name + " (called by " + callerHint() + ")");
 
         return null;
     }
 
     public IrisImage load(String name, boolean warn) {
+        if (name == null || name.trim().isEmpty()) {
+            return null;
+        }
+        if (name.equals("null") && warn) {
+            Iris.warn("Refusing " + resourceTypeName + " load for literal string \"null\" (called by " + callerHint() + ")");
+            return null;
+        }
         return loadCache.get(name);
     }
 }

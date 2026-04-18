@@ -45,6 +45,7 @@ public class ModeOverworld extends IrisEngineMode implements EngineMode {
         var deposit = new IrisDepositModifier(getEngine());
         var perfection = new IrisPerfectionModifier(getEngine());
         var custom = new IrisCustomModifier(getEngine());
+        var floatingChildBiomes = new IrisFloatingChildBiomeModifier(getEngine());
         EngineStage sBiome = (x, z, k, p, m, c) -> biome.actuate(x, z, p, m, c);
         EngineStage sGenMatter = (x, z, k, p, m, c) -> {
             if (shouldBypassMantleStages(getEngine())) {
@@ -78,6 +79,8 @@ public class ModeOverworld extends IrisEngineMode implements EngineMode {
             }
             getMantle().insertMatter(x >> 4, z >> 4, BlockData.class, K, m);
         };
+        EngineStage sFloatingTerrainSolid = (x, z, k, p, m, c) -> floatingChildBiomes.modify(x, z, k, m, c);
+        EngineStage sFloatingDecorate = (x, z, k, p, m, c) -> floatingChildBiomes.decorateColumns(x, z, k, m, c);
         EngineStage sPerfection = (x, z, k, p, m, c) -> perfection.modify(x, z, k, m, c);
         EngineStage sCustom = (x, z, k, p, m, c) -> {
             if (shouldBypassMantleStages(getEngine())) {
@@ -94,11 +97,13 @@ public class ModeOverworld extends IrisEngineMode implements EngineMode {
                 sCave,
                 sPost
         ));
+        registerStage(sFloatingTerrainSolid);
         registerStage(burst(
                 sDeposit,
                 sInsertMatter,
                 sDecorant
         ));
+        registerStage(sFloatingDecorate);
         registerStage(sPerfection);
         registerStage(sCustom);
     }

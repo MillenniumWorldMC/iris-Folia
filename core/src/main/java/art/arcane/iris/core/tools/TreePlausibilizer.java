@@ -67,15 +67,18 @@ public final class TreePlausibilizer {
         }
     }
 
-    public static Result analyze(IrisObject obj, boolean normalize, boolean smoke, int shellRadius) {
-        return run(obj, false, normalize, smoke, shellRadius);
+    public static Result analyze(IrisObject obj, PlausibilizeMode mode, int shellRadius) {
+        return run(obj, false, mode, shellRadius);
     }
 
-    public static Result apply(IrisObject obj, boolean normalize, boolean smoke, int shellRadius) {
-        return run(obj, true, normalize, smoke, shellRadius);
+    public static Result apply(IrisObject obj, PlausibilizeMode mode, int shellRadius) {
+        return run(obj, true, mode, shellRadius);
     }
 
-    private static Result run(IrisObject obj, boolean mutate, boolean normalize, boolean smoke, int shellRadius) {
+    private static Result run(IrisObject obj, boolean mutate, PlausibilizeMode mode, int shellRadius) {
+        boolean normalize = mode == PlausibilizeMode.NORMALIZE;
+        boolean smoke = mode == PlausibilizeMode.SMOKE;
+        boolean foliageOverature = mode == PlausibilizeMode.FOLIAGE_OVERATURE;
         VectorMap<BlockData> blocks = obj.getBlocks();
         Map<Long, BlockData> positions = new HashMap<>(blocks.size() * 2);
         Set<Long> logPositions = new HashSet<>();
@@ -154,6 +157,8 @@ public final class TreePlausibilizer {
         Set<Long> unreached;
         Map<Long, Integer> distances;
         List<LogInsertion> inserts = new ArrayList<>();
+        Set<Long> orphanRemovals = new HashSet<>();
+        List<LeafAddition> leafAdds = new ArrayList<>();
 
         if (!leafPositions.isEmpty() && !logPositions.isEmpty()) {
             Set<Long> connectivityLeaves;
@@ -168,12 +173,24 @@ public final class TreePlausibilizer {
             reachableBefore = countReachable(leafPositions, distances);
             unreached = new HashSet<>(leafPositions);
             unreached.removeAll(distances.keySet());
-            Set<Long> frontier = computeInitialFrontier(unreached, logPositions, distances);
 
-            logsAdded = bridgeLoop(
-                    unreached, frontier, distances,
+            if (foliageOverature && !smoke && !unreached.isEmpty()) {
+                BlockData bridgeLeaf = pickDominantLeaf(leafTypeCounts);
+                foliageBridge(
+                        unreached, logPositions, distances,
+                        leafPositions, connectivityLeaves, positions,
+                        bridgeLeaf, leafAdds,
+                        minX, minY, minZ, maxX, maxY, maxZ
+                );
+                distances = seedDistances(logPositions, connectivityLeaves);
+                unreached = new HashSet<>(leafPositions);
+                unreached.removeAll(distances.keySet());
+            }
+
+            logsAdded = tentacleGrow(
+                    unreached, distances,
                     logPositions, leafPositions, connectivityLeaves, positions,
-                    inserts
+                    inserts, orphanRemovals, !foliageOverature
             );
         } else {
             distances = new HashMap<>();
@@ -181,8 +198,9 @@ public final class TreePlausibilizer {
             reachableBefore = 0;
         }
 
-        int leavesAdded = 0;
-        List<LeafAddition> leafAdds = new ArrayList<>();
+        leavesRemoved += orphanRemovals.size();
+
+        int leavesAdded = leafAdds.size();
         if (smoke) {
             BlockData leafTemplate = pickDominantLeaf(leafTypeCounts);
             for (long key : leafPositions) {
@@ -212,6 +230,9 @@ public final class TreePlausibilizer {
                         blocks.remove(unpackKey(key));
                     }
                 }
+            }
+            for (long key : orphanRemovals) {
+                blocks.remove(unpackKey(key));
             }
             for (LeafAddition addition : leafAdds) {
                 blocks.put(unpackKey(addition.key()), addition.data());
@@ -288,125 +309,244 @@ public final class TreePlausibilizer {
         }
     }
 
-    private static int bridgeLoop(
+    private static int tentacleGrow(
             Set<Long> unreached,
-            Set<Long> frontier,
             Map<Long, Integer> distances,
             Set<Long> logPositions,
             Set<Long> leafPositions,
             Set<Long> connectivityLeaves,
             Map<Long, BlockData> positions,
-            List<LogInsertion> inserts
+            List<LogInsertion> inserts,
+            Set<Long> orphanRemovals,
+            boolean deleteOrphans
     ) {
         int logsAdded = 0;
-        int safetyLimit = unreached.size() + 32;
-        while (!unreached.isEmpty() && logsAdded < safetyLimit) {
-            long candidateKey = pickInteriorCandidate(frontier, unreached, connectivityLeaves);
-            BlockData logData = pickLogVariant(candidateKey, positions, logPositions);
-            inserts.add(new LogInsertion(candidateKey, logData));
+        int safetyLimit = unreached.size() * 2 + 32;
+        long currentTarget = -1L;
 
-            logPositions.add(candidateKey);
-            leafPositions.remove(candidateKey);
-            connectivityLeaves.remove(candidateKey);
-            distances.remove(candidateKey);
-            unreached.remove(candidateKey);
-            frontier.remove(candidateKey);
-            positions.put(candidateKey, logData);
+        while (!unreached.isEmpty() && logsAdded < safetyLimit) {
+            if (currentTarget == -1L || !unreached.contains(currentTarget)) {
+                currentTarget = unreached.iterator().next();
+            }
+
+            long extensionLeaf = findWoodAdjacentLeafFrom(currentTarget, connectivityLeaves, logPositions);
+
+            if (extensionLeaf == -1L) {
+                if (deleteOrphans) {
+                    removeOrphanCluster(currentTarget, connectivityLeaves, leafPositions, unreached, distances, positions, orphanRemovals);
+                } else {
+                    skipOrphanCluster(currentTarget, unreached, connectivityLeaves);
+                }
+                currentTarget = -1L;
+                continue;
+            }
+
+            BlockData logData = pickLogVariant(extensionLeaf, positions, logPositions);
+            inserts.add(new LogInsertion(extensionLeaf, logData));
+
+            logPositions.add(extensionLeaf);
+            leafPositions.remove(extensionLeaf);
+            connectivityLeaves.remove(extensionLeaf);
+            distances.remove(extensionLeaf);
+            unreached.remove(extensionLeaf);
+            positions.put(extensionLeaf, logData);
             logsAdded++;
 
-            int[] cx = unpack(candidateKey);
-            Deque<Long> q = new ArrayDeque<>();
-            for (int[] n : NEIGHBORS) {
-                long nk = packXYZ(cx[0] + n[0], cx[1] + n[1], cx[2] + n[2]);
-                if (connectivityLeaves.contains(nk)) {
-                    Integer cur = distances.get(nk);
-                    if (cur == null || cur > 1) {
-                        if (cur == null) {
-                            unreached.remove(nk);
-                            frontier.remove(nk);
-                        }
-                        distances.put(nk, 1);
-                        q.add(nk);
-                    }
-                }
-                if (unreached.contains(nk)) {
-                    frontier.add(nk);
-                }
-            }
-            while (!q.isEmpty()) {
-                long pos = q.poll();
-                int d = distances.get(pos);
-                if (d >= MAX_DISTANCE) {
-                    continue;
-                }
-                int[] px = unpack(pos);
-                for (int[] n : NEIGHBORS) {
-                    long nk = packXYZ(px[0] + n[0], px[1] + n[1], px[2] + n[2]);
-                    if (connectivityLeaves.contains(nk)) {
-                        Integer cur = distances.get(nk);
-                        if (cur == null || cur > d + 1) {
-                            if (cur == null) {
-                                unreached.remove(nk);
-                                frontier.remove(nk);
-                            }
-                            distances.put(nk, d + 1);
-                            q.add(nk);
-                        }
-                    }
-                    if (unreached.contains(nk)) {
-                        frontier.add(nk);
-                    }
-                }
-            }
+            propagateFromLog(extensionLeaf, distances, connectivityLeaves, unreached);
         }
         return logsAdded;
     }
 
-    private static long pickInteriorCandidate(
-            Set<Long> frontier, Set<Long> unreached, Set<Long> connectivityLeaves
-    ) {
-        Set<Long> pool = !frontier.isEmpty() ? frontier : unreached;
-        long best = -1L;
-        int bestScore = -1;
-        for (long pos : pool) {
+    private static long findWoodAdjacentLeafFrom(long start, Set<Long> leafPositions, Set<Long> logPositions) {
+        if (!leafPositions.contains(start)) return -1L;
+        if (hasLogNeighbor(start, logPositions)) return start;
+
+        Set<Long> visited = new HashSet<>();
+        Deque<Long> queue = new ArrayDeque<>();
+        queue.add(start);
+        visited.add(start);
+
+        while (!queue.isEmpty()) {
+            long pos = queue.poll();
             int[] xyz = unpack(pos);
-            int score = 0;
             for (int[] n : NEIGHBORS) {
                 long nk = packXYZ(xyz[0] + n[0], xyz[1] + n[1], xyz[2] + n[2]);
-                if (connectivityLeaves.contains(nk)) {
-                    score++;
-                }
-            }
-            if (score > bestScore) {
-                bestScore = score;
-                best = pos;
-                if (score == 6) break;
+                if (!leafPositions.contains(nk) || !visited.add(nk)) continue;
+                if (hasLogNeighbor(nk, logPositions)) return nk;
+                queue.add(nk);
             }
         }
-        return best;
+        return -1L;
     }
 
-    private static Set<Long> computeInitialFrontier(
-            Set<Long> unreached, Set<Long> logPositions, Map<Long, Integer> distances
-    ) {
-        Set<Long> frontier = new HashSet<>();
-        for (long u : unreached) {
-            if (hasReachedNeighbor(u, distances, logPositions)) {
-                frontier.add(u);
-            }
-        }
-        return frontier;
-    }
-
-    private static boolean hasReachedNeighbor(long key, Map<Long, Integer> distances, Set<Long> logPositions) {
+    private static boolean hasLogNeighbor(long key, Set<Long> logPositions) {
         int[] xyz = unpack(key);
         for (int[] n : NEIGHBORS) {
             long nk = packXYZ(xyz[0] + n[0], xyz[1] + n[1], xyz[2] + n[2]);
-            if (logPositions.contains(nk) || distances.containsKey(nk)) {
-                return true;
-            }
+            if (logPositions.contains(nk)) return true;
         }
         return false;
+    }
+
+    private static void propagateFromLog(
+            long logKey, Map<Long, Integer> distances,
+            Set<Long> connectivityLeaves, Set<Long> unreached
+    ) {
+        int[] cx = unpack(logKey);
+        Deque<Long> q = new ArrayDeque<>();
+        for (int[] n : NEIGHBORS) {
+            long nk = packXYZ(cx[0] + n[0], cx[1] + n[1], cx[2] + n[2]);
+            if (connectivityLeaves.contains(nk)) {
+                Integer cur = distances.get(nk);
+                if (cur == null || cur > 1) {
+                    if (cur == null) unreached.remove(nk);
+                    distances.put(nk, 1);
+                    q.add(nk);
+                }
+            }
+        }
+        while (!q.isEmpty()) {
+            long pos = q.poll();
+            int d = distances.get(pos);
+            if (d >= MAX_DISTANCE) continue;
+            int[] px = unpack(pos);
+            for (int[] n : NEIGHBORS) {
+                long nk = packXYZ(px[0] + n[0], px[1] + n[1], px[2] + n[2]);
+                if (connectivityLeaves.contains(nk)) {
+                    Integer cur = distances.get(nk);
+                    if (cur == null || cur > d + 1) {
+                        if (cur == null) unreached.remove(nk);
+                        distances.put(nk, d + 1);
+                        q.add(nk);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void foliageBridge(
+            Set<Long> unreached,
+            Set<Long> logPositions,
+            Map<Long, Integer> distances,
+            Set<Long> leafPositions,
+            Set<Long> connectivityLeaves,
+            Map<Long, BlockData> positions,
+            BlockData leafTemplate,
+            List<LeafAddition> leafAdds,
+            int minX, int minY, int minZ, int maxX, int maxY, int maxZ
+    ) {
+        Set<Long> pending = new HashSet<>(unreached);
+        while (!pending.isEmpty()) {
+            long seed = pending.iterator().next();
+            Set<Long> cluster = new HashSet<>();
+            Deque<Long> cq = new ArrayDeque<>();
+            cq.add(seed);
+            cluster.add(seed);
+            while (!cq.isEmpty()) {
+                long p = cq.poll();
+                int[] xyz = unpack(p);
+                for (int[] n : NEIGHBORS) {
+                    long nk = packXYZ(xyz[0] + n[0], xyz[1] + n[1], xyz[2] + n[2]);
+                    if (pending.contains(nk) && cluster.add(nk)) {
+                        cq.add(nk);
+                    }
+                }
+            }
+
+            Map<Long, Long> parent = new HashMap<>();
+            Deque<Long> q = new ArrayDeque<>();
+            for (long c : cluster) {
+                parent.put(c, -1L);
+                q.add(c);
+            }
+
+            long pathEnd = -1L;
+            while (!q.isEmpty() && pathEnd == -1L) {
+                long p = q.poll();
+                int[] xyz = unpack(p);
+                for (int[] n : NEIGHBORS) {
+                    int nx = xyz[0] + n[0];
+                    int ny = xyz[1] + n[1];
+                    int nz = xyz[2] + n[2];
+                    if (nx < minX || nx > maxX) continue;
+                    if (ny < minY || ny > maxY) continue;
+                    if (nz < minZ || nz > maxZ) continue;
+                    long nk = packXYZ(nx, ny, nz);
+                    if (parent.containsKey(nk)) continue;
+                    if (logPositions.contains(nk) || distances.containsKey(nk)) {
+                        pathEnd = p;
+                        break;
+                    }
+                    if (positions.containsKey(nk)) continue;
+                    parent.put(nk, p);
+                    q.add(nk);
+                }
+            }
+
+            pending.removeAll(cluster);
+
+            if (pathEnd == -1L) {
+                continue;
+            }
+
+            long cur = pathEnd;
+            while (cur != -1L && !cluster.contains(cur)) {
+                if (!positions.containsKey(cur)) {
+                    BlockData clone = leafTemplate.clone();
+                    positions.put(cur, clone);
+                    leafPositions.add(cur);
+                    connectivityLeaves.add(cur);
+                    leafAdds.add(new LeafAddition(cur, clone));
+                }
+                cur = parent.get(cur);
+            }
+        }
+    }
+
+    private static void skipOrphanCluster(long seed, Set<Long> unreached, Set<Long> connectivityLeaves) {
+        Deque<Long> queue = new ArrayDeque<>();
+        Set<Long> visited = new HashSet<>();
+        queue.add(seed);
+        visited.add(seed);
+        while (!queue.isEmpty()) {
+            long pos = queue.poll();
+            unreached.remove(pos);
+            int[] xyz = unpack(pos);
+            for (int[] n : NEIGHBORS) {
+                long nk = packXYZ(xyz[0] + n[0], xyz[1] + n[1], xyz[2] + n[2]);
+                if (visited.add(nk) && unreached.contains(nk) && connectivityLeaves.contains(nk)) {
+                    queue.add(nk);
+                }
+            }
+        }
+    }
+
+    private static void removeOrphanCluster(
+            long seed,
+            Set<Long> connectivityLeaves, Set<Long> leafPositions, Set<Long> unreached,
+            Map<Long, Integer> distances, Map<Long, BlockData> positions, Set<Long> orphanRemovals
+    ) {
+        Deque<Long> queue = new ArrayDeque<>();
+        Set<Long> visited = new HashSet<>();
+        queue.add(seed);
+        visited.add(seed);
+
+        while (!queue.isEmpty()) {
+            long pos = queue.poll();
+            int[] xyz = unpack(pos);
+            for (int[] n : NEIGHBORS) {
+                long nk = packXYZ(xyz[0] + n[0], xyz[1] + n[1], xyz[2] + n[2]);
+                if (visited.add(nk) && connectivityLeaves.contains(nk)) {
+                    queue.add(nk);
+                }
+            }
+            orphanRemovals.add(pos);
+            connectivityLeaves.remove(pos);
+            leafPositions.remove(pos);
+            unreached.remove(pos);
+            distances.remove(pos);
+            positions.remove(pos);
+        }
     }
 
     private static Map<Long, Integer> seedDistances(Set<Long> logPositions, Set<Long> leafPositions) {

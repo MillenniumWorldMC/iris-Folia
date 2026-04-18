@@ -23,6 +23,7 @@ import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineAssignedActuator;
 import art.arcane.iris.engine.framework.EngineDecorator;
 import art.arcane.iris.engine.object.IrisBiome;
+import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.iris.util.project.hunk.Hunk;
@@ -87,7 +88,8 @@ public class IrisDecorantActuator extends EngineAssignedActuator<BlockData> {
                     continue;
                 }
 
-                if (height < getDimension().getFluidHeight() && PREDICATE_SOLID.test(output.get(i, height, j))) {
+                if (height < getDimension().getFluidHeight() && PREDICATE_SOLID.test(output.get(i, height, j))
+                        && height + 1 < output.getHeight() && B.isWater(output.get(i, height + 1, j))) {
                     getSeaSurfaceDecorator().decorate(i, j,
                             realX, Math.round(i + 1), Math.round(x + i - 1),
                             realZ, Math.round(z + j + 1), Math.round(z + j - 1),

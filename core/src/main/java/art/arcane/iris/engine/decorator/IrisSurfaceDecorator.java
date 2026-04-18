@@ -39,6 +39,17 @@ public class IrisSurfaceDecorator extends IrisEngineDecorator {
         super(engine, "Surface", IrisDecorationPart.NONE);
     }
 
+    protected IrisSurfaceDecorator(Engine engine, String name) {
+        super(engine, name, IrisDecorationPart.NONE);
+    }
+
+    protected boolean isSlopeValid(IrisDecorator decorator, int realX, int realZ) {
+        if (decorator.isForcePlace() || decorator.getSlopeCondition().isDefault()) {
+            return true;
+        }
+        return decorator.getSlopeCondition().isValid(getComplex().getSlopeStream().get(realX, realZ));
+    }
+
     @BlockCoordinates
     @Override
     public void decorate(int x, int z, int realX, int realX1, int realX_1, int realZ, int realZ1, int realZ_1, Hunk<BlockData> data, IrisBiome biome, int height, int max) {
@@ -54,8 +65,7 @@ public class IrisSurfaceDecorator extends IrisEngineDecorator {
         boolean caveSkipFluid = biome.getInferredType() == InferredType.CAVE;
 
         if (decorator != null) {
-            if (!decorator.isForcePlace() && !decorator.getSlopeCondition().isDefault()
-                    && !decorator.getSlopeCondition().isValid(getComplex().getSlopeStream().get(realX, realZ))) {
+            if (!isSlopeValid(decorator, realX, realZ)) {
                 return;
             }
 

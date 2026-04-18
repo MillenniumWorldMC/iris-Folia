@@ -24,8 +24,6 @@ import art.arcane.iris.core.gui.NoiseExplorerGUI;
 import art.arcane.iris.core.gui.VisionGUI;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.project.IrisProject;
-import art.arcane.iris.core.runtime.ObjectStudioActivation;
-import art.arcane.iris.core.runtime.WorldRuntimeControlService;
 import art.arcane.iris.core.service.StudioSVC;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.framework.Engine;
@@ -38,6 +36,7 @@ import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.collection.KSet;
 import art.arcane.iris.util.common.director.DirectorContext;
 import art.arcane.iris.util.common.director.DirectorExecutor;
+import art.arcane.iris.util.common.director.DirectorHelp;
 import art.arcane.iris.util.common.director.handlers.DimensionHandler;
 import art.arcane.iris.util.common.director.specialhandlers.NullableDimensionHandler;
 import art.arcane.volmlib.util.director.DirectorOrigin;
@@ -92,7 +91,11 @@ import java.util.function.Supplier;
 
 @Director(name = "studio", aliases = {"std", "s"}, description = "Studio Commands", studio = true)
 public class CommandStudio implements DirectorExecutor {
-    private CommandFind find;
+    @Director(description = "Show help tree for this command group", aliases = {"?"})
+    public void help() {
+        DirectorHelp.print(sender(), getClass());
+    }
+
     private CommandEdit edit;
     //private CommandDeepSearch deepSearch;
 
@@ -123,101 +126,6 @@ public class CommandStudio implements DirectorExecutor {
             long seed) {
         sender().sendMessage(C.GREEN + "Opening studio for the \"" + dimension.getName() + "\" pack (seed: " + seed + ")");
         Iris.service(StudioSVC.class).open(sender(), seed, dimension.getLoadKey());
-    }
-
-    @Director(description = "Open an object studio world (grid of every object; dimension optional, defaults to all packs)", aliases = {"obj", "objs"}, sync = true)
-    public void object(
-            @Param(defaultValue = "null", description = "Optional dimension whose object pack to lay out; omit to aggregate objects from every pack", aliases = "dim", customHandler = NullableDimensionHandler.class)
-            IrisDimension dimension,
-            @Param(defaultValue = "1337", description = "The seed to generate the studio with", aliases = "s")
-            long seed
-    ) {
-        VolmitSender commandSender = sender();
-        java.util.Map<String, IrisData> sources = new java.util.LinkedHashMap<>();
-        IrisDimension hostDimension = dimension;
-
-        if (dimension != null) {
-            IrisData data = dimension.getLoader();
-            if (data == null) {
-                data = IrisData.get(dimension.getLoadFile().getParentFile().getParentFile());
-            }
-            sources.put(data.getDataFolder().getName(), data);
-        } else {
-            File workspace = Iris.service(StudioSVC.class).getWorkspaceFolder();
-            File[] packs = workspace == null ? null : workspace.listFiles();
-            if (packs != null) {
-                Arrays.sort(packs, java.util.Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER));
-                for (File pack : packs) {
-                    if (!pack.isDirectory()) continue;
-                    File dimensionsDir = new File(pack, "dimensions");
-                    if (!dimensionsDir.isDirectory()) continue;
-                    IrisData data = IrisData.get(pack);
-                    String[] keys = data.getObjectLoader().getPossibleKeys();
-                    if (keys == null || keys.length == 0) continue;
-                    sources.put(pack.getName(), data);
-                    if (hostDimension == null) {
-                        File[] dimFiles = dimensionsDir.listFiles((f) -> f.isFile() && f.getName().endsWith(".json"));
-                        if (dimFiles != null && dimFiles.length > 0) {
-                            String loadKey = dimFiles[0].getName().replaceFirst("\\.json$", "");
-                            IrisDimension loaded = data.getDimensionLoader().load(loadKey);
-                            if (loaded != null) {
-                                hostDimension = loaded;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (hostDimension == null || sources.isEmpty()) {
-            commandSender.sendMessage(C.RED + "No packs with objects were found on this server.");
-            return;
-        }
-
-        int totalObjects = 0;
-        for (IrisData d : sources.values()) {
-            String[] k = d.getObjectLoader().getPossibleKeys();
-            if (k != null) totalObjects += k.length;
-        }
-        if (totalObjects == 0) {
-            commandSender.sendMessage(C.RED + "No objects to place across the selected pack(s).");
-            return;
-        }
-
-        hostDimension.setStudioMode(StudioMode.OBJECT_BUFFET);
-        ObjectStudioActivation.activate(hostDimension.getLoadKey());
-        ObjectStudioActivation.setSources(hostDimension.getLoadKey(), sources);
-
-        String scope = dimension == null
-                ? ("all packs [" + sources.size() + "]")
-                : ("\"" + hostDimension.getName() + "\"");
-        commandSender.sendMessage(C.GREEN + "Opening Object Studio for " + scope + " ("
-                + totalObjects + " objects)");
-
-        IrisDimension finalHost = hostDimension;
-        try {
-            Iris.service(StudioSVC.class).open(commandSender, seed, hostDimension.getLoadKey(), world -> {
-                if (world == null) return;
-                try {
-                    WorldRuntimeControlService.get().applyObjectStudioWorldRules(world);
-                } catch (Throwable e) {
-                    Iris.reportError("Failed to apply object studio world rules for " + world.getName(), e);
-                }
-
-                if (commandSender.isPlayer()) {
-                    Player p = commandSender.player();
-                    if (p != null) {
-                        Location target = new Location(world, 0.5D, 66D, 0.5D);
-                        J.runEntity(p, () -> {
-                            PaperLib.teleportAsync(p, target).thenRun(() -> p.setGameMode(GameMode.CREATIVE));
-                        });
-                    }
-                }
-            });
-        } catch (Throwable e) {
-            Iris.reportError("Failed to open object studio world \"" + finalHost.getLoadKey() + "\".", e);
-            commandSender.sendMessage(C.RED + "Failed to open object studio: " + e.getMessage());
-        }
     }
 
     @Director(description = "Open VSCode for a dimension", aliases = {"vsc", "edit"})
@@ -283,42 +191,23 @@ public class CommandStudio implements DirectorExecutor {
         sender().sendMessage(C.GREEN + "The \"" + dimension.getName() + "\" pack has version: " + dimension.getVersion());
     }
 
-    @Director(description = "Open the noise explorer (External GUI)", aliases = {"nmap", "n"})
-    public void noise() {
-        if (noGUI()) return;
-        sender().sendMessage(C.GREEN + "Opening Noise Explorer!");
-        NoiseExplorerGUI.launch();
-    }
-
-    @Director(description = "Charges all spawners in the area", aliases = "zzt", origin = DirectorOrigin.PLAYER)
-    public void charge() {
-        if (!IrisToolbelt.isIrisWorld(world())) {
-            sender().sendMessage(C.RED + "You must be in an Iris world to charge spawners!");
-            return;
-        }
-        sender().sendMessage(C.GREEN + "Charging spawners!");
-        engine().getWorldManager().chargeEnergy();
-    }
-
-    @Director(description = "Preview noise gens (External GUI)", aliases = {"generator", "gen"})
-    public void explore(
-            @Param(description = "The generator to explore", contextual = true)
+    @Director(description = "Open the noise explorer (External GUI)", aliases = {"nmap", "n", "generator", "gen"})
+    public void noise(
+            @Param(description = "Optional pack generator to preview", defaultValue = "null", contextual = true)
             IrisGenerator generator,
-            @Param(description = "The seed to generate with", defaultValue = "12345")
+            @Param(description = "The seed to preview the generator with", defaultValue = "12345")
             long seed
     ) {
         if (noGUI()) return;
         sender().sendMessage(C.GREEN + "Opening Noise Explorer!");
 
-        Supplier<Function2<Double, Double, Double>> l = () -> {
+        if (generator == null) {
+            NoiseExplorerGUI.launch();
+            return;
+        }
 
-            if (generator == null) {
-                return (x, z) -> 0D;
-            }
-
-            return (x, z) -> generator.getHeight(x, z, new RNG(seed).nextParallelRNG(3245).lmax());
-        };
-        NoiseExplorerGUI.launch(l, "Custom Generator");
+        Supplier<Function2<Double, Double, Double>> supplier = () -> (x, z) -> generator.getHeight(x, z, new RNG(seed).nextParallelRNG(3245).lmax());
+        NoiseExplorerGUI.launch(supplier, "Custom Generator");
     }
 
     @Director(description = "Show loot if a chest were right here", origin = DirectorOrigin.PLAYER, sync = true)
@@ -634,50 +523,6 @@ public class CommandStudio implements DirectorExecutor {
         }
 
         sender().sendMessage(C.GREEN + "Done! " + report.getPath());
-    }
-
-    @Director(description = "List pack noise generators as pack/generator", aliases = {"pack-noise", "packnoises"})
-    public void packnoise() {
-        LinkedHashSet<File> packFolders = new LinkedHashSet<>();
-        File packsFolder = Iris.instance.getDataFolder("packs");
-        File[] children = packsFolder.listFiles();
-        if (children != null) {
-            for (File child : children) {
-                if (child != null && child.isDirectory()) {
-                    packFolders.add(child);
-                }
-            }
-        }
-
-        StudioSVC studioService = Iris.service(StudioSVC.class);
-        if (studioService != null && studioService.isProjectOpen()) {
-            IrisProject activeProject = studioService.getActiveProject();
-            if (activeProject != null && activeProject.getPath() != null && activeProject.getPath().isDirectory()) {
-                packFolders.add(activeProject.getPath());
-            }
-        }
-
-        ArrayList<String> entries = new ArrayList<>();
-
-        for (File packFolder : packFolders) {
-            IrisData packData = IrisData.get(packFolder);
-            String packName = packFolder.getName();
-            String[] keys = packData.getGeneratorLoader().getPossibleKeys();
-            for (String key : keys) {
-                entries.add(packName + "/" + key);
-            }
-        }
-
-        if (entries.isEmpty()) {
-            sender().sendMessage(C.YELLOW + "No pack noise generators were found.");
-            return;
-        }
-
-        Collections.sort(entries);
-        sender().sendMessage(C.GREEN + "Pack noise generators: " + C.GOLD + entries.size());
-        for (String entry : entries) {
-            sender().sendMessage(C.GRAY + entry);
-        }
     }
 
     private PlatformChunkGenerator resolveProfileGenerator(IrisDimension dimension) {

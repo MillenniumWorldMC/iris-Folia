@@ -50,9 +50,6 @@ public class IrisSpawner extends IrisRegistrant {
     @Desc("The entity spawns to add initially. EXECUTES PER CHUNK!")
     private KList<IrisEntitySpawn> initialSpawns = new KList<>();
 
-    @Desc("The energy multiplier when calculating spawn energy usage")
-    private double energyMultiplier = 1;
-
     @Desc("This spawner will not spawn in a given chunk if that chunk has more than the defined amount of living entities.")
     private int maxEntitiesPerChunk = 1;
 

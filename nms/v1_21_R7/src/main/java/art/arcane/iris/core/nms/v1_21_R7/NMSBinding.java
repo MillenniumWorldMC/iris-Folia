@@ -5,7 +5,6 @@ import art.arcane.iris.Iris;
 import art.arcane.iris.core.nms.INMSBinding;
 import art.arcane.iris.core.nms.container.BiomeColor;
 import art.arcane.iris.core.nms.container.Pair;
-import art.arcane.iris.core.nms.container.StructurePlacement;
 import art.arcane.iris.core.nms.container.BlockProperty;
 import art.arcane.iris.core.nms.datapack.DataVersion;
 import art.arcane.iris.engine.data.cache.AtomicCache;
@@ -732,65 +731,6 @@ public class NMSBinding implements INMSBinding {
     }
 
     @Override
-    public KList<String> getStructureKeys() {
-        KList<String> keys = new KList<>();
-
-        var registry = registry().lookup(Registries.STRUCTURE).orElse(null);
-        if (registry == null) return keys;
-        registry.keySet().stream().map(Identifier::toString).forEach(keys::add);
-        registry.getTags()
-                .map(HolderSet.Named::key)
-                .map(TagKey::location)
-                .map(Identifier::toString)
-                .map(s -> "#" + s)
-                .forEach(keys::add);
-
-        return keys;
-    }
-
-    @Override
-    public KMap<String, KList<String>> getVanillaStructureBiomeTags() {
-        KMap<String, KList<String>> tags = new KMap<>();
-
-        Registry<net.minecraft.world.level.biome.Biome> registry = registry().lookup(Registries.BIOME).orElse(null);
-        if (registry == null) {
-            return tags;
-        }
-
-        registry.getTags().forEach(named -> {
-            TagKey<net.minecraft.world.level.biome.Biome> tagKey = named.key();
-            Identifier location = tagKey.location();
-            if (!"minecraft".equals(location.getNamespace())) {
-                return;
-            }
-
-            String path = location.getPath();
-            if (!path.startsWith("has_structure/")) {
-                return;
-            }
-
-            KList<String> values = new KList<>();
-            named.stream().forEach(holder -> {
-                net.minecraft.world.level.biome.Biome biome = holder.value();
-                Identifier biomeLocation = registry.getKey(biome);
-                if (biomeLocation == null) {
-                    return;
-                }
-                if ("minecraft".equals(biomeLocation.getNamespace())) {
-                    values.add(biomeLocation.toString());
-                }
-            });
-
-            KList<String> uniqueValues = values.removeDuplicates();
-            if (!uniqueValues.isEmpty()) {
-                tags.put(path, uniqueValues);
-            }
-        });
-
-        return tags;
-    }
-
-    @Override
     public boolean missingDimensionTypes(String... keys) {
         var type = registry().lookupOrThrow(Registries.DIMENSION_TYPE);
         return !Arrays.stream(keys)
@@ -848,76 +788,8 @@ public class NMSBinding implements INMSBinding {
         return new BlockProperty(property.getName(), property.getValueClass(), state.getValue(property), property.getPossibleValues(), property::getName);
     }
 
-    @Override
-    public void placeStructures(Chunk chunk) {
-        var craft = ((CraftChunk) chunk);
-        var level = craft.getCraftWorld().getHandle();
-        var access = craft.getHandle(ChunkStatus.FEATURES);
-        if (access instanceof LevelChunk) {
-            return;
-        }
-        level.getChunkSource().getGenerator().applyBiomeDecoration(level, access, level.structureManager());
-    }
-
-    @Override
-    public KMap<art.arcane.iris.core.link.Identifier, StructurePlacement> collectStructures() {
-        var structureSets = registry().lookupOrThrow(Registries.STRUCTURE_SET);
-        var structurePlacements = registry().lookupOrThrow(Registries.STRUCTURE_PLACEMENT);
-        return structureSets.keySet()
-                .stream()
-                .map(structureSets::get)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(holder -> {
-                    var set = holder.value();
-                    var placement = set.placement();
-                    var key = holder.key().identifier();
-                    StructurePlacement.StructurePlacementBuilder<?, ?> builder;
-                    if (placement instanceof RandomSpreadStructurePlacement random) {
-                        builder = StructurePlacement.RandomSpread.builder()
-                                .separation(random.separation())
-                                .spacing(random.spacing())
-                                .spreadType(switch (random.spreadType()) {
-                                    case LINEAR -> StructurePlacement.SpreadType.LINEAR;
-                                    case TRIANGULAR -> StructurePlacement.SpreadType.TRIANGULAR;
-                                });
-                    } else if (placement instanceof ConcentricRingsStructurePlacement rings) {
-                        builder = StructurePlacement.ConcentricRings.builder()
-                                .distance(rings.distance())
-                                .spread(rings.spread())
-                                .count(rings.count());
-                    } else {
-                        Iris.warn("Unsupported structure placement for set " + key + " with type " + structurePlacements.getKey(placement.type()));
-                        return null;
-                    }
-
-                    return new Pair<>(new art.arcane.iris.core.link.Identifier(key.getNamespace(), key.getPath()), builder
-                            .salt(placement.salt)
-                            .frequency(placement.frequency)
-                            .structures(set.structures()
-                                    .stream()
-                                    .map(entry -> new StructurePlacement.Structure(
-                                            entry.weight(),
-                                            entry.structure()
-                                                    .unwrapKey()
-                                                    .map(ResourceKey::identifier)
-                                                    .map(Identifier::toString)
-                                                    .orElse(null),
-                                            entry.structure().tags()
-                                                    .map(TagKey::location)
-                                                    .map(Identifier::toString)
-                                                    .toList()
-                                    ))
-                                    .filter(StructurePlacement.Structure::isValid)
-                                    .toList())
-                            .build());
-                })
-                .filter(Objects::nonNull)
-                .collect(Collectors.toMap(Pair::getA, Pair::getB, (a, b) -> a, KMap::new));
-    }
-
     private static final Pattern VANILLA_DATAPACK_ENTRY = Pattern.compile(
-            "^data/minecraft/(?:worldgen/(?:structure|structure_set|template_pool|processor_list)/.+\\.json"
+            "^data/minecraft/(?:worldgen/(?:structure|structure_set|template_pool|processor_list|configured_feature|placed_feature)/.+\\.json"
                     + "|structures?/.+\\.nbt"
                     + "|tags/worldgen/biome/has_structure/.+\\.json)$"
     );

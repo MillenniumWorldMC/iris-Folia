@@ -29,6 +29,7 @@ import art.arcane.iris.core.nms.datapack.IDataFixer.Dimension;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.object.annotations.*;
 import art.arcane.iris.engine.object.annotations.functions.ComponentFlagFunction;
+import com.google.gson.annotations.SerializedName;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.collection.KSet;
@@ -154,11 +155,6 @@ public class IrisDimension extends IrisRegistrant {
     private IrisCaveProfile caveProfile = new IrisCaveProfile();
     @Desc("Configuration of fluid bodies such as rivers & lakes")
     private IrisFluidBodies fluidBodies = new IrisFluidBodies();
-    @Desc("Enable or disable vanilla structure generation from the extracted vanilla datapack. When disabled, no vanilla structures spawn. When enabled, structures come from the vanilla datapack and can be overridden by external datapacks.")
-    private boolean vanillaStructures = true;
-    @ArrayType(type = IrisExternalDatapack.class, min = 1)
-    @Desc("Pack-scoped external datapack sources for structure import and optional vanilla replacement")
-    private KList<IrisExternalDatapack> externalDatapacks = new KList<>();
     @Desc("forceConvertTo320Height")
     private Boolean forceConvertTo320Height = false;
     @Desc("The world environment")
@@ -190,6 +186,8 @@ public class IrisDimension extends IrisRegistrant {
     private boolean upperDimensionCarving = false;
     @Desc("When true, objects from the mantle (structures, trees, etc.) can be placed in the upper dimension terrain zone. When false, the upper terrain is protected from object placement.")
     private boolean upperDimensionObjects = false;
+    @Desc("When true, upper-dimension objects force-place regardless of placement restrictions (slope, underwater, clamp, collisions, carving). Normal dimension objects always place first; upper objects place second and may clip or occlude lower-dimension placements when this is enabled.")
+    private boolean upperObjectsForcePlace = false;
     @RegistryListResource(IrisBiome.class)
     @Desc("Keep this either undefined or empty. Setting any biome name into this will force iris to only generate the specified biome. Great for testing.")
     private String focus = "";
@@ -241,12 +239,6 @@ public class IrisDimension extends IrisRegistrant {
     @ArrayType(min = 1, type = IrisShapedGeneratorStyle.class)
     @Desc("Overlay additional noise on top of the interoplated terrain.")
     private KList<IrisShapedGeneratorStyle> overlayNoise = new KList<>();
-    @Desc("If true, the spawner system has infinite energy. This is NOT recommended because it would allow for mobs to keep spawning over and over without a rate limit")
-    private boolean infiniteEnergy = false;
-    @MinNumber(0)
-    @MaxNumber(10000)
-    @Desc("This is the maximum energy you can have in a dimension")
-    private double maximumEnergy = 1000;
     @MinNumber(0.0001)
     @MaxNumber(512)
     @Desc("The rock zoom mostly for zooming in on a wispy palette")
@@ -468,7 +460,6 @@ public class IrisDimension extends IrisRegistrant {
     }
 
     public void installBiomes(IDataFixer fixer, DataProvider data, KList<File> folders, KSet<String> biomes) {
-        KMap<String, String> customBiomeToVanillaBiome = new KMap<>();
         String namespace = getLoadKey().toLowerCase(Locale.ROOT);
 
         for (IrisBiome irisBiome : getAllBiomes(data)) {
@@ -476,13 +467,8 @@ public class IrisDimension extends IrisRegistrant {
                 continue;
             }
 
-            Biome vanillaDerivative = irisBiome.getVanillaDerivative();
-            NamespacedKey vanillaDerivativeKey = vanillaDerivative == null ? null : vanillaDerivative.getKey();
-            String vanillaBiomeKey = vanillaDerivativeKey == null ? null : vanillaDerivativeKey.toString();
-
             for (IrisBiomeCustom customBiome : irisBiome.getCustomDerivitives()) {
                 String customBiomeId = customBiome.getId();
-                String customBiomeKey = namespace + ":" + customBiomeId.toLowerCase(Locale.ROOT);
                 String json = customBiome.generateJson(fixer);
 
                 synchronized (biomes) {
@@ -490,10 +476,6 @@ public class IrisDimension extends IrisRegistrant {
                         Iris.verbose("Duplicate Data Pack Biome: " + getLoadKey() + "/" + customBiomeId);
                         continue;
                     }
-                }
-
-                if (vanillaBiomeKey != null) {
-                    customBiomeToVanillaBiome.put(customBiomeKey, vanillaBiomeKey);
                 }
 
                 for (File datapacks : folders) {
@@ -509,126 +491,6 @@ public class IrisDimension extends IrisRegistrant {
                     }
                 }
             }
-        }
-
-        installStructureBiomeTags(folders, customBiomeToVanillaBiome);
-    }
-
-    private void installStructureBiomeTags(KList<File> folders, KMap<String, String> customBiomeToVanillaBiome) {
-        if (customBiomeToVanillaBiome.isEmpty()) {
-            return;
-        }
-
-        KMap<String, KList<String>> vanillaTags = INMS.get().getVanillaStructureBiomeTags();
-        if (vanillaTags == null || vanillaTags.isEmpty()) {
-            return;
-        }
-
-        KMap<String, KSet<String>> customTagValues = new KMap<>();
-        for (Map.Entry<String, String> customBiomeEntry : customBiomeToVanillaBiome.entrySet()) {
-            String customBiomeKey = customBiomeEntry.getKey();
-            String vanillaBiomeKey = customBiomeEntry.getValue();
-            if (vanillaBiomeKey == null) {
-                continue;
-            }
-
-            for (Map.Entry<String, KList<String>> tagEntry : vanillaTags.entrySet()) {
-                KList<String> values = tagEntry.getValue();
-                if (values == null || !values.contains(vanillaBiomeKey)) {
-                    continue;
-                }
-                customTagValues.computeIfAbsent(tagEntry.getKey(), key -> new KSet<>()).add(customBiomeKey);
-            }
-        }
-
-        if (customTagValues.isEmpty()) {
-            return;
-        }
-
-        for (File datapacks : folders) {
-            for (Map.Entry<String, KSet<String>> tagEntry : customTagValues.entrySet()) {
-                String tagPath = tagEntry.getKey();
-                KSet<String> customValues = tagEntry.getValue();
-                if (customValues == null || customValues.isEmpty()) {
-                    continue;
-                }
-
-                File output = new File(datapacks, "iris/data/minecraft/tags/worldgen/biome/" + tagPath + ".json");
-                try {
-                    writeMergedStructureBiomeTag(output, customValues);
-                } catch (IOException e) {
-                    Iris.reportError(e);
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-
-    private void writeMergedStructureBiomeTag(File output, KSet<String> customValues) throws IOException {
-        synchronized (IrisDimension.class) {
-            KSet<String> mergedValues = readExistingStructureBiomeTagValues(output);
-            mergedValues.addAll(customValues);
-
-            JSONArray values = new JSONArray();
-            KList<String> sortedValues = new KList<>(mergedValues).sort();
-            for (String value : sortedValues) {
-                values.put(value);
-            }
-
-            JSONObject json = new JSONObject();
-            json.put("replace", false);
-            json.put("values", values);
-
-            writeAtomicFile(output, json.toString(4));
-        }
-    }
-
-    private KSet<String> readExistingStructureBiomeTagValues(File output) {
-        KSet<String> values = new KSet<>();
-        if (output == null || !output.exists()) {
-            return values;
-        }
-
-        try {
-            JSONObject json = new JSONObject(IO.readAll(output));
-            if (!json.has("values")) {
-                return values;
-            }
-
-            JSONArray existingValues = json.getJSONArray("values");
-            for (int index = 0; index < existingValues.length(); index++) {
-                Object rawValue = existingValues.get(index);
-                if (rawValue == null) {
-                    continue;
-                }
-
-                String value = String.valueOf(rawValue).trim();
-                if (!value.isEmpty()) {
-                    values.add(value);
-                }
-            }
-        } catch (Throwable e) {
-            Iris.warn("Skipping malformed existing structure biome tag file: " + output.getPath());
-        }
-
-        return values;
-    }
-
-    private void writeAtomicFile(File output, String contents) throws IOException {
-        File parent = output.getParentFile();
-        if (parent != null && !parent.exists()) {
-            parent.mkdirs();
-        }
-
-        File temp = new File(parent, output.getName() + ".tmp-" + System.nanoTime());
-        IO.writeAll(temp, contents);
-
-        Path tempPath = temp.toPath();
-        Path outputPath = output.toPath();
-        try {
-            Files.move(tempPath, outputPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException e) {
-            Files.move(tempPath, outputPath, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 

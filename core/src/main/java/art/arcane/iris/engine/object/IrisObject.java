@@ -80,6 +80,8 @@ public class IrisObject extends IrisRegistrant {
     protected static final BlockData VAIR = B.get("VOID_AIR");
     protected static final BlockData VAIR_DEBUG = B.get("COBWEB");
     protected static final BlockData[] SNOW_LAYERS = new BlockData[]{B.get("minecraft:snow[layers=1]"), B.get("minecraft:snow[layers=2]"), B.get("minecraft:snow[layers=3]"), B.get("minecraft:snow[layers=4]"), B.get("minecraft:snow[layers=5]"), B.get("minecraft:snow[layers=6]"), B.get("minecraft:snow[layers=7]"), B.get("minecraft:snow[layers=8]")};
+    private static final long IMPLAUSIBLE_BEDROCK_WARN_THROTTLE_MS = 5000L;
+    private static final java.util.concurrent.ConcurrentHashMap<String, Long> IMPLAUSIBLE_BEDROCK_WARNS = new java.util.concurrent.ConcurrentHashMap<>();
     protected transient final Lock readLock;
     protected transient final Lock writeLock;
     @Getter
@@ -297,7 +299,7 @@ public class IrisObject extends IrisRegistrant {
 
     public synchronized IrisObject copy() {
         IrisObject o = new IrisObject(w, h, d);
-        o.setLoadKey(o.getLoadKey());
+        o.setLoadKey(getLoadKey());
         o.setLoader(getLoader());
         o.setLoadFile(getLoadFile());
         o.setCenter(getCenter().clone());
@@ -679,6 +681,7 @@ public class IrisObject extends IrisRegistrant {
         }
 
         boolean warped = !config.getWarp().isFlat();
+        boolean rawStructurePiece = config.getMode() == ObjectPlaceMode.STRUCTURE_PIECE;
         boolean stilting = (config.getMode().equals(ObjectPlaceMode.STILT) || config.getMode().equals(ObjectPlaceMode.FAST_STILT) ||
                 config.getMode() == ObjectPlaceMode.MIN_STILT || config.getMode() == ObjectPlaceMode.FAST_MIN_STILT ||
                 config.getMode() == ObjectPlaceMode.CENTER_STILT || config.getMode() == ObjectPlaceMode.ERODE_STILT);
@@ -819,17 +822,19 @@ public class IrisObject extends IrisRegistrant {
                         bail = true;
                     }
                 }
+            } else if (config.getMode().equals(ObjectPlaceMode.FLOATING)) {
+                y = rty;
             }
         } else {
             y = yv;
-            if (!config.isForcePlace()) {
+            if (!config.isForcePlace() && !rawStructurePiece) {
                 if (shouldBailForCarvingAnchor(placer, config, x, y, z)) {
                     bail = true;
                 }
             }
         }
 
-        if (yv >= 0 && config.isBottom()) {
+        if (yv >= 0 && config.isBottom() && !rawStructurePiece) {
             y += Math.floorDiv(h, 2);
             CarvingMode carvingMode = config.getCarvingSupport();
             if (!config.isForcePlace() && !carvingMode.equals(CarvingMode.CARVING_ONLY)) {
@@ -839,29 +844,42 @@ public class IrisObject extends IrisRegistrant {
             }
         }
 
+        if (yv < 0
+                && !config.isForcePlace()
+                && !config.isFromBottom()
+                && config.getMode() != ObjectPlaceMode.FLOATING
+                && !rawStructurePiece
+                && config.getCarvingSupport().supportsSurface()
+                && placer.getEngine() != null
+                && placer.getEngine().getDimension().isBedrock()
+                && y <= 1) {
+            warnImplausibleBedrockPlacement(placer, config, x, y, z);
+            return -1;
+        }
+
         if (bail && !config.isForcePlace()) {
             return -1;
         }
 
-        if (yv < 0) {
+        if (yv < 0 && !config.getMode().equals(ObjectPlaceMode.FLOATING) && !rawStructurePiece) {
             if (!config.isForcePlace() && !config.isUnderwater() && !config.isOnwater() && placer.isUnderwater(x, z)) {
                 return -1;
             }
         }
 
-        if (!config.isForcePlace() && c != null && Math.max(0, h + yrand + ty) + 1 >= c.getHeight()) {
+        if (!config.isForcePlace() && !rawStructurePiece && c != null && Math.max(0, h + yrand + ty) + 1 >= c.getHeight()) {
             return -1;
         }
 
-        if (!config.isForcePlace() && config.isUnderwater() && y + rty + ty >= placer.getFluidHeight()) {
+        if (!config.isForcePlace() && !rawStructurePiece && config.isUnderwater() && y + rty + ty >= placer.getFluidHeight()) {
             return -1;
         }
 
-        if (!config.isForcePlace() && !config.getClamp().canPlace(y + rty + ty, y - rty + ty)) {
+        if (!config.isForcePlace() && !rawStructurePiece && !config.getClamp().canPlace(y + rty + ty, y - rty + ty)) {
             return -1;
         }
 
-        if (!config.isForcePlace() && (!config.getAllowedCollisions().isEmpty() || !config.getForbiddenCollisions().isEmpty())) {
+        if (!config.isForcePlace() && !rawStructurePiece && (!config.getAllowedCollisions().isEmpty() || !config.getForbiddenCollisions().isEmpty())) {
             Engine engine = rdata.getEngine();
             BlockVector offset = new BlockVector(config.getTranslate().getX(), config.getTranslate().getY(), config.getTranslate().getZ());
             for (int i = x - Math.floorDiv(w, 2) + (int) offset.getX(); i <= x + Math.floorDiv(w, 2) - (w % 2 == 0 ? 1 : 0) + (int) offset.getX(); i++) {
@@ -1019,7 +1037,7 @@ public class IrisObject extends IrisRegistrant {
                     }
                 }
 
-                if (config.isMeld() && !placer.isSolid(xx, yy, zz)) {
+                if (config.isMeld() && !rawStructurePiece && !placer.isSolid(xx, yy, zz)) {
                     continue;
                 }
 
@@ -1241,6 +1259,24 @@ public class IrisObject extends IrisRegistrant {
         return y;
     }
 
+    private void warnImplausibleBedrockPlacement(IObjectPlacer placer, IrisObjectPlacement config, int x, int y, int z) {
+        String key = getLoadKey();
+        String fingerprint = (key == null ? "<null>" : key) + "|" + config.getMode();
+        long now = System.currentTimeMillis();
+        Long last = IMPLAUSIBLE_BEDROCK_WARNS.get(fingerprint);
+        if (last != null && now - last < IMPLAUSIBLE_BEDROCK_WARN_THROTTLE_MS) {
+            return;
+        }
+        IMPLAUSIBLE_BEDROCK_WARNS.put(fingerprint, now);
+        Iris.warn("Implausible object placement rejected: "
+                + (key == null ? "<no loadKey>" : key)
+                + " resolved anchorY=" + y + " at (" + x + "," + z + ") mode=" + config.getMode()
+                + " carving=" + config.getCarvingSupport()
+                + ". Surface-anchored placement should never land on the bedrock row. "
+                + "Height sampling returned a bogus value — not configured for floor placement "
+                + "(forcePlace=false, fromBottom=false, mode!=FLOATING). Skipping to protect bedrock.");
+    }
+
     private boolean shouldBailForCarvingAnchor(IObjectPlacer placer, IrisObjectPlacement placement, int x, int y, int z) {
         boolean carved = isCarvedAnchor(placer, x, y, z);
         CarvingMode carvingMode = placement.getCarvingSupport();
@@ -1339,6 +1375,9 @@ public class IrisObject extends IrisRegistrant {
     }
 
     public IrisObject scaled(double scale, IrisObjectPlacementScaleInterpolator interpolation) {
+        if (interpolation == null) {
+            interpolation = IrisObjectPlacementScaleInterpolator.NONE;
+        }
         Vector sm1 = new Vector(scale - 1, scale - 1, scale - 1);
         scale = Math.max(0.001, Math.min(50, scale));
         if (scale < 1) {
@@ -1361,6 +1400,9 @@ public class IrisObject extends IrisRegistrant {
         }
 
         IrisObject oo = new IrisObject((int) Math.ceil((w * scale) + (scale * 2)), (int) Math.ceil((h * scale) + (scale * 2)), (int) Math.ceil((d * scale) + (scale * 2)));
+        oo.setLoadKey(getLoadKey());
+        oo.setLoader(getLoader());
+        oo.setLoadFile(getLoadFile());
 
         readLock.lock();
         for (var entry : blocks) {

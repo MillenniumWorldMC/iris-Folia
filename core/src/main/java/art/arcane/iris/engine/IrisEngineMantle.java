@@ -28,6 +28,7 @@ import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.mantle.EngineMantle;
 import art.arcane.iris.engine.mantle.MantleComponent;
 import art.arcane.iris.engine.mantle.components.MantleCarvingComponent;
+import art.arcane.iris.engine.mantle.components.MantleFloatingObjectComponent;
 import art.arcane.iris.engine.mantle.components.MantleFluidBodyComponent;
 import art.arcane.iris.engine.mantle.components.MantleObjectComponent;
 import art.arcane.iris.util.project.matter.IrisMatterSupport;
@@ -82,6 +83,7 @@ public class IrisEngineMantle implements EngineMantle {
         registerComponent(new MantleFluidBodyComponent(this));
         object = new MantleObjectComponent(this);
         registerComponent(object);
+        registerComponent(new MantleFloatingObjectComponent(this));
     }
 
     @Override

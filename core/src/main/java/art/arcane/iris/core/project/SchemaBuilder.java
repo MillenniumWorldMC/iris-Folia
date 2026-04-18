@@ -322,6 +322,18 @@ public class SchemaBuilder {
                     fancyType = "Enchantment Type";
                     prop.put("$ref", "#/definitions/" + key);
                     description.add(SYMBOL_TYPE__N + "  Must be a valid Enchantment Type (use ctrl+space for auto complete!)");
+                } else if (k.isAnnotationPresent(RegistryListPotionEffect.class)) {
+                    String key = "enum-potion-effect-type";
+
+                    if (!definitions.containsKey(key)) {
+                        JSONObject j = new JSONObject();
+                        j.put("enum", POTION_TYPES);
+                        definitions.put(key, j);
+                    }
+
+                    fancyType = "Potion Effect Type";
+                    prop.put("$ref", "#/definitions/" + key);
+                    description.add(SYMBOL_TYPE__N + "  Must be a valid Potion Effect Type (use ctrl+space for auto complete!)");
                 } else if (k.isAnnotationPresent(RegistryListFunction.class)) {
                     var functionClass = k.getDeclaredAnnotation(RegistryListFunction.class).value();
                     try {
@@ -537,6 +549,20 @@ public class SchemaBuilder {
                                 items.put("$ref", "#/definitions/" + key);
                                 prop.put("items", items);
                                 description.add(SYMBOL_TYPE__N + "  Must be a valid Enchantment Type (use ctrl+space for auto complete!)");
+                            } else if (k.isAnnotationPresent(RegistryListPotionEffect.class)) {
+                                fancyType = "List of Potion Effect Types";
+                                String key = "enum-potion-effect-type";
+
+                                if (!definitions.containsKey(key)) {
+                                    JSONObject j = new JSONObject();
+                                    j.put("enum", POTION_TYPES);
+                                    definitions.put(key, j);
+                                }
+
+                                JSONObject items = new JSONObject();
+                                items.put("$ref", "#/definitions/" + key);
+                                prop.put("items", items);
+                                description.add(SYMBOL_TYPE__N + "  Must be a valid Potion Effect Type (use ctrl+space for auto complete!)");
                             } else if (k.isAnnotationPresent(RegistryListFunction.class)) {
                                 var functionClass = k.getDeclaredAnnotation(RegistryListFunction.class).value();
                                 try {

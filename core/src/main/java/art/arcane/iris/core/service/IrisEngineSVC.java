@@ -64,6 +64,15 @@ public class IrisEngineSVC implements IrisService {
 
     @Override
     public void onDisable() {
+        for (World world : worlds.keySet()) {
+            PlatformChunkGenerator gen = IrisToolbelt.access(world);
+            if (gen == null) continue;
+            try {
+                gen.close();
+            } catch (Throwable t) {
+                Iris.reportError(t);
+            }
+        }
         if (service != null) {
             service.shutdown();
         }

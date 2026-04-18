@@ -220,24 +220,6 @@ public class IrisSettings {
         public boolean useConsoleCustomColors = true;
         public boolean useCustomColorsIngame = true;
         public boolean adjustVanillaHeight = false;
-        public boolean importExternalDatapacks = true;
-        public boolean autoGenerateIntrinsicStructures = true;
-        public boolean intrinsicStructureFoundations = true;
-        public int intrinsicFoundationMaxDepth = 96;
-        public java.util.List<String> intrinsicStructureAllowlist = new java.util.ArrayList<>(java.util.List.of(
-                "minecraft:village_plains",
-                "minecraft:village_desert",
-                "minecraft:village_savanna",
-                "minecraft:village_snowy",
-                "minecraft:village_taiga",
-                "minecraft:pillager_outpost",
-                "minecraft:desert_pyramid",
-                "minecraft:jungle_temple",
-                "minecraft:swamp_hut",
-                "minecraft:igloo",
-                "minecraft:mansion",
-                "minecraft:ruined_portal*"
-        ));
         public String forceMainWorld = "";
         public int spinh = -20;
         public int spins = 7;

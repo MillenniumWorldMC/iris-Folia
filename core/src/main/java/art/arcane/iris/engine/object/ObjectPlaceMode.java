@@ -68,5 +68,13 @@ public enum ObjectPlaceMode {
 
     @Desc("Samples the height of the terrain at every x,z position of your object and pushes it down to the surface. It's pretty much like a melt function over the terrain.")
 
-    PAINT
+    PAINT,
+
+    @Desc("Places the object in pure air at an absolute Y driven entirely by translate.y (plus optional translate.yRandom). Terrain height, underwater, and carving anchor checks are skipped. Use this for floating islands, sky structures, clouds, or blimps where the object must not be translated to the ground.")
+
+    FLOATING,
+
+    @Desc("Raw stamp at the caller-supplied (x, y, z). No terrain sampling, no stilting, no Y recomputation, no underwater or carving anchor guards. Used internally to route native Minecraft structure pieces (villages etc.) through the Iris object placer.")
+
+    STRUCTURE_PIECE
 }

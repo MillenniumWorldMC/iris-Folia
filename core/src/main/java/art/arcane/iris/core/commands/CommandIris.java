@@ -19,7 +19,6 @@
 package art.arcane.iris.core.commands;
 
 import art.arcane.iris.Iris;
-import art.arcane.iris.core.ExternalDataPackPipeline;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.IrisWorlds;
 import art.arcane.iris.core.lifecycle.WorldLifecycleService;
@@ -29,7 +28,6 @@ import art.arcane.iris.core.service.StudioSVC;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.IrisDimension;
-import art.arcane.iris.engine.object.IrisExternalDatapack;
 import art.arcane.iris.engine.platform.ChunkReplacementListener;
 import art.arcane.iris.engine.platform.ChunkReplacementOptions;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
@@ -37,11 +35,11 @@ import art.arcane.volmlib.util.collection.KList;
 import art.arcane.iris.util.common.director.DirectorContext;
 import art.arcane.volmlib.util.director.DirectorParameterHandler;
 import art.arcane.iris.util.common.director.DirectorExecutor;
+import art.arcane.iris.util.common.director.DirectorHelp;
 import art.arcane.volmlib.util.director.DirectorOrigin;
 import art.arcane.volmlib.util.director.annotations.Director;
 import art.arcane.volmlib.util.director.annotations.Param;
 import art.arcane.volmlib.util.director.exceptions.DirectorParsingException;
-import art.arcane.iris.util.common.director.specialhandlers.ExternalDatapackLocateHandler;
 import art.arcane.iris.util.common.director.specialhandlers.NullablePlayerHandler;
 import art.arcane.iris.util.common.format.C;
 import art.arcane.volmlib.util.io.IO;
@@ -90,13 +88,17 @@ import static org.bukkit.Bukkit.getServer;
 
 @Director(name = "iris", aliases = {"ir", "irs"}, description = "Basic Command")
 public class CommandIris implements DirectorExecutor {
+    @Director(description = "Show help tree for this command group", aliases = {"?"})
+    public void help() {
+        DirectorHelp.print(sender(), getClass());
+    }
+
     private CommandStudio studio;
     private CommandPregen pregen;
     private CommandSettings settings;
     private CommandObject object;
     private CommandWhat what;
     private CommandEdit edit;
-    private CommandFind find;
     private CommandDeveloper developer;
     private CommandPack pack;
     public static boolean worldCreation = false;
@@ -449,170 +451,6 @@ public class CommandIris implements DirectorExecutor {
         sender().sendMessage(C.GREEN + "Iris v" + Iris.instance.getDescription().getVersion() + " by Volmit Software");
     }
 
-    @Director(description = "Locate structure targets mapped to an external datapack id in this world's dimension config", aliases = {"locateexternal", "locateext"}, origin = DirectorOrigin.PLAYER, sync = true)
-    public void locateExternal(
-            @Param(description = "External datapack id or structure id (comma separated values supported)", customHandler = ExternalDatapackLocateHandler.class)
-            String id,
-            @Param(description = "Run locate for every structure mapped to the id(s)", defaultValue = "true")
-            boolean all
-    ) {
-        if (id == null || id.trim().isBlank()) {
-            sender().sendMessage(C.RED + "You must provide an external datapack id.");
-            return;
-        }
-
-        Engine activeEngine = engine();
-        if (activeEngine == null || activeEngine.getDimension() == null) {
-            sender().sendMessage(C.RED + "You must be in an Iris world to use locateexternal.");
-            return;
-        }
-
-        IrisDimension dimension = activeEngine.getDimension();
-        KList<IrisExternalDatapack> externalDatapacks = dimension.getExternalDatapacks();
-        if (externalDatapacks == null || externalDatapacks.isEmpty()) {
-            sender().sendMessage(C.RED + "This dimension has no externalDatapacks entries.");
-            return;
-        }
-
-        LinkedHashSet<String> requestedTokens = new LinkedHashSet<>();
-        for (String token : id.split(",")) {
-            if (token == null) {
-                continue;
-            }
-
-            String normalizedToken = normalizeLocateExternalToken(token);
-            if (!normalizedToken.isBlank()) {
-                requestedTokens.add(normalizedToken);
-            }
-        }
-
-        if (requestedTokens.isEmpty()) {
-            sender().sendMessage(C.RED + "No valid external datapack ids or structure ids were provided.");
-            return;
-        }
-
-        Map<String, Set<String>> fallbackById = buildExternalLocateFallbackById(externalDatapacks);
-        LinkedHashSet<String> structures = new LinkedHashSet<>();
-        LinkedHashSet<String> matchedIds = new LinkedHashSet<>();
-        for (String token : requestedTokens) {
-            Set<String> resolvedStructures = ExternalDataPackPipeline.resolveLocateStructuresForId(token);
-            if (resolvedStructures.isEmpty()) {
-                Set<String> fallbackStructures = fallbackById.get(token);
-                if (fallbackStructures != null) {
-                    resolvedStructures = fallbackStructures;
-                }
-            }
-
-            if (!resolvedStructures.isEmpty()) {
-                matchedIds.add(token);
-                structures.addAll(resolvedStructures);
-                continue;
-            }
-
-            String structureToken = normalizeLocateStructureToken(token);
-            if (!structureToken.isBlank()) {
-                matchedIds.add("structure:" + structureToken);
-                structures.add(structureToken);
-            }
-        }
-
-        if (structures.isEmpty()) {
-            sender().sendMessage(C.RED + "No external datapack entry matched value(s): " + String.join(", ", requestedTokens));
-            return;
-        }
-
-        VolmitSender commandSender = sender();
-        Runnable dispatchTask = () -> dispatchLocateExternalCommands(commandSender, structures, matchedIds, all);
-        if (commandSender.isPlayer()) {
-            Player player = commandSender.player();
-            if (player == null) {
-                commandSender.sendMessage(C.RED + "No active player sender was available for locateexternal.");
-                return;
-            }
-
-            if (!J.runEntity(player, dispatchTask)) {
-                commandSender.sendMessage(C.RED + "Failed to schedule locate command dispatch on the player's region thread.");
-            }
-            return;
-        }
-
-        J.s(dispatchTask);
-    }
-
-    private void dispatchLocateExternalCommands(
-            VolmitSender commandSender,
-            Set<String> structures,
-            Set<String> matchedIds,
-            boolean all
-    ) {
-        org.bukkit.command.CommandSender locateSender = commandSender.isPlayer()
-                ? commandSender.player()
-                : Bukkit.getConsoleSender();
-        int dispatched = 0;
-        for (String structure : structures) {
-            String command = "locate structure " + structure;
-            boolean accepted = Bukkit.dispatchCommand(locateSender, command);
-            if (!accepted) {
-                commandSender.sendMessage(C.RED + "Failed to dispatch: /" + command);
-            } else {
-                commandSender.sendMessage(C.GREEN + "Dispatched: /" + command);
-                dispatched++;
-            }
-
-            if (!all) {
-                break;
-            }
-        }
-
-        commandSender.sendMessage(C.GREEN + "Matched ids=" + matchedIds.size() + ", locateTargets=" + structures.size() + ", dispatched=" + dispatched + ".");
-    }
-
-    private static String normalizeLocateExternalToken(String token) {
-        if (token == null) {
-            return "";
-        }
-
-        String normalized = token.trim().toLowerCase(Locale.ROOT);
-        if (normalized.isBlank()) {
-            return "";
-        }
-
-        normalized = normalized.replace("minecraft:worldgen/structure/", "");
-        normalized = normalized.replace("worldgen/structure/", "");
-        if (!normalized.contains(":") && normalized.contains("/")) {
-            return normalized;
-        }
-
-        if (!normalized.contains(":")) {
-            return normalized;
-        }
-
-        return normalized;
-    }
-
-    private static Map<String, Set<String>> buildExternalLocateFallbackById(KList<IrisExternalDatapack> externalDatapacks) {
-        return new ConcurrentHashMap<>();
-    }
-
-    private static String normalizeLocateStructureToken(String structure) {
-        if (structure == null) {
-            return "";
-        }
-
-        String normalized = structure.trim().toLowerCase(Locale.ROOT);
-        if (normalized.isBlank()) {
-            return "";
-        }
-
-        normalized = normalized.replace("minecraft:worldgen/structure/", "");
-        normalized = normalized.replace("worldgen/structure/", "");
-        if (!normalized.contains(":")) {
-            normalized = "minecraft:" + normalized;
-        }
-
-        return normalized;
-    }
-
     /*
     /todo
     @Director(description = "Benchmark a pack", origin = DirectorOrigin.CONSOLE)
@@ -763,25 +601,21 @@ public class CommandIris implements DirectorExecutor {
         sender().sendMessage(C.GREEN + "Set debug to: " + to);
     }
 
-    //TODO fix pack trimming
     @Director(description = "Download a project.", aliases = "dl")
     public void download(
             @Param(name = "pack", description = "The pack to download", defaultValue = "overworld", aliases = "project")
             String pack,
             @Param(name = "branch", description = "The branch to download from", defaultValue = "stable")
             String branch,
-            //@Param(name = "trim", description = "Whether or not to download a trimmed version (do not enable when editing)", defaultValue = "false")
-            //boolean trim,
             @Param(name = "overwrite", description = "Whether or not to overwrite the pack with the downloaded one", aliases = "force", defaultValue = "false")
             boolean overwrite
     ) {
-        boolean trim = false;
-        sender().sendMessage(C.GREEN + "Downloading pack: " + pack + "/" + branch + (trim ? " trimmed" : "") + (overwrite ? " overwriting" : ""));
+        sender().sendMessage(C.GREEN + "Downloading pack: " + pack + "/" + branch + (overwrite ? " overwriting" : ""));
         if (pack.equals("overworld")) {
             String url = "https://github.com/IrisDimensions/overworld/releases/download/" + INMS.OVERWORLD_TAG + "/overworld.zip";
-            Iris.service(StudioSVC.class).downloadRelease(sender(), url, trim, overwrite);
+            Iris.service(StudioSVC.class).downloadRelease(sender(), url, overwrite);
         } else {
-            Iris.service(StudioSVC.class).downloadSearch(sender(), "IrisDimensions/" + pack + "/" + branch, trim, overwrite);
+            Iris.service(StudioSVC.class).downloadSearch(sender(), "IrisDimensions/" + pack + "/" + branch, overwrite);
         }
     }
 

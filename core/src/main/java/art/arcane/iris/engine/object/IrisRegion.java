@@ -24,6 +24,7 @@ import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.loader.IrisRegistrant;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.object.annotations.*;
+import com.google.gson.annotations.SerializedName;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.collection.KSet;
@@ -118,9 +119,6 @@ public class IrisRegion extends IrisRegistrant implements IRare {
     private IrisCaveProfile caveProfile = new IrisCaveProfile();
     @Desc("Configuration of fluid bodies such as rivers & lakes")
     private IrisFluidBodies fluidBodies = new IrisFluidBodies();
-    @ArrayType(type = IrisExternalDatapackBinding.class, min = 1)
-    @Desc("Scoped external datapack bindings for this region")
-    private KList<IrisExternalDatapackBinding> externalDatapacks = new KList<>();
     @RegistryListResource(IrisBiome.class)
     @Required
     @ArrayType(min = 1, type = String.class)

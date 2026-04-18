@@ -22,10 +22,13 @@ import art.arcane.iris.Iris;
 import art.arcane.iris.core.link.WorldEditLink;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.loader.ResourceLoader;
+import art.arcane.iris.core.runtime.ObjectStudioActivation;
+import art.arcane.iris.core.runtime.WorldRuntimeControlService;
 import art.arcane.iris.core.service.ObjectSVC;
 import art.arcane.iris.core.service.StudioSVC;
 import art.arcane.iris.core.service.WandSVC;
 import art.arcane.iris.core.tools.IrisConverter;
+import art.arcane.iris.core.tools.PlausibilizeMode;
 import art.arcane.iris.core.tools.TreePlausibilizer;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.*;
@@ -33,17 +36,23 @@ import art.arcane.volmlib.util.data.Cuboid;
 import art.arcane.iris.util.common.data.IrisCustomData;
 import art.arcane.iris.util.common.data.registry.Materials;
 import art.arcane.iris.util.common.director.DirectorExecutor;
+import art.arcane.iris.util.common.director.DirectorHelp;
+import art.arcane.iris.util.common.director.specialhandlers.NullableDimensionHandler;
+import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.director.DirectorOrigin;
 import art.arcane.volmlib.util.director.annotations.Director;
 import art.arcane.volmlib.util.director.annotations.Param;
 import art.arcane.iris.util.common.director.specialhandlers.ObjectHandler;
+import art.arcane.iris.util.common.director.specialhandlers.ObjectTargetHandler;
 import art.arcane.iris.util.common.format.C;
 import art.arcane.iris.util.common.math.Direction;
 import art.arcane.volmlib.util.math.RNG;
+import io.papermc.lib.PaperLib;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.Vector;
 
@@ -54,6 +63,105 @@ import java.util.*;
 
 @Director(name = "object", aliases = "o", origin = DirectorOrigin.PLAYER, studio = true, description = "Iris object manipulation")
 public class CommandObject implements DirectorExecutor {
+    @Director(description = "Show help tree for this command group", aliases = {"?"})
+    public void help() {
+        DirectorHelp.print(sender(), getClass());
+    }
+
+    @Director(description = "Open an object studio world (grid of every object; dimension optional, defaults to all packs)", aliases = {"std", "s"}, sync = true)
+    public void studio(
+            @Param(defaultValue = "null", description = "Optional dimension whose object pack to lay out; omit to aggregate objects from every pack", aliases = "dim", customHandler = NullableDimensionHandler.class)
+            IrisDimension dimension,
+            @Param(defaultValue = "1337", description = "The seed to generate the studio with", aliases = "s")
+            long seed
+    ) {
+        VolmitSender commandSender = sender();
+        Map<String, IrisData> sources = new LinkedHashMap<>();
+        IrisDimension hostDimension = dimension;
+
+        if (dimension != null) {
+            IrisData data = dimension.getLoader();
+            if (data == null) {
+                data = IrisData.get(dimension.getLoadFile().getParentFile().getParentFile());
+            }
+            sources.put(data.getDataFolder().getName(), data);
+        } else {
+            File workspace = Iris.service(StudioSVC.class).getWorkspaceFolder();
+            File[] packs = workspace == null ? null : workspace.listFiles();
+            if (packs != null) {
+                Arrays.sort(packs, Comparator.comparing(File::getName, String.CASE_INSENSITIVE_ORDER));
+                for (File pack : packs) {
+                    if (!pack.isDirectory()) continue;
+                    File dimensionsDir = new File(pack, "dimensions");
+                    if (!dimensionsDir.isDirectory()) continue;
+                    IrisData data = IrisData.get(pack);
+                    String[] keys = data.getObjectLoader().getPossibleKeys();
+                    if (keys == null || keys.length == 0) continue;
+                    sources.put(pack.getName(), data);
+                    if (hostDimension == null) {
+                        File[] dimFiles = dimensionsDir.listFiles((f) -> f.isFile() && f.getName().endsWith(".json"));
+                        if (dimFiles != null && dimFiles.length > 0) {
+                            String loadKey = dimFiles[0].getName().replaceFirst("\\.json$", "");
+                            IrisDimension loaded = data.getDimensionLoader().load(loadKey);
+                            if (loaded != null) {
+                                hostDimension = loaded;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (hostDimension == null || sources.isEmpty()) {
+            commandSender.sendMessage(C.RED + "No packs with objects were found on this server.");
+            return;
+        }
+
+        int totalObjects = 0;
+        for (IrisData d : sources.values()) {
+            String[] k = d.getObjectLoader().getPossibleKeys();
+            if (k != null) totalObjects += k.length;
+        }
+        if (totalObjects == 0) {
+            commandSender.sendMessage(C.RED + "No objects to place across the selected pack(s).");
+            return;
+        }
+
+        hostDimension.setStudioMode(StudioMode.OBJECT_BUFFET);
+        ObjectStudioActivation.activate(hostDimension.getLoadKey());
+        ObjectStudioActivation.setSources(hostDimension.getLoadKey(), sources);
+
+        String scope = dimension == null
+                ? ("all packs [" + sources.size() + "]")
+                : ("\"" + hostDimension.getName() + "\"");
+        commandSender.sendMessage(C.GREEN + "Opening Object Studio for " + scope + " ("
+                + totalObjects + " objects)");
+
+        IrisDimension finalHost = hostDimension;
+        try {
+            Iris.service(StudioSVC.class).open(commandSender, seed, hostDimension.getLoadKey(), world -> {
+                if (world == null) return;
+                try {
+                    WorldRuntimeControlService.get().applyObjectStudioWorldRules(world);
+                } catch (Throwable e) {
+                    Iris.reportError("Failed to apply object studio world rules for " + world.getName(), e);
+                }
+
+                if (commandSender.isPlayer()) {
+                    Player p = commandSender.player();
+                    if (p != null) {
+                        Location target = new Location(world, 0.5D, 66D, 0.5D);
+                        J.runEntity(p, () -> {
+                            PaperLib.teleportAsync(p, target).thenRun(() -> p.setGameMode(GameMode.CREATIVE));
+                        });
+                    }
+                }
+            });
+        } catch (Throwable e) {
+            Iris.reportError("Failed to open object studio world \"" + finalHost.getLoadKey() + "\".", e);
+            commandSender.sendMessage(C.RED + "Failed to open object studio: " + e.getMessage());
+        }
+    }
 
     private static final Set<Material> skipBlocks = Set.of(Materials.GRASS, Material.SNOW, Material.VINE, Material.TORCH, Material.DEAD_BUSH,
             Material.POPPY, Material.DANDELION);
@@ -225,21 +333,18 @@ public class CommandObject implements DirectorExecutor {
         }
     }
 
-    @Director(description = "Bridge unreachable leaves with hidden logs so trees are vanilla-decay-plausible",
+    @Director(description = "Make tree leaves vanilla-decay-plausible (every leaf within 6 blocks of a log)",
             origin = DirectorOrigin.BOTH, studio = false)
     public void plausibilize(
-            @Param(description = "Pack key (trees/bonsai/smbase1), pack prefix (trees/), or filesystem path to a .iob file or directory")
+            @Param(description = "Object key, prefix (trees/), or filesystem path",
+                    customHandler = ObjectTargetHandler.class)
             String target,
+            @Param(description = "DEFAULT: tentacle logs, delete orphans. NORMALIZE: + flip persistent=false. FOLIAGE_OVERATURE: add leaves to bridge orphans, no deletions. SMOKE: wipe & repaint canopy shell.",
+                    defaultValue = "DEFAULT")
+            PlausibilizeMode mode,
             @Param(description = "Analyze only, do not write", defaultValue = "false")
             boolean dryRun,
-            @Param(description = "Flip persistent=true leaves to false and bridge them as well",
-                    defaultValue = "false")
-            boolean normalize,
-            @Param(description = "Wipe scattered leaves and repaint a canopy shell around every log, then bridge any gaps with interior log tendrils",
-                    defaultValue = "false")
-            boolean smoke,
-            @Param(description = "Canopy shell radius (smoke mode only), clamped to [0,5]",
-                    defaultValue = "2")
+            @Param(description = "Canopy shell radius (SMOKE only), clamped [0,5]", defaultValue = "2")
             int radius
     ) {
         List<Target> targets = resolveTargets(target);
@@ -248,13 +353,13 @@ public class CommandObject implements DirectorExecutor {
             return;
         }
 
-        sender().sendMessage(C.IRIS + "Plausibilize: queued " + targets.size() + " object(s)"
-                + (dryRun ? " [DRY RUN]" : "")
-                + (normalize ? " [NORMALIZE]" : "")
-                + (smoke ? " [SMOKE r=" + radius + "]" : ""));
+        sender().sendMessage(C.IRIS + "Plausibilize [" + mode.name()
+                + (dryRun ? " DRY" : "")
+                + (mode == PlausibilizeMode.SMOKE ? " r=" + radius : "")
+                + "] queued " + targets.size() + " object(s)");
 
         org.bukkit.command.CommandSender s = sender();
-        J.a(() -> runPlausibilize(targets, dryRun, normalize, smoke, radius, s));
+        J.a(() -> runPlausibilize(targets, dryRun, mode, radius, s));
     }
 
     private List<Target> resolveTargets(String target) {
@@ -330,8 +435,7 @@ public class CommandObject implements DirectorExecutor {
     private static void runPlausibilize(
             List<Target> targets,
             boolean dryRun,
-            boolean normalize,
-            boolean smoke,
+            PlausibilizeMode mode,
             int radius,
             org.bukkit.command.CommandSender s
     ) {
@@ -340,9 +444,6 @@ public class CommandObject implements DirectorExecutor {
         int failed = 0;
         int changed = 0;
         long totalLogsAdded = 0L;
-        long totalReachableBefore = 0L;
-        long totalLeaves = 0L;
-        long totalPersistentInput = 0L;
         long totalLeavesAdded = 0L;
         long totalLeavesRemoved = 0L;
         long totalNormalized = 0L;
@@ -362,8 +463,8 @@ public class CommandObject implements DirectorExecutor {
                 }
 
                 TreePlausibilizer.Result r = dryRun
-                        ? TreePlausibilizer.analyze(o, normalize, smoke, radius)
-                        : TreePlausibilizer.apply(o, normalize, smoke, radius);
+                        ? TreePlausibilizer.analyze(o, mode, radius)
+                        : TreePlausibilizer.apply(o, mode, radius);
 
                 if (r.skipReason() != null) {
                     s.sendMessage(C.YELLOW + "  skip " + t.key() + ": " + r.skipReason());
@@ -383,9 +484,6 @@ public class CommandObject implements DirectorExecutor {
 
                 processed++;
                 totalLogsAdded += r.logsAdded();
-                totalReachableBefore += r.reachableBefore();
-                totalLeaves += r.totalLeaves();
-                totalPersistentInput += r.persistentLeavesInput();
                 totalLeavesAdded += r.leavesAdded();
                 totalLeavesRemoved += r.leavesRemoved();
                 totalNormalized += r.leavesNormalized();
@@ -393,14 +491,11 @@ public class CommandObject implements DirectorExecutor {
 
                 if (touched || targets.size() == 1) {
                     s.sendMessage(C.GRAY + "  " + t.key()
-                            + " leaves=" + r.totalLeaves()
-                            + " persistentIn=" + r.persistentLeavesInput()
-                            + " reachable=" + r.reachableBefore()
-                            + " logsAdded=" + r.logsAdded()
-                            + " leavesAdded=" + r.leavesAdded()
-                            + " leavesRemoved=" + r.leavesRemoved()
-                            + " normalized=" + r.leavesNormalized()
-                            + " remaining=" + r.unreachableAfter());
+                            + C.WHITE + " +" + r.logsAdded() + " logs"
+                            + C.WHITE + " +" + r.leavesAdded() + " leaves"
+                            + C.WHITE + " -" + r.leavesRemoved() + " removed"
+                            + (r.leavesNormalized() > 0 ? C.WHITE + " ~" + r.leavesNormalized() + " normalized" : "")
+                            + (r.unreachableAfter() > 0 ? C.YELLOW + " " + r.unreachableAfter() + " unreachable" : ""));
                 }
 
                 if (targets.size() > 1 && index % progressStep == 0) {
@@ -414,19 +509,11 @@ public class CommandObject implements DirectorExecutor {
             }
         }
 
-        s.sendMessage(C.IRIS + "Done."
-                + " processed=" + processed
-                + " changed=" + changed
-                + " skipped=" + skipped
-                + " failed=" + failed
-                + " leaves=" + totalLeaves
-                + " persistentIn=" + totalPersistentInput
-                + " reachableBefore=" + totalReachableBefore
-                + " logsAdded=" + totalLogsAdded
-                + " leavesAdded=" + totalLeavesAdded
-                + " leavesRemoved=" + totalLeavesRemoved
-                + " normalized=" + totalNormalized
-                + " remaining=" + totalUnreachableAfter);
+        s.sendMessage(C.IRIS + "Done: " + processed + " processed, " + changed + " changed, "
+                + skipped + " skipped, " + failed + " failed");
+        s.sendMessage(C.IRIS + "Totals: +" + totalLogsAdded + " logs, +" + totalLeavesAdded + " leaves, -"
+                + totalLeavesRemoved + " removed, ~" + totalNormalized + " normalized, "
+                + totalUnreachableAfter + " unreachable");
     }
 
     private static IrisObject loadTarget(Target t) throws IOException {

@@ -123,6 +123,14 @@ public class ObjectResourceLoader extends ResourceLoader<IrisObject> {
     }
 
     public File findFile(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return null;
+        }
+        if (name.equals("null")) {
+            Iris.warn("Refusing " + resourceTypeName + " lookup for literal string \"null\" (called by " + callerHint() + ")");
+            return null;
+        }
+
         for (File i : getFolders(name)) {
             for (File j : i.listFiles()) {
                 if (j.isFile() && j.getName().endsWith(".iob") && j.getName().split("\\Q.\\E")[0].equals(name)) {
@@ -137,7 +145,7 @@ public class ObjectResourceLoader extends ResourceLoader<IrisObject> {
             }
         }
 
-        Iris.warn("Couldn't find " + resourceTypeName + ": " + name);
+        Iris.warn("Couldn't find " + resourceTypeName + ": " + name + " (called by " + callerHint() + ")");
 
         return null;
     }
@@ -161,12 +169,21 @@ public class ObjectResourceLoader extends ResourceLoader<IrisObject> {
             }
         }
 
-        Iris.warn("Couldn't find " + resourceTypeName + ": " + name);
-
         return null;
     }
 
     public IrisObject load(String name, boolean warn) {
-        return loadCache.get(name);
+        if (name == null || name.trim().isEmpty()) {
+            return null;
+        }
+        if (name.equals("null") && warn) {
+            Iris.warn("Refusing " + resourceTypeName + " load for literal string \"null\" (called by " + callerHint() + ")");
+            return null;
+        }
+        IrisObject result = loadCache.get(name);
+        if (result == null && warn) {
+            Iris.warn("Couldn't find " + resourceTypeName + ": " + name + " (called by " + callerHint() + ")");
+        }
+        return result;
     }
 }

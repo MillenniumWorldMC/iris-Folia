@@ -80,7 +80,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
     private final KList<Runnable> updateQueue = new KList<>();
     private final ChronoLatch cl;
     private final ChronoLatch clw;
-    private final ChronoLatch ecl;
     private final ChronoLatch cln;
     private final ChronoLatch chunkUpdater;
     private final ChronoLatch chunkDiscovery;
@@ -90,9 +89,7 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
     private final Set<Long> markerFlagQueue = ConcurrentHashMap.newKeySet();
     private final Set<Long> discoveredFlagQueue = ConcurrentHashMap.newKeySet();
     private final Set<Long> markerScanQueue = ConcurrentHashMap.newKeySet();
-    private double energy = 25;
     private int entityCount = 0;
-    private long charge = 0;
     private int actuallySpawned = 0;
     private int cooldown = 0;
     private List<Entity> precount = new KList<>();
@@ -101,7 +98,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
     public IrisWorldManager() {
         super(null);
         cl = null;
-        ecl = null;
         cln = null;
         clw = null;
         looper = null;
@@ -117,7 +113,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
         chunkDiscovery = new ChronoLatch(5000);
         cln = new ChronoLatch(60000);
         cl = new ChronoLatch(3000);
-        ecl = new ChronoLatch(250);
         clw = new ChronoLatch(1000, true);
         cleanupService = Executors.newSingleThreadScheduledExecutor(runnable -> {
             var thread = new Thread(runnable, "Iris Mantle Cleanup " + getTarget().getWorld().name());
@@ -125,7 +120,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
             return thread;
         });
         id = engine.getCacheID();
-        energy = 25;
         looper = new Looper() {
             @Override
             protected long loop() {
@@ -158,16 +152,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
                         return 3000;
                     }
 
-                    if (getDimension().isInfiniteEnergy()) {
-                        energy += 1000;
-                        fixEnergy();
-                    }
-
-                    if (M.ms() < charge) {
-                        energy += 70;
-                        fixEnergy();
-                    }
-
                     if (precount != null) {
                         entityCount = 0;
                         for (Entity i : precount) {
@@ -179,13 +163,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
                         }
 
                         precount = null;
-                    }
-
-                    if (energy < 650) {
-                        if (ecl.flip()) {
-                            energy *= 1 + (0.02 * M.clip((1D - getEntitySaturation()), 0D, 1D));
-                            fixEnergy();
-                        }
                     }
 
                     onAsyncTick();
@@ -413,11 +390,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
 
         actuallySpawned = 0;
 
-        if (energy < 100) {
-            J.sleep(200);
-            return false;
-        }
-
         if (!getEngine().getWorld().hasRealWorld()) {
             Iris.debug("Can't spawn. No real world");
             J.sleep(5000);
@@ -471,7 +443,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
             spawnChunkSafely(world, c.getX(), c.getZ(), false);
         }
 
-        energy -= (actuallySpawned / 2D);
         return actuallySpawned > 0;
     }
 
@@ -581,10 +552,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
         }
     }
 
-    private void fixEnergy() {
-        energy = M.clip(energy, 1D, getDimension().getMaximumEnergy());
-    }
-
     private void spawnIn(Chunk c, boolean initial) {
         if (getEngine().isClosed()) {
             return;
@@ -597,10 +564,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
         IrisComplex complex = getEngine().getComplex();
         if (complex == null) {
             return;
-        }
-
-        if (initial) {
-            energy += 1.2;
         }
 
         if (IrisSettings.get().getWorld().isMarkerEntitySpawningSystem()) {
@@ -663,7 +626,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
         actuallySpawned += s;
         if (s > 0) {
             ref.spawn(getEngine(), c.getX(), c.getZ());
-            energy -= s * ((i.getEnergyMultiplier() * ref.getEnergyMultiplier() * 1));
         }
     }
 
@@ -676,7 +638,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
         actuallySpawned += s;
         if (s > 0) {
             ref.spawn(getEngine(), PowerOfTwoCoordinates.blockToChunkFloor(pos.getX()), PowerOfTwoCoordinates.blockToChunkFloor(pos.getZ()));
-            energy -= s * ((i.getEnergyMultiplier() * ref.getEnergyMultiplier() * 1));
         }
     }
 
@@ -736,8 +697,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
         Long key = Cache.key(e);
         cleanup.put(key, cleanupService.schedule(() -> {
             cleanup.remove(key);
-            energy += 0.3;
-            fixEnergy();
             getEngine().cleanupMantleChunk(cX, cZ);
         }, Math.max(IrisSettings.get().getPerformance().mantleCleanupDelay * 50L, 0), TimeUnit.MILLISECONDS));
 
@@ -814,11 +773,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
 
     public Mantle<Matter> getMantle() {
         return getEngine().getMantle().getMantle();
-    }
-
-    @Override
-    public void chargeEnergy() {
-        charge = M.ms() + 3000;
     }
 
     @Override

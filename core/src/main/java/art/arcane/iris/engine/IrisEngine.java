@@ -377,7 +377,7 @@ public class IrisEngine implements Engine {
         setupEngine();
         J.a(() -> {
             synchronized (ServerConfigurator.class) {
-                ServerConfigurator.installDataPacks(false, false);
+                ServerConfigurator.installDataPacks(false);
             }
         });
     }

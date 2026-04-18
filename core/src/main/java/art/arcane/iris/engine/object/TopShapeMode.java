@@ -16,34 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package art.arcane.iris.engine.framework;
+package art.arcane.iris.engine.object;
 
-import org.bukkit.Chunk;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
-import org.bukkit.event.player.PlayerTeleportEvent;
+import art.arcane.iris.engine.object.annotations.Desc;
 
-@SuppressWarnings("EmptyMethod")
-public interface EngineWorldManager {
-    void close();
+@Desc("How the top profile of a floating-child island is shaped.")
+public enum TopShapeMode {
+    @Desc("Evaluate the target biome's own terrain generators to build the island top. Mountains biome produces real peaks, desert produces dunes, plains is flat. Recommended default.")
+    BIOME,
 
-    int getEntityCount();
+    @Desc("Drive the top profile from topShapeStyle noise, independent of the target biome's generators. Amplitude controlled by topShapeAmp.")
+    NOISE,
 
-    int getChunkCount();
-
-    double getEntitySaturation();
-
-    void onTick();
-
-    void onSave();
-
-    void onBlockBreak(BlockBreakEvent e);
-
-    void onBlockPlace(BlockPlaceEvent e);
-
-    void onChunkLoad(Chunk e, boolean generated);
-
-    void onChunkUnload(Chunk e);
-
-    void teleportAsync(PlayerTeleportEvent e);
+    @Desc("Flat slab on top, topHeight blocks above the base. Ignores noise and biome generators.")
+    FLAT
 }

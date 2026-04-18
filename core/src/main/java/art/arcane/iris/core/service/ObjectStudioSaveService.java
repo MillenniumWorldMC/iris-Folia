@@ -26,6 +26,7 @@ import art.arcane.iris.core.runtime.ObjectStudioLayout.GridCell;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.IrisObject;
 import art.arcane.iris.engine.platform.studio.generators.ObjectStudioGenerator;
+import art.arcane.iris.util.common.format.C;
 import art.arcane.iris.util.common.plugin.IrisService;
 import art.arcane.iris.util.common.scheduling.J;
 import io.papermc.lib.PaperLib;
@@ -41,22 +42,18 @@ import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntitySpawnEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
+import org.bukkit.inventory.EquipmentSlot;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class ObjectStudioSaveService implements IrisService {
-    public static final int INTERVAL_TICKS = 100;
-    private static final int CELLS_PER_PASS = 50;
-
     private static ObjectStudioSaveService INSTANCE;
 
     private final Map<UUID, ActiveStudio> studios = new ConcurrentHashMap<>();
-    private int taskId = -1;
 
     public static ObjectStudioSaveService get() {
         ObjectStudioSaveService svc = INSTANCE;
@@ -68,15 +65,10 @@ public class ObjectStudioSaveService implements IrisService {
     @Override
     public void onEnable() {
         INSTANCE = this;
-        taskId = J.ar(this::pass, INTERVAL_TICKS);
     }
 
     @Override
     public void onDisable() {
-        if (taskId != -1) {
-            J.car(taskId);
-            taskId = -1;
-        }
         studios.clear();
         INSTANCE = null;
     }
@@ -154,7 +146,9 @@ public class ObjectStudioSaveService implements IrisService {
 
     @EventHandler(ignoreCancelled = true)
     public void onPlayerInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_BLOCK && event.getAction() != Action.LEFT_CLICK_BLOCK) return;
+        if (event.getHand() != EquipmentSlot.HAND) return;
+        Action action = event.getAction();
+        if (action != Action.RIGHT_CLICK_BLOCK && action != Action.LEFT_CLICK_BLOCK) return;
         Block clicked = event.getClickedBlock();
         if (clicked == null) return;
 
@@ -162,18 +156,44 @@ public class ObjectStudioSaveService implements IrisService {
         ActiveStudio studio = studios.get(world.getUID());
         if (studio == null) return;
 
-        GridCell cell = studio.layout.findAt(clicked.getX(), clicked.getZ());
-        if (cell == null) return;
-
         Player player = event.getPlayer();
-        Iris.info("Object Studio save triggered by %s for %s", player.getName(), cell.key());
+        GridCell cell = findCellNear(studio, clicked.getX(), clicked.getZ());
+        if (cell == null) {
+            player.sendMessage(C.GRAY + "Object Studio: no cell under click (x=" + clicked.getX() + " z=" + clicked.getZ() + ").");
+            return;
+        }
+
+        player.sendMessage(C.AQUA + "Object Studio: saving " + C.WHITE + cell.pack() + "/" + cell.key() + C.GRAY + " (" + cell.w() + "x" + cell.h() + "x" + cell.d() + ")");
+        Iris.info("Object Studio save triggered by %s for %s/%s", player.getName(), cell.pack(), cell.key());
         J.runRegion(world, cell.chunkMinX(), cell.chunkMinZ(), () -> {
             try {
-                captureAndSave(studio, world, cell);
+                captureAndSave(studio, world, cell, player);
             } catch (Throwable e) {
                 Iris.reportError(e);
             }
         });
+    }
+
+    private static GridCell findCellNear(ActiveStudio studio, int x, int z) {
+        GridCell inside = studio.layout.findAt(x, z);
+        if (inside != null) return inside;
+        int reach = Math.max(1, studio.layout.padding() + 1);
+        GridCell best = null;
+        int bestDist = Integer.MAX_VALUE;
+        for (GridCell cell : studio.layout.cells()) {
+            int dx = 0;
+            if (x < cell.originX()) dx = cell.originX() - x;
+            else if (x >= cell.originX() + cell.w()) dx = x - (cell.originX() + cell.w() - 1);
+            int dz = 0;
+            if (z < cell.originZ()) dz = cell.originZ() - z;
+            else if (z >= cell.originZ() + cell.d()) dz = z - (cell.originZ() + cell.d() - 1);
+            int dist = Math.max(dx, dz);
+            if (dist <= reach && dist < bestDist) {
+                bestDist = dist;
+                best = cell;
+            }
+        }
+        return best;
     }
 
     public boolean teleportTo(Player player, String objectKey) {
@@ -206,43 +226,7 @@ public class ObjectStudioSaveService implements IrisService {
         return objects;
     }
 
-    private void pass() {
-        if (studios.isEmpty()) return;
-
-        for (ActiveStudio studio : studios.values()) {
-            World world = Bukkit.getWorld(studio.worldId);
-            if (world == null) continue;
-
-            int budget = CELLS_PER_PASS;
-            int size = studio.layout.cells().size();
-            if (size == 0) continue;
-
-            while (budget-- > 0) {
-                int idx = studio.cursor.getAndIncrement();
-                if (idx >= size) {
-                    studio.cursor.set(0);
-                    idx = 0;
-                }
-                GridCell cell = studio.layout.cells().get(idx);
-                scheduleCapture(studio, world, cell);
-                if (size <= CELLS_PER_PASS && idx == size - 1) break;
-            }
-        }
-    }
-
-    private void scheduleCapture(ActiveStudio studio, World world, GridCell cell) {
-        int chunkX = cell.chunkMinX();
-        int chunkZ = cell.chunkMinZ();
-        J.runRegion(world, chunkX, chunkZ, () -> {
-            try {
-                captureAndSave(studio, world, cell);
-            } catch (Throwable e) {
-                Iris.reportError(e);
-            }
-        });
-    }
-
-    private void captureAndSave(ActiveStudio studio, World world, GridCell cell) {
+    private void captureAndSave(ActiveStudio studio, World world, GridCell cell, Player notify) {
         if (!allChunksLoaded(world, cell)) {
             return;
         }
@@ -268,18 +252,29 @@ public class ObjectStudioSaveService implements IrisService {
         long hash = hashOf(snapshot);
         Long prior = studio.hashes.get(hashKey);
         if (prior != null && prior == hash) {
+            if (notify != null) {
+                notify.sendMessage(C.GRAY + "Object Studio: no changes for " + cell.pack() + "/" + cell.key() + ".");
+            }
             return;
         }
 
         if (!anyBlock && prior == null) {
             studio.hashes.put(hashKey, hash);
+            if (notify != null) {
+                notify.sendMessage(C.GRAY + "Object Studio: empty cell " + cell.pack() + "/" + cell.key() + " (nothing to write).");
+            }
             return;
         }
 
         studio.hashes.put(hashKey, hash);
 
         File targetFile = objectFileFor(studio, cell);
-        if (targetFile == null) return;
+        if (targetFile == null) {
+            if (notify != null) {
+                notify.sendMessage(C.RED + "Object Studio: no target file for " + cell.pack() + "/" + cell.key() + ".");
+            }
+            return;
+        }
 
         J.a(() -> {
             try {
@@ -290,8 +285,14 @@ public class ObjectStudioSaveService implements IrisService {
                 snapshot.write(targetFile);
                 Iris.info("Object Studio saved: %s/%s (%dx%dx%d)",
                         cell.pack(), cell.key(), cell.w(), cell.h(), cell.d());
+                if (notify != null) {
+                    J.runEntity(notify, () -> notify.sendMessage(C.GREEN + "Object Studio: saved " + C.WHITE + cell.pack() + "/" + cell.key()));
+                }
             } catch (Throwable e) {
                 Iris.reportError(e);
+                if (notify != null) {
+                    J.runEntity(notify, () -> notify.sendMessage(C.RED + "Object Studio: save failed for " + cell.pack() + "/" + cell.key() + " (" + e.getMessage() + ")"));
+                }
             }
         });
     }
@@ -335,7 +336,6 @@ public class ObjectStudioSaveService implements IrisService {
         final Map<String, File> objectsDirs;
         final String packKey;
         final Map<String, Long> hashes = new ConcurrentHashMap<>();
-        final AtomicInteger cursor = new AtomicInteger();
 
         ActiveStudio(UUID worldId, ObjectStudioLayout layout, Map<String, File> objectsDirs, String packKey) {
             this.worldId = worldId;

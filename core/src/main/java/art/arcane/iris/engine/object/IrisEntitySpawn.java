@@ -52,8 +52,6 @@ public class IrisEntitySpawn implements IRare {
     @Required
     @Desc("The entity")
     private String entity = "";
-    @Desc("The energy multiplier when calculating spawn energy usage")
-    private double energyMultiplier = 1;
     @MinNumber(1)
     @Desc("The 1 in RARITY chance for this entity to spawn")
     private int rarity = 1;

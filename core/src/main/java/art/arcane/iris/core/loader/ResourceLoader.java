@@ -130,6 +130,14 @@ public class ResourceLoader<T extends IrisRegistrant> implements MeteredCache {
     }
 
     public File findFile(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return null;
+        }
+        if (name.equals("null")) {
+            Iris.warn("Refusing " + resourceTypeName + " lookup for literal string \"null\" (called by " + callerHint() + ")");
+            return null;
+        }
+
         for (File i : getFolders(name)) {
             for (File j : i.listFiles()) {
                 if (j.isFile() && j.getName().endsWith(".json") && j.getName().split("\\Q.\\E")[0].equals(name)) {
@@ -144,9 +152,32 @@ public class ResourceLoader<T extends IrisRegistrant> implements MeteredCache {
             }
         }
 
-        Iris.warn("Couldn't find " + resourceTypeName + ": " + name);
+        Iris.warn("Couldn't find " + resourceTypeName + ": " + name + " (called by " + callerHint() + ")");
 
         return null;
+    }
+
+    protected static String describeName(String name) {
+        if (name == null) return "<java null>";
+        if (name.isEmpty()) return "<empty string>";
+        if (name.equals("null")) return "\"null\" (literal string)";
+        return "\"" + name + "\"";
+    }
+
+    protected static String callerHint() {
+        StackWalker walker = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
+        return walker.walk(frames -> frames
+                .filter(f -> {
+                    String cn = f.getClassName();
+                    return !cn.startsWith("art.arcane.iris.core.loader.")
+                            && !cn.startsWith("art.arcane.volmlib.util.data.")
+                            && !cn.startsWith("com.github.benmanes.caffeine.");
+                })
+                .limit(3)
+                .map(f -> f.getClassName().substring(f.getClassName().lastIndexOf('.') + 1)
+                        + "." + f.getMethodName() + ":" + f.getLineNumber())
+                .reduce((a, b) -> a + " <- " + b)
+                .orElse("<unknown>"));
     }
 
     public void logLoad(File path, T t) {
@@ -167,7 +198,11 @@ public class ResourceLoader<T extends IrisRegistrant> implements MeteredCache {
     }
 
     public void failLoad(File path, Throwable e) {
-        J.a(() -> Iris.warn("Couldn't Load " + resourceTypeName + " file: " + path.getPath() + ": " + e.getMessage()));
+        failLoad(path, null, e);
+    }
+
+    public void failLoad(File path, String rawText, Throwable e) {
+        J.a(() -> JsonSchemaValidator.reportLoadFailure(path, rawText, resourceTypeName, e));
     }
 
     private KList<File> matchAllFiles(File root, Predicate<File> f) {
@@ -241,10 +276,14 @@ public class ResourceLoader<T extends IrisRegistrant> implements MeteredCache {
     }
 
     protected T loadFile(File j, String name) {
+        String rawText = null;
         try {
             PrecisionStopwatch p = PrecisionStopwatch.start();
+            rawText = IO.readAll(j);
+            JSONObject parsed = new JSONObject(rawText);
+            JsonSchemaValidator.validateTopLevelKeys(parsed, rawText, j, resourceTypeName, objectClass);
             T t = getManager().getGson()
-                    .fromJson(preprocess(new JSONObject(IO.readAll(j))).toString(0), objectClass);
+                    .fromJson(preprocess(parsed).toString(0), objectClass);
             t.setLoadKey(name);
             t.setLoadFile(j);
             t.setLoader(manager);
@@ -254,7 +293,7 @@ public class ResourceLoader<T extends IrisRegistrant> implements MeteredCache {
             return t;
         } catch (Throwable e) {
             Iris.reportError(e);
-            failLoad(j, e);
+            failLoad(j, rawText, e);
             return null;
         }
     }
@@ -358,11 +397,11 @@ public class ResourceLoader<T extends IrisRegistrant> implements MeteredCache {
     }
 
     public T load(String name, boolean warn) {
-        if (name == null) {
+        if (name == null || name.trim().isEmpty()) {
             return null;
         }
-
-        if (name.trim().isEmpty()) {
+        if (name.equals("null") && warn) {
+            Iris.warn("Refusing " + resourceTypeName + " load for literal string \"null\" (called by " + callerHint() + ")");
             return null;
         }
 

@@ -19,13 +19,11 @@
 package art.arcane.iris.core.nms.v1X;
 
 import art.arcane.iris.Iris;
-import art.arcane.iris.core.link.Identifier;
 import art.arcane.iris.core.nms.INMSBinding;
 import art.arcane.iris.core.nms.container.BiomeColor;
 import art.arcane.iris.core.nms.container.BlockProperty;
 import art.arcane.iris.core.nms.datapack.DataVersion;
 import art.arcane.iris.core.nms.container.Pair;
-import art.arcane.iris.core.nms.container.StructurePlacement;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
@@ -40,7 +38,6 @@ import org.bukkit.block.Biome;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.event.entity.CreatureSpawnEvent;
-import org.bukkit.generator.structure.Structure;
 import org.bukkit.inventory.ItemStack;
 
 import java.awt.Color;
@@ -116,15 +113,6 @@ public class NMSBinding1X implements INMSBinding {
     }
 
     @Override
-    public KList<String> getStructureKeys() {
-        List<String> list = StreamSupport.stream(Registry.STRUCTURE.spliterator(), false)
-                .map(Structure::getKeyOrThrow)
-                .map(NamespacedKey::toString)
-                .toList();
-        return new KList<>(list);
-    }
-
-    @Override
     public boolean missingDimensionTypes(String... keys) {
         return false;
     }
@@ -136,16 +124,6 @@ public class NMSBinding1X implements INMSBinding {
             if (m.isBlock()) map.put(m, List.of());
         }
         return map;
-    }
-
-    @Override
-    public void placeStructures(Chunk chunk) {
-
-    }
-
-    @Override
-    public KMap<Identifier, StructurePlacement> collectStructures() {
-        return new KMap<>();
     }
 
     @Override

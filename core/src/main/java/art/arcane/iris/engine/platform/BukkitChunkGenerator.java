@@ -376,8 +376,6 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
                                 effectiveListener.onOverlay(x, z, overlayMetrics.appliedBlocks(), overlayMetrics.objectKeys(), System.currentTimeMillis());
                             }
 
-                            setChunkReplacementPhase(phaseRef, effectiveListener, "structures", x, z);
-                            INMS.get().placeStructures(c);
                             setChunkReplacementPhase(phaseRef, effectiveListener, "chunk-load-callback", x, z);
                             engine.getWorldManager().onChunkLoad(c, true);
                             world.refreshChunk(c.getX(), c.getZ());
@@ -458,10 +456,6 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
                             effectiveListener.onOverlay(x, z, overlayMetrics.appliedBlocks(), overlayMetrics.objectKeys(), System.currentTimeMillis());
                         }, syncExecutor).get();
                     }
-                    CompletableFuture.runAsync(() -> {
-                        setChunkReplacementPhase(phaseRef, effectiveListener, "structures", x, z);
-                        INMS.get().placeStructures(c);
-                    }, syncExecutor).get();
                     CompletableFuture.runAsync(() -> {
                         setChunkReplacementPhase(phaseRef, effectiveListener, "chunk-load-callback", x, z);
                         engine.getWorldManager().onChunkLoad(c, true);
@@ -811,10 +805,7 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
 
     @Override
     public boolean shouldGenerateStructures() {
-        if (isStudio() && art.arcane.iris.core.runtime.ObjectStudioActivation.isActive(getEngine().getDimension().getLoadKey())) {
-            return false;
-        }
-        return IrisSettings.get().getGeneral().isAutoGenerateIntrinsicStructures();
+        return false;
     }
 
     @Override

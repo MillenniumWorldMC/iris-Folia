@@ -163,6 +163,10 @@ public class MantleWriter implements IObjectPlacer, AutoCloseable {
             return;
         }
 
+        if (y == 0 && t instanceof BlockData && engineMantle.getEngine().getDimension().isBedrock()) {
+            return;
+        }
+
         MantleChunk<Matter> chunk = acquireChunk(cx, cz);
         if (chunk == null) return;
 

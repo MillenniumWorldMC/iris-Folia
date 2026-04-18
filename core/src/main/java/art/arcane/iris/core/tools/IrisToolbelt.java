@@ -95,7 +95,7 @@ public class IrisToolbelt {
         }
 
         if (!pack.exists()) {
-            Iris.service(StudioSVC.class).downloadSearch(new VolmitSender(Bukkit.getConsoleSender(), Iris.instance.getTag()), requested, false, false);
+            Iris.service(StudioSVC.class).downloadSearch(new VolmitSender(Bukkit.getConsoleSender(), Iris.instance.getTag()), requested, false);
             File found = findCaseInsensitivePack(packsFolder, requested);
             if (found != null) {
                 pack = found;

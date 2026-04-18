@@ -41,7 +41,7 @@ plugins {
 }
 
 group = 'art.arcane'
-version = '4.0.0-1.21.11'
+version = '4.0.0-26.1'
 String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')
     .orElse('com.github.VolmitSoftware:VolmLib:master-SNAPSHOT')
     .get()

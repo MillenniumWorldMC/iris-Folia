@@ -21,18 +21,13 @@ package art.arcane.iris.engine.object;
 import art.arcane.iris.Iris;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.object.annotations.*;
-import art.arcane.iris.util.common.reflect.KeyedType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
-import org.bukkit.NamespacedKey;
 import org.bukkit.entity.LivingEntity;
-import org.bukkit.Registry;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
-
-import java.util.Locale;
 
 @Accessors(chain = true)
 @NoArgsConstructor
@@ -44,6 +39,7 @@ import java.util.Locale;
 public class IrisPotionEffect {
     private final transient AtomicCache<PotionEffectType> pt = new AtomicCache<>();
     @Required
+    @RegistryListPotionEffect
     @Desc("The potion effect to apply in this area")
     private String potionEffect = "";
     @Required
@@ -63,29 +59,24 @@ public class IrisPotionEffect {
     public PotionEffectType getRealType() {
         return pt.aquire(() ->
         {
-            PotionEffectType t = PotionEffectType.LUCK;
-
-            if (getPotionEffect().isEmpty()) {
-                return t;
+            if (getPotionEffect() == null || getPotionEffect().isEmpty()) {
+                return PotionEffectType.LUCK;
             }
 
             try {
-                for (PotionEffectType i : Registry.EFFECT) {
-                    NamespacedKey key = KeyedType.getKey(i);
-                    if (key != null && key.getKey().toUpperCase(Locale.ROOT).replaceAll("\\Q \\E", "_").equals(getPotionEffect())) {
-                        t = i;
-
-                        return t;
-                    }
+                PotionEffectType resolved = PotionEffectTypes.resolve(getPotionEffect());
+                if (resolved != null) {
+                    return resolved;
                 }
             } catch (Throwable e) {
                 Iris.reportError(e);
-
             }
 
-            Iris.warn("Unknown Potion Effect Type: " + getPotionEffect());
+            if (PotionEffectTypes.shouldWarn(getPotionEffect())) {
+                Iris.warn("Unknown Potion Effect Type: \"" + getPotionEffect() + "\". Valid types: " + PotionEffectTypes.knownTypesList());
+            }
 
-            return t;
+            return PotionEffectType.LUCK;
         });
     }
 

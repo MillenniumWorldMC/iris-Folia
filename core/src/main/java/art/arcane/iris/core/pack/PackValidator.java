@@ -42,6 +42,9 @@ public final class PackValidator {
     private static final String TRASH_ROOT = ".iris-trash";
     private static final String DATAPACK_IMPORTS = "datapack-imports";
     private static final String EXTERNAL_DATAPACKS = "externaldatapacks";
+    private static final String INTERNAL_DATAPACKS = "internaldatapacks";
+    private static final String DATAPACKS_FOLDER = "datapacks";
+    private static final String CACHE_FOLDER = "cache";
     private static final String OBJECTS_FOLDER = "objects";
     private static final String DIMENSIONS_FOLDER = "dimensions";
     private static final List<String> MANAGED_RESOURCE_FOLDERS = List.of(
@@ -207,6 +210,15 @@ public final class PackValidator {
             return false;
         }
         if (str.contains("/" + EXTERNAL_DATAPACKS + "/")) {
+            return false;
+        }
+        if (str.contains("/" + INTERNAL_DATAPACKS + "/")) {
+            return false;
+        }
+        if (str.contains("/" + DATAPACKS_FOLDER + "/")) {
+            return false;
+        }
+        if (str.contains("/" + CACHE_FOLDER + "/")) {
             return false;
         }
         if (str.contains("/" + OBJECTS_FOLDER + "/")) {

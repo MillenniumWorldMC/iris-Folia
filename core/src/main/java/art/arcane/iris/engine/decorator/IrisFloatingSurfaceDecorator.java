@@ -16,34 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package art.arcane.iris.engine.framework;
+package art.arcane.iris.engine.decorator;
 
-import org.bukkit.Chunk;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
-import org.bukkit.event.player.PlayerTeleportEvent;
+import art.arcane.iris.engine.framework.Engine;
+import art.arcane.iris.engine.object.IrisDecorator;
 
-@SuppressWarnings("EmptyMethod")
-public interface EngineWorldManager {
-    void close();
+public class IrisFloatingSurfaceDecorator extends IrisSurfaceDecorator {
+    public IrisFloatingSurfaceDecorator(Engine engine) {
+        super(engine, "Floating Surface");
+    }
 
-    int getEntityCount();
-
-    int getChunkCount();
-
-    double getEntitySaturation();
-
-    void onTick();
-
-    void onSave();
-
-    void onBlockBreak(BlockBreakEvent e);
-
-    void onBlockPlace(BlockPlaceEvent e);
-
-    void onChunkLoad(Chunk e, boolean generated);
-
-    void onChunkUnload(Chunk e);
-
-    void teleportAsync(PlayerTeleportEvent e);
+    @Override
+    protected boolean isSlopeValid(IrisDecorator decorator, int realX, int realZ) {
+        return true;
+    }
 }

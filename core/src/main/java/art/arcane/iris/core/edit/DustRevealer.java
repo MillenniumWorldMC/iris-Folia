@@ -124,6 +124,9 @@ public class DustRevealer {
     }
 
     private boolean is(BlockPosition a) {
+        if (a.getY() < world.getMinHeight() || a.getY() >= world.getMaxHeight()) {
+            return false;
+        }
         int betterY = a.getY() - world.getMinHeight();
         if (isValidTry(a) && engine.getObjectPlacementKey(a.getX(), betterY, a.getZ()) != null && engine.getObjectPlacementKey(a.getX(), betterY, a.getZ()).equals(key)) {
             hits.add(a);

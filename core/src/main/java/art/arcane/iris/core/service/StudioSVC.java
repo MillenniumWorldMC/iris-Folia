@@ -74,7 +74,7 @@ public class StudioSVC implements IrisService {
                 if (pack.equals("overworld")) {
                     Iris.info("Downloading Default Pack " + pack);
                     String url = "https://github.com/IrisDimensions/overworld/releases/download/" + INMS.OVERWORLD_TAG + "/overworld.zip";
-                    Iris.service(StudioSVC.class).downloadRelease(Iris.getSender(), url, false, false);
+                    Iris.service(StudioSVC.class).downloadRelease(Iris.getSender(), url, false);
                 } else {
                     Iris.warn("Default pack '" + pack + "' is not installed. Please download it manually with /iris download");
                 }
@@ -201,11 +201,11 @@ public class StudioSVC implements IrisService {
         return dim;
     }
 
-    public void downloadSearch(VolmitSender sender, String key, boolean trim) {
-        downloadSearch(sender, key, trim, false);
+    public void downloadSearch(VolmitSender sender, String key) {
+        downloadSearch(sender, key, false);
     }
 
-    public void downloadSearch(VolmitSender sender, String key, boolean trim, boolean forceOverwrite) {
+    public void downloadSearch(VolmitSender sender, String key, boolean forceOverwrite) {
         try {
             String url = getListing(false).get(key);
 
@@ -219,7 +219,7 @@ public class StudioSVC implements IrisService {
             String[] nodes = url.split("\\Q/\\E");
             String repo = nodes.length == 1 ? "IrisDimensions/" + nodes[0] : nodes[0] + "/" + nodes[1];
             String branch = nodes.length > 2 ? nodes[2] : "stable";
-            download(sender, repo, branch, trim, forceOverwrite, false);
+            download(sender, repo, branch, forceOverwrite, false);
         } catch (Throwable e) {
             Iris.reportError(e);
             e.printStackTrace();
@@ -227,9 +227,9 @@ public class StudioSVC implements IrisService {
         }
     }
 
-    public void downloadRelease(VolmitSender sender, String url, boolean trim, boolean forceOverwrite) {
+    public void downloadRelease(VolmitSender sender, String url, boolean forceOverwrite) {
         try {
-            download(sender, "IrisDimensions", url, trim, forceOverwrite, true);
+            download(sender, "IrisDimensions", url, forceOverwrite, true);
         } catch (Throwable e) {
             Iris.reportError(e);
             e.printStackTrace();
@@ -237,14 +237,14 @@ public class StudioSVC implements IrisService {
         }
     }
 
-    public void download(VolmitSender sender, String repo, String branch, boolean trim) throws JsonSyntaxException, IOException {
-        download(sender, repo, branch, trim, false, false);
+    public void download(VolmitSender sender, String repo, String branch) throws JsonSyntaxException, IOException {
+        download(sender, repo, branch, false, false);
     }
 
-    public void download(VolmitSender sender, String repo, String branch, boolean trim, boolean forceOverwrite, boolean directUrl) throws JsonSyntaxException, IOException {
+    public void download(VolmitSender sender, String repo, String branch, boolean forceOverwrite, boolean directUrl) throws JsonSyntaxException, IOException {
         String url = directUrl ? branch : "https://codeload.github.com/" + repo + "/zip/refs/heads/" + branch;
         sender.sendMessage("Downloading " + url + " "); //The extra space stops a bug in adventure API from repeating the last letter of the URL
-        File zip = Iris.getNonCachedFile("pack-" + trim + "-" + repo, url);
+        File zip = Iris.getNonCachedFile("pack-" + repo, url);
         File temp = Iris.getTemp();
         File work = new File(temp, "dl-" + UUID.randomUUID());
         File packs = getWorkspaceFolder();
@@ -331,13 +331,6 @@ public class StudioSVC implements IrisService {
 
         FileUtils.copyDirectory(dir, packEntry);
 
-        if (trim) {
-            sender.sendMessage("Trimming " + key);
-            File cp = compilePackage(sender, key, false, false);
-            IO.delete(packEntry);
-            packEntry.mkdirs();
-            ZipUtil.unpack(cp, packEntry);
-        }
         IrisData.getLoaded(packEntry)
                 .ifPresent(IrisData::hotloaded);
 

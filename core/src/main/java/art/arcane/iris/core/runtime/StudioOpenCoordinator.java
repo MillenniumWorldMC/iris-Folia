@@ -153,7 +153,7 @@ public final class StudioOpenCoordinator {
                 request.onDone().accept(world);
             }
 
-            future.complete(new StudioOpenResult(world, safeEntry, creator.getLastDatapackReadinessResult()));
+            future.complete(new StudioOpenResult(world, safeEntry));
         } catch (Throwable e) {
             Iris.reportError("Studio open failed for world \"" + request.worldName() + "\".", e);
             if (!request.retainOnFailure()) {
@@ -544,7 +544,7 @@ public final class StudioOpenCoordinator {
     public record StudioOpenProgress(double progress, String stage) {
     }
 
-    public record StudioOpenResult(World world, Location entryLocation, DatapackReadinessResult datapackReadiness) {
+    public record StudioOpenResult(World world, Location entryLocation) {
     }
 
     public record StudioCloseResult(

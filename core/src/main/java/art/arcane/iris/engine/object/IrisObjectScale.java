@@ -89,6 +89,9 @@ public class IrisObjectScale {
     }
 
     public IrisObject get(RNG rng, IrisObject origin) {
+        if (origin == null) {
+            return null;
+        }
         if (!shouldScale()) {
             return origin;
         }

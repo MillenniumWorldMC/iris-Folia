@@ -23,6 +23,7 @@ import art.arcane.iris.core.pack.PackValidationRegistry;
 import art.arcane.iris.core.pack.PackValidationResult;
 import art.arcane.iris.core.pack.PackValidator;
 import art.arcane.iris.util.common.director.DirectorExecutor;
+import art.arcane.iris.util.common.director.DirectorHelp;
 import art.arcane.iris.util.common.format.C;
 import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.volmlib.util.director.annotations.Director;
@@ -32,6 +33,10 @@ import java.io.File;
 
 @Director(name = "pack", aliases = {"pk"}, description = "Pack validation and maintenance")
 public class CommandPack implements DirectorExecutor {
+    @Director(description = "Show help tree for this command group", aliases = {"?"})
+    public void help() {
+        DirectorHelp.print(sender(), getClass());
+    }
 
     @Director(description = "Validate a pack (or all packs) and re-publish results", aliases = {"v", "check"})
     public void validate(

@@ -916,7 +916,13 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
             return o.getObject().getLoadKey() + "@" + o.getId();
         }
 
-        return null;
+        MantleChunk<Matter> chunk = getMantle().getMantle().getChunk(x >> 4, z >> 4).use();
+        try {
+            String raw = chunk.get(x & 15, y, z & 15, String.class);
+            return (raw == null || raw.isEmpty()) ? null : raw;
+        } finally {
+            chunk.release();
+        }
     }
 
     default PlacedObject getObjectPlacement(int x, int y, int z) {
@@ -936,6 +942,9 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
 
         String[] v = objectAt.split("\\Q@\\E");
         String object = v[0];
+        if (object.isEmpty() || object.equals("null")) {
+            return null;
+        }
         int id = Integer.parseInt(v[1]);
 
 

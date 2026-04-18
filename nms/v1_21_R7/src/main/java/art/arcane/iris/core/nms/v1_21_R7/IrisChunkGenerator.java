@@ -2,19 +2,11 @@ package art.arcane.iris.core.nms.v1_21_R7;
 
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.MapCodec;
-import art.arcane.iris.Iris;
-import art.arcane.iris.core.ExternalDataPackPipeline;
-import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.util.common.reflect.WrappedField;
 import art.arcane.iris.util.common.reflect.WrappedReturningMethod;
-import net.minecraft.CrashReport;
-import net.minecraft.CrashReportCategory;
-import net.minecraft.ReportedException;
 import net.minecraft.core.*;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.util.random.WeightedList;
@@ -29,12 +21,9 @@ import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.*;
 import net.minecraft.world.level.levelgen.blending.Blender;
-import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
-import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
-import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.craftbukkit.generator.CustomChunkGenerator;
@@ -45,18 +34,12 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 
 public class IrisChunkGenerator extends CustomChunkGenerator {
     private static final WrappedField<ChunkGenerator, BiomeSource> BIOME_SOURCE;
     private static final WrappedReturningMethod<Heightmap, Object> SET_HEIGHT;
-    private static final int EXTERNAL_FOUNDATION_MAX_DEPTH = 96;
-    private static final Set<String> loggedExternalStructureFingerprintKeys = ConcurrentHashMap.newKeySet();
     private final ChunkGenerator delegate;
     private final Engine engine;
-    private volatile Registry<Structure> cachedStructureRegistry;
-    private volatile Map<Structure, Integer> cachedStructureOrder;
 
     public IrisChunkGenerator(ChunkGenerator delegate, long seed, Engine engine, World world) {
         super(((CraftWorld) world).getHandle(), edit(delegate, new CustomBiomeSource(seed, engine, world)), null);
@@ -66,10 +49,7 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
 
     @Override
     public @Nullable Pair<BlockPos, Holder<Structure>> findNearestMapStructure(ServerLevel level, HolderSet<Structure> holders, BlockPos pos, int radius, boolean findUnexplored) {
-        if (holders.size() == 0) return null;
-        if (engine.getDimension().isDisableExplorerMaps())
-            return null;
-        return delegate.findNearestMapStructure(level, holders, pos, radius, findUnexplored);
+        return null;
     }
 
     @Override
@@ -96,12 +76,6 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
 
     @Override
     public void createStructures(RegistryAccess registryAccess, ChunkGeneratorStructureState structureState, StructureManager structureManager, ChunkAccess access, StructureTemplateManager templateManager, ResourceKey<Level> levelKey) {
-        if (!structureManager.shouldGenerateStructures())
-            return;
-        if (!IrisSettings.get().getGeneral().isAutoGenerateIntrinsicStructures()) {
-            return;
-        }
-        delegate.createStructures(registryAccess, structureState, structureManager, access, templateManager, levelKey);
     }
 
     @Override
@@ -157,18 +131,8 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
 
     @Override
     public void addVanillaDecorations(WorldGenLevel level, ChunkAccess chunkAccess, StructureManager structureManager) {
-        if (!structureManager.shouldGenerateStructures())
-            return;
-        if (!IrisSettings.get().getGeneral().isAutoGenerateIntrinsicStructures()) {
-            return;
-        }
-
         SectionPos sectionPos = SectionPos.of(chunkAccess.getPos(), level.getMinSectionY());
         BlockPos blockPos = sectionPos.origin();
-        WorldgenRandom random = new WorldgenRandom(new XoroshiroRandomSource(RandomSupport.generateUniqueSeed()));
-        long i = random.setDecorationSeed(level.getSeed(), blockPos.getX(), blockPos.getZ());
-        Registry<Structure> structureRegistry = level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
-        Map<Structure, Integer> structureOrder = getStructureOrder(structureRegistry);
 
         Heightmap surface = chunkAccess.getOrCreateHeightmapUnprimed(Heightmap.Types.WORLD_SURFACE_WG);
         Heightmap ocean = chunkAccess.getOrCreateHeightmapUnprimed(Heightmap.Types.OCEAN_FLOOR_WG);
@@ -180,401 +144,16 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
                 int wX = x + blockPos.getX();
                 int wZ = z + blockPos.getZ();
 
-                int noAir = engine.getHeight(wX, wZ, false) + engine.getMinHeight() + 1;
-                int noFluid = engine.getHeight(wX, wZ, true) + engine.getMinHeight() + 1;
-                int oceanHeight = ocean.getFirstAvailable(x, z);
-                int surfaceHeight = surface.getFirstAvailable(x, z);
-                int motionHeight = motion.getFirstAvailable(x, z);
-                int motionNoLeavesHeight = motionNoLeaves.getFirstAvailable(x, z);
-                if (noFluid > oceanHeight) {
-                    SET_HEIGHT.invoke(ocean, x, z, noFluid);
-                }
-                if (noAir > surfaceHeight) {
-                    SET_HEIGHT.invoke(surface, x, z, noAir);
-                }
-                if (noAir > motionHeight) {
-                    SET_HEIGHT.invoke(motion, x, z, noAir);
-                }
-                if (noAir > motionNoLeavesHeight) {
-                    SET_HEIGHT.invoke(motionNoLeaves, x, z, noAir);
-                }
-            }
-        }
-
-        List<StructureStart> starts = new ArrayList<>(structureManager.startsForStructure(chunkAccess.getPos(), structure -> true));
-        starts.sort(Comparator.comparingInt(start -> structureOrder.getOrDefault(start.getStructure(), Integer.MAX_VALUE)));
-        Set<String> externalSmartBoreStructures = ExternalDataPackPipeline.snapshotSmartBoreStructureKeys();
-        IrisSettings.IrisSettingsGeneral general = IrisSettings.get().getGeneral();
-        boolean intrinsicFoundationsEnabled = general.isIntrinsicStructureFoundations();
-        int intrinsicFoundationDepth = Math.max(0, general.getIntrinsicFoundationMaxDepth());
-        List<String> intrinsicAllowlist = general.getIntrinsicStructureAllowlist();
-
-        int seededStructureIndex = Integer.MIN_VALUE;
-        for (int j = 0; j < starts.size(); j++) {
-            StructureStart start = starts.get(j);
-            Structure structure = start.getStructure();
-            int structureIndex = structureOrder.getOrDefault(structure, j);
-            if (structureIndex != seededStructureIndex) {
-                random.setFeatureSeed(i, structureIndex, structure.step().ordinal());
-                seededStructureIndex = structureIndex;
-            }
-            Supplier<String> supplier = () -> structureRegistry.getResourceKey(structure).map(Object::toString).orElseGet(structure::toString);
-            String structureKey = resolveStructureKey(structureRegistry, structure);
-            boolean isExternalSmartBoreStructure = externalSmartBoreStructures.contains(structureKey);
-            boolean isIntrinsicFoundationStructure = !isExternalSmartBoreStructure
-                    && intrinsicFoundationsEnabled
-                    && intrinsicFoundationDepth > 0
-                    && matchesIntrinsicAllowlist(structureKey, intrinsicAllowlist);
-            int foundationDepth = isExternalSmartBoreStructure
-                    ? EXTERNAL_FOUNDATION_MAX_DEPTH
-                    : (isIntrinsicFoundationStructure ? intrinsicFoundationDepth : 0);
-            BitSet[] beforeSolidColumns = null;
-            if (foundationDepth > 0) {
-                beforeSolidColumns = snapshotChunkSolidColumns(level, chunkAccess);
-            }
-
-            try {
-                level.setCurrentlyGenerating(supplier);
-                start.placeInChunk(level, structureManager, this, random, getWritableArea(chunkAccess), chunkAccess.getPos());
-                if (beforeSolidColumns != null) {
-                    applyStructureFoundations(level, chunkAccess, beforeSolidColumns, foundationDepth);
-                }
-                if (shouldLogExternalStructureFingerprint(structureKey)) {
-                    logExternalStructureFingerprint(structureKey, start);
-                }
-            } catch (Exception exception) {
-                CrashReport crashReport = CrashReport.forThrowable(exception, "Feature placement");
-                CrashReportCategory category = crashReport.addCategory("Feature");
-                category.setDetail("Description", supplier::get);
-                throw new ReportedException(crashReport);
+                int terrainTop = engine.getHeight(wX, wZ, false) + engine.getMinHeight() + 1;
+                int terrainNoFluid = engine.getHeight(wX, wZ, true) + engine.getMinHeight() + 1;
+                SET_HEIGHT.invoke(ocean, x, z, terrainNoFluid);
+                SET_HEIGHT.invoke(surface, x, z, terrainTop);
+                SET_HEIGHT.invoke(motion, x, z, terrainTop);
+                SET_HEIGHT.invoke(motionNoLeaves, x, z, terrainTop);
             }
         }
 
         Heightmap.primeHeightmaps(chunkAccess, ChunkStatus.FINAL_HEIGHTMAPS);
-    }
-
-    private static String resolveStructureKey(Registry<Structure> structureRegistry, Structure structure) {
-        Identifier directKey = structureRegistry.getKey(structure);
-        if (directKey != null) {
-            return directKey.toString().toLowerCase(Locale.ROOT);
-        }
-
-        String fallback = String.valueOf(structure);
-        int slash = fallback.lastIndexOf('/');
-        int end = fallback.lastIndexOf(']');
-        if (slash >= 0 && end > slash) {
-            return fallback.substring(slash + 1, end).toLowerCase(Locale.ROOT);
-        }
-
-        return fallback.toLowerCase(Locale.ROOT);
-    }
-
-    private static BoundingBox getWritableArea(ChunkAccess ichunkaccess) {
-        ChunkPos chunkPos = ichunkaccess.getPos();
-        int minX = chunkPos.getMinBlockX();
-        int minZ = chunkPos.getMinBlockZ();
-        LevelHeightAccessor heightAccessor = ichunkaccess.getHeightAccessorForGeneration();
-        int minY = heightAccessor.getMinY() + 1;
-        int maxY = heightAccessor.getMaxY();
-        return new BoundingBox(minX, minY, minZ, minX + 15, maxY, minZ + 15);
-    }
-
-    private static BitSet[] snapshotChunkSolidColumns(WorldGenLevel level, ChunkAccess chunkAccess) {
-        int minY = level.getMinY();
-        int maxY = level.getMaxY();
-        int ySpan = maxY - minY;
-        if (ySpan <= 0) {
-            return new BitSet[0];
-        }
-
-        ChunkPos chunkPos = chunkAccess.getPos();
-        int minX = chunkPos.getMinBlockX();
-        int minZ = chunkPos.getMinBlockZ();
-        BitSet[] columns = new BitSet[16 * 16];
-        BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
-        for (int localX = 0; localX < 16; localX++) {
-            for (int localZ = 0; localZ < 16; localZ++) {
-                int index = (localX << 4) | localZ;
-                BitSet solids = new BitSet(ySpan);
-                int worldX = minX + localX;
-                int worldZ = minZ + localZ;
-                for (int y = minY; y < maxY; y++) {
-                    mutablePos.set(worldX, y, worldZ);
-                    if (isFoundationSolid(level.getBlockState(mutablePos))) {
-                        solids.set(y - minY);
-                    }
-                }
-                columns[index] = solids;
-            }
-        }
-
-        return columns;
-    }
-
-    private static boolean matchesIntrinsicAllowlist(String structureKey, List<String> allowlist) {
-        if (structureKey == null || structureKey.isBlank() || allowlist == null || allowlist.isEmpty()) {
-            return false;
-        }
-        String key = structureKey.toLowerCase(Locale.ROOT);
-        for (String raw : allowlist) {
-            if (raw == null) {
-                continue;
-            }
-            String pattern = raw.trim().toLowerCase(Locale.ROOT);
-            if (pattern.isEmpty()) {
-                continue;
-            }
-            if (pattern.endsWith("*")) {
-                if (key.startsWith(pattern.substring(0, pattern.length() - 1))) {
-                    return true;
-                }
-            } else if (key.equals(pattern)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static void applyStructureFoundations(
-            WorldGenLevel level,
-            ChunkAccess chunkAccess,
-            BitSet[] beforeSolidColumns,
-            int maxDepth
-    ) {
-        if (beforeSolidColumns == null || beforeSolidColumns.length == 0 || maxDepth <= 0) {
-            return;
-        }
-
-        int minY = level.getMinY();
-        int maxY = level.getMaxY();
-        int ySpan = maxY - minY;
-        if (ySpan <= 0) {
-            return;
-        }
-
-        ChunkPos chunkPos = chunkAccess.getPos();
-        int minX = chunkPos.getMinBlockX();
-        int minZ = chunkPos.getMinBlockZ();
-        BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
-        for (int localX = 0; localX < 16; localX++) {
-            for (int localZ = 0; localZ < 16; localZ++) {
-                int index = (localX << 4) | localZ;
-                BitSet before = beforeSolidColumns[index];
-                if (before == null) {
-                    continue;
-                }
-
-                int worldX = minX + localX;
-                int worldZ = minZ + localZ;
-                int lowestNewSolidY = Integer.MIN_VALUE;
-                for (int y = minY; y < maxY; y++) {
-                    mutablePos.set(worldX, y, worldZ);
-                    BlockState state = level.getBlockState(mutablePos);
-                    if (!isFoundationSolid(state)) {
-                        continue;
-                    }
-
-                    if (before.get(y - minY)) {
-                        continue;
-                    }
-
-                    lowestNewSolidY = y;
-                    break;
-                }
-
-                if (lowestNewSolidY == Integer.MIN_VALUE) {
-                    continue;
-                }
-
-                mutablePos.set(worldX, lowestNewSolidY, worldZ);
-                BlockState foundationState = level.getBlockState(mutablePos);
-                if (!isFoundationSolid(foundationState)) {
-                    continue;
-                }
-
-                int depth = 0;
-                for (int y = lowestNewSolidY - 1; y >= minY && depth < maxDepth; y--) {
-                    mutablePos.set(worldX, y, worldZ);
-                    BlockState state = level.getBlockState(mutablePos);
-                    if (isFoundationSolid(state)) {
-                        break;
-                    }
-
-                    level.setBlock(mutablePos, foundationState, 2);
-                    depth++;
-                }
-            }
-        }
-    }
-
-    private static boolean isFoundationSolid(BlockState state) {
-        if (state == null || state.isAir()) {
-            return false;
-        }
-        if (!state.getFluidState().isEmpty()) {
-            return false;
-        }
-        return Heightmap.Types.MOTION_BLOCKING_NO_LEAVES.isOpaque().test(state);
-    }
-
-    private static boolean shouldLogExternalStructureFingerprint(String structureKey) {
-        if (!IrisSettings.get().getGeneral().isDebug()) {
-            return false;
-        }
-        if (structureKey == null || structureKey.isBlank()) {
-            return false;
-        }
-
-        String normalized = structureKey.toLowerCase(Locale.ROOT);
-        if (!"minecraft:ancient_city".equals(normalized)
-                && !"minecraft:mineshaft".equals(normalized)
-                && !"minecraft:mineshaft_mesa".equals(normalized)) {
-            return false;
-        }
-
-        return loggedExternalStructureFingerprintKeys.add(normalized);
-    }
-
-    private static void logExternalStructureFingerprint(String structureKey, StructureStart start) {
-        if (start == null) {
-            return;
-        }
-
-        List<?> pieces = extractPieces(start);
-        int pieceCount = pieces.size();
-        String firstPieceType = "none";
-        String firstPieceFingerprint = "none";
-        if (!pieces.isEmpty()) {
-            Object firstPiece = pieces.get(0);
-            if (firstPiece != null) {
-                firstPieceType = firstPiece.getClass().getName();
-                firstPieceFingerprint = resolvePieceFingerprint(firstPiece);
-            }
-        }
-
-        Iris.debug("External structure fingerprint: key=" + structureKey
-                + ", pieces=" + pieceCount
-                + ", firstPiece=" + firstPieceType
-                + ", fingerprint=" + firstPieceFingerprint);
-    }
-
-    private static List<?> extractPieces(StructureStart start) {
-        try {
-            Method getPiecesMethod = start.getClass().getMethod("getPieces");
-            Object result = getPiecesMethod.invoke(start);
-            if (result instanceof List<?> list) {
-                return list;
-            }
-            if (result != null) {
-                Method piecesMethod = result.getClass().getMethod("pieces");
-                Object piecesResult = piecesMethod.invoke(result);
-                if (piecesResult instanceof List<?> list) {
-                    return list;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-
-        try {
-            Method piecesMethod = start.getClass().getMethod("pieces");
-            Object result = piecesMethod.invoke(start);
-            if (result instanceof List<?> list) {
-                return list;
-            }
-        } catch (Throwable ignored) {
-        }
-
-        return List.of();
-    }
-
-    private static String resolvePieceFingerprint(Object piece) {
-        if (piece == null) {
-            return "unknown";
-        }
-
-        try {
-            Method templateNameMethod = piece.getClass().getMethod("templateName");
-            Object value = templateNameMethod.invoke(piece);
-            if (value != null) {
-                String normalized = String.valueOf(value);
-                if (!normalized.isBlank()) {
-                    return normalized;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-
-        try {
-            Method templateMethod = piece.getClass().getMethod("template");
-            Object value = templateMethod.invoke(piece);
-            if (value != null) {
-                return value.getClass().getName();
-            }
-        } catch (Throwable ignored) {
-        }
-
-        Class<?> current = piece.getClass();
-        while (current != null && current != Object.class) {
-            Field[] fields = current.getDeclaredFields();
-            for (Field field : fields) {
-                try {
-                    field.setAccessible(true);
-                    Object value = field.get(piece);
-                    if (value == null) {
-                        continue;
-                    }
-
-                    if (value instanceof Identifier identifier) {
-                        String normalized = identifier.toString();
-                        if (!normalized.isBlank()) {
-                            return normalized;
-                        }
-                    }
-
-                    if (value instanceof String text) {
-                        String fieldName = field.getName() == null ? "" : field.getName().toLowerCase(Locale.ROOT);
-                        if (fieldName.contains("template") || fieldName.contains("name") || fieldName.contains("id")) {
-                            if (!text.isBlank()) {
-                                return text;
-                            }
-                        }
-                    }
-                } catch (Throwable ignored) {
-                }
-            }
-            current = current.getSuperclass();
-        }
-
-        return piece.getClass().getSimpleName();
-    }
-
-    private Map<Structure, Integer> getStructureOrder(Registry<Structure> structureRegistry) {
-        Map<Structure, Integer> localOrder = cachedStructureOrder;
-        Registry<Structure> localRegistry = cachedStructureRegistry;
-        if (localRegistry == structureRegistry && localOrder != null) {
-            return localOrder;
-        }
-
-        synchronized (this) {
-            Map<Structure, Integer> synchronizedOrder = cachedStructureOrder;
-            Registry<Structure> synchronizedRegistry = cachedStructureRegistry;
-            if (synchronizedRegistry == structureRegistry && synchronizedOrder != null) {
-                return synchronizedOrder;
-            }
-
-            List<Structure> sortedStructures = structureRegistry.stream()
-                    .sorted(Comparator.comparingInt(structure -> structure.step().ordinal()))
-                    .toList();
-            Map<Structure, Integer> builtOrder = new IdentityHashMap<>(sortedStructures.size());
-            for (int index = 0; index < sortedStructures.size(); index++) {
-                Structure structure = sortedStructures.get(index);
-                builtOrder.put(structure, index);
-            }
-
-            cachedStructureRegistry = structureRegistry;
-            cachedStructureOrder = builtOrder;
-            return builtOrder;
-        }
     }
 
     @Override

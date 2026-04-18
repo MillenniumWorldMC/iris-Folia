@@ -23,6 +23,7 @@ import art.arcane.iris.core.gui.PregeneratorJob;
 import art.arcane.iris.core.pregenerator.PregenTask;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.util.common.director.DirectorExecutor;
+import art.arcane.iris.util.common.director.DirectorHelp;
 import art.arcane.volmlib.util.director.annotations.Director;
 import art.arcane.volmlib.util.director.annotations.Param;
 import art.arcane.iris.util.common.format.C;
@@ -32,6 +33,11 @@ import org.bukkit.util.Vector;
 
 @Director(name = "pregen", aliases = "pregenerate", description = "Pregenerate your Iris worlds!")
 public class CommandPregen implements DirectorExecutor {
+    @Director(description = "Show help tree for this command group", aliases = {"?"})
+    public void help() {
+        DirectorHelp.print(sender(), getClass());
+    }
+
     @Director(description = "Pregenerate a world")
     public void start(
             @Param(description = "The radius of the pregen in blocks", aliases = "size")

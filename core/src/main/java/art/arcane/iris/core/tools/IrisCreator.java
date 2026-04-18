@@ -32,7 +32,6 @@ import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.pregenerator.PregenTask;
 import art.arcane.iris.core.service.BoardSVC;
 import art.arcane.iris.core.service.StudioSVC;
-import art.arcane.iris.core.runtime.DatapackReadinessResult;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.IrisDimension;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
@@ -113,11 +112,6 @@ public class IrisCreator {
      */
     private boolean benchmark = false;
     private BiConsumer<Double, String> studioProgressConsumer;
-    private DatapackReadinessResult lastDatapackReadinessResult;
-
-    public DatapackReadinessResult getLastDatapackReadinessResult() {
-        return lastDatapackReadinessResult;
-    }
 
     public static boolean removeFromBukkitYml(String name) throws IOException {
         YamlConfiguration yml = YamlConfiguration.loadConfiguration(BUKKIT_YML);
@@ -191,41 +185,7 @@ public class IrisCreator {
         if (!studio()) {
             IrisWorlds.get().put(name(), dimension());
         }
-        boolean verifyDataPacks = !studio();
-        boolean includeExternalDataPacks = true;
-        KMap<String, KList<File>> extraWorldDatapackFoldersByPack = null;
-        if (studio()) {
-            File studioDatapackFolder = new File(new File(Bukkit.getWorldContainer(), name()), "datapacks");
-            KList<File> studioDatapackFolders = new KList<>();
-            studioDatapackFolders.add(studioDatapackFolder);
-            extraWorldDatapackFoldersByPack = new KMap<>();
-            extraWorldDatapackFoldersByPack.put(d.getLoadKey(), studioDatapackFolders);
-        }
-        lastDatapackReadinessResult = DatapackReadinessResult.installForStudioWorld(
-                d.getLoadKey(),
-                d.getDimensionTypeKey(),
-                new File(Bukkit.getWorldContainer(), name()),
-                verifyDataPacks,
-                includeExternalDataPacks,
-                extraWorldDatapackFoldersByPack
-        );
-        if (!"ok".equals(lastDatapackReadinessResult.getExternalDatapackInstallResult())) {
-            throw new IrisException("Datapack external install failed: " + lastDatapackReadinessResult.getExternalDatapackInstallResult());
-        }
-        if (lastDatapackReadinessResult.isRestartRequired()) {
-            throw new IrisException("Datapack install requested a server restart for "
-                    + d.getLoadKey()
-                    + ". folders="
-                    + lastDatapackReadinessResult.getResolvedDatapackFolders());
-        }
-        if (!lastDatapackReadinessResult.isVerificationPassed()) {
-            throw new IrisException("Datapack readiness verification failed for "
-                    + d.getLoadKey()
-                    + ". missingPaths="
-                    + lastDatapackReadinessResult.getMissingPaths()
-                    + ", folders="
-                    + lastDatapackReadinessResult.getResolvedDatapackFolders());
-        }
+        ServerConfigurator.installDataPacks(!studio());
         reportStudioProgress(0.40D, "install_datapacks");
 
         PlatformChunkGenerator access = (PlatformChunkGenerator) wc.generator();

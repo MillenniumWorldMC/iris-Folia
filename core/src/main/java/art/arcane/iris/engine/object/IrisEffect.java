@@ -24,24 +24,19 @@ import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.annotations.*;
 import art.arcane.volmlib.util.math.RNG;
 import art.arcane.volmlib.util.scheduling.ChronoLatch;
-import art.arcane.iris.util.common.reflect.KeyedType;
 import art.arcane.iris.util.common.scheduling.J;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import org.bukkit.Location;
-import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
-import org.bukkit.Registry;
 import org.bukkit.Sound;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
-
-import java.util.Locale;
 
 @Snippet("effect")
 @Accessors(chain = true)
@@ -52,6 +47,7 @@ import java.util.Locale;
 public class IrisEffect {
     private final transient AtomicCache<PotionEffectType> pt = new AtomicCache<>();
     private final transient AtomicCache<ChronoLatch> latch = new AtomicCache<>();
+    @RegistryListPotionEffect
     @Desc("The potion effect to apply in this area")
     private String potionEffect = "";
     @Desc("The particle effect to apply in the area")
@@ -162,29 +158,24 @@ public class IrisEffect {
     public PotionEffectType getRealType() {
         return pt.aquire(() ->
         {
-            PotionEffectType t = PotionEffectType.LUCK;
-
-            if (getPotionEffect().isEmpty()) {
-                return t;
+            if (getPotionEffect() == null || getPotionEffect().isEmpty()) {
+                return PotionEffectType.LUCK;
             }
 
             try {
-                for (PotionEffectType i : Registry.EFFECT) {
-                    NamespacedKey key = KeyedType.getKey(i);
-                    if (key != null && key.getKey().toUpperCase(Locale.ROOT).replaceAll("\\Q \\E", "_").equals(getPotionEffect())) {
-                        t = i;
-
-                        return t;
-                    }
+                PotionEffectType resolved = PotionEffectTypes.resolve(getPotionEffect());
+                if (resolved != null) {
+                    return resolved;
                 }
             } catch (Throwable e) {
                 Iris.reportError(e);
-
             }
 
-            Iris.warn("Unknown Potion Effect Type: " + getPotionEffect());
+            if (PotionEffectTypes.shouldWarn(getPotionEffect())) {
+                Iris.warn("Unknown Potion Effect Type: \"" + getPotionEffect() + "\". Valid types: " + PotionEffectTypes.knownTypesList());
+            }
 
-            return t;
+            return PotionEffectType.LUCK;
         });
     }
 
