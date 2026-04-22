@@ -21,15 +21,17 @@ package art.arcane.iris.engine.modifier;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.engine.IrisComplex;
-import art.arcane.iris.engine.decorator.IrisFloatingSurfaceDecorator;
+import art.arcane.iris.engine.decorator.FloatingDecorator;
 import art.arcane.iris.engine.decorator.IrisSeaSurfaceDecorator;
 import static art.arcane.iris.engine.mantle.EngineMantle.AIR;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineAssignedModifier;
 import art.arcane.iris.engine.framework.EngineDecorator;
+import art.arcane.iris.engine.mantle.components.MantleFloatingObjectComponent;
 import art.arcane.iris.engine.object.FloatingIslandSample;
 import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisBiomeCustom;
+import art.arcane.iris.engine.object.IrisDecorationPart;
 import art.arcane.iris.engine.object.IrisDimension;
 import art.arcane.iris.engine.object.IrisFloatingChildBiomes;
 import art.arcane.iris.util.common.data.B;
@@ -43,21 +45,23 @@ import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
 import org.bukkit.block.Biome;
 import org.bukkit.block.data.BlockData;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<BlockData> {
     public static final long FLOATING_BASE_SEED_SALT = 0x5EED_F107_00F1B10CL;
-    private static final java.util.concurrent.atomic.AtomicLong columnsChecked = new java.util.concurrent.atomic.AtomicLong();
-    private static final java.util.concurrent.atomic.AtomicLong samplesAccepted = new java.util.concurrent.atomic.AtomicLong();
-    private static final java.util.concurrent.atomic.AtomicLong decorateInvocations = new java.util.concurrent.atomic.AtomicLong();
-    private static final java.util.concurrent.atomic.AtomicLong decorateSkippedNotAir = new java.util.concurrent.atomic.AtomicLong();
-    private static final java.util.concurrent.atomic.AtomicLong decorateSkippedNoInherit = new java.util.concurrent.atomic.AtomicLong();
-    private static final java.util.concurrent.atomic.AtomicLong decoratePhaseColumns = new java.util.concurrent.atomic.AtomicLong();
-    private static final java.util.concurrent.atomic.AtomicLong decoratePlaced = new java.util.concurrent.atomic.AtomicLong();
-    private static final java.util.concurrent.atomic.AtomicLong decorateNoChange = new java.util.concurrent.atomic.AtomicLong();
-    private static final java.util.concurrent.atomic.AtomicLong decorateFloorNull = new java.util.concurrent.atomic.AtomicLong();
-    private static final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong> floorMatHisto = new java.util.concurrent.ConcurrentHashMap<>();
-    private static final java.util.concurrent.atomic.AtomicLong lastReportMs = new java.util.concurrent.atomic.AtomicLong(0L);
+    private static final AtomicLong columnsChecked = new AtomicLong();
+    private static final AtomicLong samplesAccepted = new AtomicLong();
+    private static final AtomicLong decorateInvocations = new AtomicLong();
+    private static final AtomicLong decorateSkippedNotAir = new AtomicLong();
+    private static final AtomicLong decorateSkippedNoInherit = new AtomicLong();
+    private static final AtomicLong decoratePhaseColumns = new AtomicLong();
+    private static final AtomicLong decoratePlaced = new AtomicLong();
+    private static final AtomicLong decorateNoChange = new AtomicLong();
+    private static final AtomicLong decorateFloorNull = new AtomicLong();
+    private static final java.util.concurrent.ConcurrentHashMap<String, AtomicLong> floorMatHisto = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final AtomicLong lastReportMs = new AtomicLong(0L);
+    private static final AtomicLong reportCycle = new AtomicLong(0L);
     private final RNG rng;
-    private final EngineDecorator surfaceDecorator;
     private final EngineDecorator seaSurfaceDecorator;
 
     public static void reportFloatingStats() {
@@ -66,15 +70,36 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
                 .sorted((a, b) -> Long.compare(b.getValue().get(), a.getValue().get()))
                 .limit(5)
                 .forEach(e -> topFloors.append(' ').append(e.getKey()).append('=').append(e.getValue().get()));
-        art.arcane.iris.Iris.info("[floating-debug] columns=" + columnsChecked.get()
+
+        StringBuilder topAnchorY = new StringBuilder();
+        MantleFloatingObjectComponent.anchorYHisto.entrySet().stream()
+                .sorted((a, b) -> Long.compare(b.getValue().get(), a.getValue().get()))
+                .limit(5)
+                .forEach(e -> topAnchorY.append(' ').append(e.getKey()).append('=').append(e.getValue().get()));
+
+        art.arcane.iris.Iris.info("[floating-debug]"
+                + " columns=" + columnsChecked.get()
                 + " samples=" + samplesAccepted.get()
                 + " decInvoke=" + decorateInvocations.get()
                 + " decPlaced=" + decoratePlaced.get()
                 + " decNoChange=" + decorateNoChange.get()
                 + " decFloorNull=" + decorateFloorNull.get()
+                + " decCandidatesNull=" + FloatingDecorator.decCandidatesNull.get()
                 + " decSkipNonAir=" + decorateSkippedNotAir.get()
                 + " decSkipNoInherit=" + decorateSkippedNoInherit.get()
                 + " decPhaseCols=" + decoratePhaseColumns.get()
+                + " objAttempt=" + MantleFloatingObjectComponent.objectsAttempted.get()
+                + " objPlaced=" + MantleFloatingObjectComponent.objectsPlaced.get()
+                + " objNoFlat=" + MantleFloatingObjectComponent.objectsSkippedNoFlat.get()
+                + " objNoInterior=" + MantleFloatingObjectComponent.objectsSkippedNoInterior.get()
+                + " objRelax=" + MantleFloatingObjectComponent.objectsRelaxed.get()
+                + " objShrinkDrop=" + MantleFloatingObjectComponent.objectsSkippedShrink.get()
+                + " objNullObj=" + MantleFloatingObjectComponent.objectsSkippedNullObj.get()
+                + " writeAttempt=" + MantleFloatingObjectComponent.writesAttemptedTotal.get()
+                + " writeDropBelow=" + MantleFloatingObjectComponent.writesDroppedBelowTotal.get()
+                + " writeDropOverhang=" + MantleFloatingObjectComponent.writesDroppedOverhangTotal.get()
+                + " terrainMismatch=" + MantleFloatingObjectComponent.terrainMismatchWarnings.get()
+                + " anchorY:" + (topAnchorY.length() == 0 ? " <none>" : topAnchorY.toString())
                 + " topFloors:" + (topFloors.length() == 0 ? " <none>" : topFloors.toString()));
     }
 
@@ -83,13 +108,44 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
         long last = lastReportMs.get();
         if (now - last >= 10000L && lastReportMs.compareAndSet(last, now)) {
             reportFloatingStats();
+            if (reportCycle.incrementAndGet() >= 30) {
+                reportCycle.set(0);
+                resetAllCounters();
+            }
+        }
+    }
+
+    private static void resetAllCounters() {
+        columnsChecked.set(0);
+        samplesAccepted.set(0);
+        decorateInvocations.set(0);
+        decorateSkippedNotAir.set(0);
+        decorateSkippedNoInherit.set(0);
+        decoratePhaseColumns.set(0);
+        decoratePlaced.set(0);
+        decorateNoChange.set(0);
+        decorateFloorNull.set(0);
+        floorMatHisto.clear();
+        FloatingDecorator.decCandidatesNull.set(0);
+        MantleFloatingObjectComponent.resetObjectCounters();
+    }
+
+    private static void recordFloorMat(String matKey) {
+        if (floorMatHisto.size() < 32) {
+            floorMatHisto.computeIfAbsent(matKey, k -> new AtomicLong()).incrementAndGet();
+        } else {
+            AtomicLong existing = floorMatHisto.get(matKey);
+            if (existing != null) {
+                existing.incrementAndGet();
+            } else {
+                floorMatHisto.computeIfAbsent("other", k -> new AtomicLong()).incrementAndGet();
+            }
         }
     }
 
     public IrisFloatingChildBiomeModifier(Engine engine) {
         super(engine, "FloatingChildBiomes");
         rng = new RNG(engine.getSeedManager().getTerrain() ^ 0x7EB0A73F1DCE514DL);
-        surfaceDecorator = new IrisFloatingSurfaceDecorator(engine);
         seaSurfaceDecorator = new IrisSeaSurfaceDecorator(engine);
     }
 
@@ -112,7 +168,7 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
                 }
                 columnsChecked.incrementAndGet();
 
-                FloatingIslandSample sample = FloatingIslandSample.sampleMemoized(parent, wx, wz, chunkHeight, baseSeed, data, complex, getEngine());
+                FloatingIslandSample sample = FloatingIslandSample.sampleMemoized(parent, wx, wz, chunkHeight, baseSeed, data, getEngine());
                 if (sample == null) {
                     continue;
                 }
@@ -202,7 +258,7 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
                 if (parent == null || parent.getFloatingChildBiomes() == null || parent.getFloatingChildBiomes().isEmpty()) {
                     continue;
                 }
-                FloatingIslandSample sample = FloatingIslandSample.sampleMemoized(parent, wx, wz, chunkHeight, baseSeed, data, complex, getEngine());
+                FloatingIslandSample sample = FloatingIslandSample.sampleMemoized(parent, wx, wz, chunkHeight, baseSeed, data, getEngine());
                 if (sample == null) {
                     continue;
                 }
@@ -225,19 +281,18 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
                         if (floor == null) {
                             decorateFloorNull.incrementAndGet();
                         } else {
-                            String matKey = floor.getMaterial().getKey().getKey();
-                            floorMatHisto.computeIfAbsent(matKey, k -> new java.util.concurrent.atomic.AtomicLong()).incrementAndGet();
+                            recordFloorMat(floor.getMaterial().getKey().getKey());
                         }
                         try {
-                            surfaceDecorator.decorate(xf, zf, wx, wz, output, target, topY, max);
+                            RNG colRng = rng.nextParallelRNG((int) FloatingIslandSample.columnSeed(baseSeed, wx, wz));
+                            int placed = FloatingDecorator.decorateColumn(getEngine(), target, IrisDecorationPart.NONE, xf, zf, wx, wz, topY, max, output, colRng);
+                            if (placed > 0) {
+                                decoratePlaced.addAndGet(placed);
+                            } else {
+                                decorateNoChange.incrementAndGet();
+                            }
                         } catch (Throwable e) {
                             art.arcane.iris.Iris.reportError(e);
-                        }
-                        BlockData afterAbove = output.get(xf, topY + 1, zf);
-                        if (afterAbove != null && !B.isAir(afterAbove)) {
-                            decoratePlaced.incrementAndGet();
-                        } else {
-                            decorateNoChange.incrementAndGet();
                         }
                     } else {
                         decorateSkippedNotAir.incrementAndGet();
@@ -269,10 +324,7 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
                     }
                     if (fluidTopY > 0 && fluidTopY + 1 < chunkHeight && B.isAir(output.get(xf, fluidTopY + 1, zf))) {
                         try {
-                            seaSurfaceDecorator.decorate(xf, zf,
-                                    wx, wx + 1, wx - 1,
-                                    wz, wz + 1, wz - 1,
-                                    output, target, fluidTopY, chunkHeight);
+                            seaSurfaceDecorator.decorate(xf, zf, wx, wx + 1, wx - 1, wz, wz + 1, wz - 1, output, target, fluidTopY, chunkHeight);
                         } catch (Throwable e) {
                             art.arcane.iris.Iris.reportError(e);
                         }

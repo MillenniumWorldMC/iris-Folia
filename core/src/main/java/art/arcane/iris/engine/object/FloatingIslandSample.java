@@ -20,7 +20,6 @@ package art.arcane.iris.engine.object;
 
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.loader.IrisData;
-import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.util.project.noise.CNG;
 import art.arcane.volmlib.util.collection.KList;
@@ -63,13 +62,13 @@ public final class FloatingIslandSample {
         CHUNK_MEMO.get().clear();
     }
 
-    public static FloatingIslandSample sampleMemoized(IrisBiome parent, int wx, int wz, int chunkHeight, long baseSeed, IrisData data, IrisComplex complex, Engine engine) {
+    public static FloatingIslandSample sampleMemoized(IrisBiome parent, int wx, int wz, int chunkHeight, long baseSeed, IrisData data, Engine engine) {
         long key = (((long) wx) << 32) ^ (wz & 0xFFFFFFFFL);
         HashMap<Long, FloatingIslandSample> memo = CHUNK_MEMO.get();
         if (memo.containsKey(key)) {
             return memo.get(key);
         }
-        FloatingIslandSample result = sample(parent, wx, wz, chunkHeight, baseSeed, data, complex, engine);
+        FloatingIslandSample result = sample(parent, wx, wz, chunkHeight, baseSeed, data, engine);
         memo.put(key, result);
         return result;
     }
@@ -111,7 +110,7 @@ public final class FloatingIslandSample {
         return baseSeed ^ ((long) wx * 341873128712L) ^ ((long) wz * 132897987541L);
     }
 
-    public static FloatingIslandSample sample(IrisBiome parent, int wx, int wz, int chunkHeight, long baseSeed, IrisData data, IrisComplex complex, Engine engine) {
+    public static FloatingIslandSample sample(IrisBiome parent, int wx, int wz, int chunkHeight, long baseSeed, IrisData data, Engine engine) {
         KList<IrisFloatingChildBiomes> entries = parent.getFloatingChildBiomes();
         if (entries == null || entries.isEmpty()) {
             return reject(REJECT_NO_ENTRIES);
@@ -153,8 +152,6 @@ public final class FloatingIslandSample {
             return reject(REJECT_NO_SEED);
         }
 
-        int surfaceY = (int) Math.round(complex.getHeightStream().get(wx & ~63, wz & ~63));
-
         CNG altitudeCng = entry.getAltitudeCng(baseSeed, data);
         if (altitudeCng == null) {
             warnNullCng("altitudeStyle", parent);
@@ -162,9 +159,10 @@ public final class FloatingIslandSample {
         }
         double altNoise = altitudeCng.noise(wx, wz);
         double altClamped = Math.max(0, Math.min(1, altNoise));
-        int minAlt = Math.max(0, entry.getMinHeightAboveSurface());
-        int maxAlt = Math.max(minAlt, entry.getMaxHeightAboveSurface());
-        int baseY = surfaceY + minAlt + (int) Math.round(altClamped * (maxAlt - minAlt));
+        int worldMin = engine.getWorld().minHeight();
+        int minAlt = Math.max(0, entry.getMinHeightAboveSurface() - worldMin);
+        int maxAlt = Math.max(minAlt, entry.getMaxHeightAboveSurface() - worldMin);
+        int baseY = minAlt + (int) Math.round(altClamped * (maxAlt - minAlt));
 
         IrisBiome target = entry.getRealBiome(parent, data);
         int topH = computeTopHeight(entry, target, engine, baseSeed, wx, wz, data);
@@ -188,12 +186,12 @@ public final class FloatingIslandSample {
         int botY = baseY - depth;
 
         Integer minAbsoluteY = entry.getMinAbsoluteY();
-        if (minAbsoluteY != null && botY < minAbsoluteY) {
-            botY = minAbsoluteY;
+        if (minAbsoluteY != null && botY < minAbsoluteY - worldMin) {
+            botY = minAbsoluteY - worldMin;
         }
         Integer maxAbsoluteY = entry.getMaxAbsoluteY();
-        if (maxAbsoluteY != null && topY > maxAbsoluteY) {
-            topY = maxAbsoluteY;
+        if (maxAbsoluteY != null && topY > maxAbsoluteY - worldMin) {
+            topY = maxAbsoluteY - worldMin;
         }
 
         if (botY < 0) {

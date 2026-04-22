@@ -114,13 +114,13 @@ public class IrisFloatingChildBiomes implements IRare {
 
     @MinNumber(0)
     @MaxNumber(2032)
-    @Desc("Minimum blocks above the parent biome surface where the island base can sit.")
-    private int minHeightAboveSurface = 60;
+    @Desc("Minimum absolute world Y where the island base can sit. Island altitude is independent of the parent biome's terrain height; altitudeStyle noise varies the base between min and max per column.")
+    private int minHeightAboveSurface = 160;
 
     @MinNumber(0)
     @MaxNumber(2032)
-    @Desc("Maximum blocks above the parent biome surface where the island base can sit.")
-    private int maxHeightAboveSurface = 110;
+    @Desc("Maximum absolute world Y where the island base can sit. Island altitude is independent of the parent biome's terrain height; altitudeStyle noise varies the base between min and max per column.")
+    private int maxHeightAboveSurface = 210;
 
     @Desc("Optional absolute minimum world Y for the island base. When set, baseY is clamped upward so the tail bottom stays above this value.")
     private Integer minAbsoluteY = null;

@@ -46,7 +46,6 @@ import org.bukkit.inventory.ItemStack;
 
 import java.awt.Color;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 public interface INMSBinding {
@@ -161,10 +160,6 @@ public interface INMSBinding {
     }
 
     KMap<Material, List<BlockProperty>> getBlockProperties();
-
-    default Map<String, byte[]> extractVanillaDatapack() {
-        return Map.of();
-    }
 
     private void validateDimensionTypes(WorldCreator c) {
         if (c.generator() instanceof PlatformChunkGenerator gen
