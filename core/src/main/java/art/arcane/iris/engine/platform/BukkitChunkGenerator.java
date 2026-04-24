@@ -526,7 +526,7 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
                 }
             });
             mantleChunk.iterate(BlockData.class, (x, y, z, blockData) -> {
-                if (blockData == null) {
+                if (!shouldApplyMantleOverlayBlock(blockData)) {
                     return;
                 }
                 int worldY = y + minWorldY;
@@ -540,6 +540,15 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
             mantleChunk.release();
         }
         return new OverlayMetrics(appliedBlocks.get(), objectKeys.get());
+    }
+
+    static boolean shouldApplyMantleOverlayBlock(BlockData blockData) {
+        if (blockData == null) {
+            return false;
+        }
+
+        Material material = blockData.getMaterial();
+        return material != null && material != Material.AIR && material != Material.CAVE_AIR && material != Material.VOID_AIR;
     }
 
     private record OverlayMetrics(int appliedBlocks, int objectKeys) {

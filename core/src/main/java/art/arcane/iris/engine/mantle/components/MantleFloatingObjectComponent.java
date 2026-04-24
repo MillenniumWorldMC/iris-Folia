@@ -53,72 +53,15 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 @ComponentFlag(ReservedFlag.FLOATING_OBJECT)
 public class MantleFloatingObjectComponent extends IrisMantleComponent {
-    public static final AtomicLong objectsAttempted = new AtomicLong();
-    public static final AtomicLong objectsPlaced = new AtomicLong();
-    public static final AtomicLong objectsSkippedNoFlat = new AtomicLong();
-    public static final AtomicLong objectsSkippedNoInterior = new AtomicLong();
-    public static final AtomicLong objectsRelaxed = new AtomicLong();
-    public static final AtomicLong objectsSkippedShrink = new AtomicLong();
-    public static final AtomicLong objectsSkippedNullObj = new AtomicLong();
-    public static final AtomicLong writesAttemptedTotal = new AtomicLong();
-    public static final AtomicLong writesDroppedBelowTotal = new AtomicLong();
-    public static final AtomicLong writesDroppedOverhangTotal = new AtomicLong();
-    public static final AtomicLong objectsInvertedAttempted = new AtomicLong();
-    public static final AtomicLong objectsInvertedPlaced = new AtomicLong();
-    public static final AtomicLong objectsInvertedSkippedNoFlat = new AtomicLong();
-    public static final AtomicLong objectsInvertedFallbackNoInterior = new AtomicLong();
-    public static final AtomicLong objectsInvertedSkippedShrink = new AtomicLong();
-    public static final AtomicLong objectsInvertedSkippedNullObj = new AtomicLong();
-    public static final AtomicLong writesDroppedAboveBottomTotal = new AtomicLong();
-    public static final AtomicLong writesDroppedBottomOverhangTotal = new AtomicLong();
     private static final int MIN_FOOTPRINT_CELLS_CHECKED = 3;
     private static final int INVERTED_PICK_ATTEMPTS = 8;
     private static final IrisObjectRotation ROTATION_NONE = IrisObjectRotation.of(0, 0, 0);
-    public static final ConcurrentHashMap<String, AtomicLong> anchorYHisto = new ConcurrentHashMap<>();
 
     public MantleFloatingObjectComponent(EngineMantle engineMantle) {
         super(engineMantle, ReservedFlag.FLOATING_OBJECT, 2);
-    }
-
-    public static void resetObjectCounters() {
-        objectsAttempted.set(0);
-        objectsPlaced.set(0);
-        objectsSkippedNoFlat.set(0);
-        objectsSkippedNoInterior.set(0);
-        objectsRelaxed.set(0);
-        objectsSkippedShrink.set(0);
-        objectsSkippedNullObj.set(0);
-        writesAttemptedTotal.set(0);
-        writesDroppedBelowTotal.set(0);
-        writesDroppedOverhangTotal.set(0);
-        anchorYHisto.clear();
-        objectsInvertedAttempted.set(0);
-        objectsInvertedPlaced.set(0);
-        objectsInvertedSkippedNoFlat.set(0);
-        objectsInvertedFallbackNoInterior.set(0);
-        objectsInvertedSkippedShrink.set(0);
-        objectsInvertedSkippedNullObj.set(0);
-        writesDroppedAboveBottomTotal.set(0);
-        writesDroppedBottomOverhangTotal.set(0);
-    }
-
-    private static void recordWriteStats(IslandObjectPlacer islandPlacer) {
-        int attempted = islandPlacer.getWritesAttempted();
-        int below = islandPlacer.getWritesDroppedBelow();
-        int overhang = islandPlacer.getWritesDroppedOverhang();
-        writesAttemptedTotal.addAndGet(attempted);
-        writesDroppedBelowTotal.addAndGet(below);
-        writesDroppedOverhangTotal.addAndGet(overhang);
-    }
-
-    private static void recordInvertedWriteStats(IslandObjectPlacer islandPlacer) {
-        writesDroppedAboveBottomTotal.addAndGet(islandPlacer.getWritesDroppedAboveBottom());
-        writesDroppedBottomOverhangTotal.addAndGet(islandPlacer.getWritesDroppedBottomOverhang());
     }
 
     @Override
@@ -150,12 +93,17 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
         }
 
         IdentityHashMap<IrisFloatingChildBiomes, KList<Integer>> entryColumns = new IdentityHashMap<>();
+        IdentityHashMap<IrisFloatingChildBiomes, KList<Integer>> bottomEntryColumns = new IdentityHashMap<>();
         for (int i = 0; i < 256; i++) {
             FloatingIslandSample s = samples[i];
             if (s == null || s.entry == null) {
                 continue;
             }
             entryColumns.computeIfAbsent(s.entry, e -> new KList<>()).add(i);
+            IrisFloatingChildBiomes bottomEntry = s.bottomEntry();
+            if (bottomEntry != null) {
+                bottomEntryColumns.computeIfAbsent(bottomEntry, e -> new KList<>()).add(i);
+            }
         }
 
         for (Map.Entry<IrisFloatingChildBiomes, KList<Integer>> ec : entryColumns.entrySet()) {
@@ -193,11 +141,20 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
                     }
                 }
             }
+        }
+
+        for (Map.Entry<IrisFloatingChildBiomes, KList<Integer>> ec : bottomEntryColumns.entrySet()) {
+            IrisFloatingChildBiomes entry = ec.getKey();
+            KList<Integer> columns = ec.getValue();
+            if (columns.isEmpty()) {
+                continue;
+            }
+
+            IrisBiome parent = complex.getTrueBiomeStream().get(minX + (columns.get(0) & 15), minZ + (columns.get(0) >> 4));
+            IrisBiome target = entry.getRealBiome(parent, data);
             KList<IrisObjectPlacement> bottom = target != null ? entry.resolveBottomObjects(target) : null;
             if (bottom != null && !bottom.isEmpty()) {
-                if (interior == null) {
-                    interior = interiorColumns(samples, columns);
-                }
+                KList<Integer> interior = interiorColumns(samples, columns);
                 for (IrisObjectPlacement placement : bottom) {
                     tryPlaceInvertedChunk(writer, complex, chunkRng, data, placement, samples, columns, interior, minX, minZ, entry);
                 }
@@ -213,24 +170,20 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
         int density = placement.getDensity(rng, minX, minZ, data);
         double perAttempt = placement.getChance();
         for (int i = 0; i < density; i++) {
-            objectsAttempted.incrementAndGet();
             if (!rng.chance(perAttempt + rng.d(-0.005, 0.005))) {
                 continue;
             }
             IrisObject raw = placement.getObject(complex, rng);
             if (raw == null) {
-                objectsSkippedNullObj.incrementAndGet();
                 continue;
             }
             IrisObject obj0 = placement.getScale().get(rng, raw);
             if (obj0 == null) {
-                objectsSkippedShrink.incrementAndGet();
                 continue;
             }
             if (entry != null && entry.hasObjectShrink()) {
                 obj0 = entry.getShrinkScale().get(rng, obj0);
                 if (obj0 == null) {
-                    objectsSkippedShrink.incrementAndGet();
                     continue;
                 }
             }
@@ -249,7 +202,6 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
                         writer.setData(b.getX(), b.getY(), b.getZ(), marker);
                     }
                 }, null, data);
-                objectsPlaced.incrementAndGet();
             } catch (Throwable e) {
                 Iris.reportError(e);
             }
@@ -265,25 +217,21 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
         double perAttempt = placement.getChance();
 
         for (int i = 0; i < density; i++) {
-            objectsAttempted.incrementAndGet();
             if (!rng.chance(perAttempt + rng.d(-0.005, 0.005))) {
                 continue;
             }
 
             IrisObject raw = placement.getObject(complex, rng);
             if (raw == null) {
-                objectsSkippedNullObj.incrementAndGet();
                 continue;
             }
             IrisObject obj0 = placement.getScale().get(rng, raw);
             if (obj0 == null) {
-                objectsSkippedShrink.incrementAndGet();
                 continue;
             }
             if (entry != null && entry.hasObjectShrink()) {
                 obj0 = entry.getShrinkScale().get(rng, obj0);
                 if (obj0 == null) {
-                    objectsSkippedShrink.incrementAndGet();
                     continue;
                 }
             }
@@ -292,26 +240,20 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
             FloatingObjectFootprint fp = FloatingObjectFootprint.compute(obj);
 
             KList<Integer> pool = interior.isEmpty() ? columns : interior;
-            if (interior.isEmpty()) {
-                objectsSkippedNoInterior.incrementAndGet();
-            }
 
             int pickedKey = pool.get(rng.i(0, pool.size() - 1));
             int pickedXf = pickedKey & 15;
             int pickedZf = pickedKey >> 4;
             FloatingIslandSample pickedSample = samples[(pickedZf << 4) | pickedXf];
             if (pickedSample == null) {
-                objectsSkippedNoFlat.incrementAndGet();
                 continue;
             }
             int pickTopY = pickedSample.topY();
 
             if (!isFootprintFlat(fp, pickedXf, pickedZf, pickTopY, samples, 2)) {
                 if (!isFootprintFlat(fp, pickedXf, pickedZf, pickTopY, samples, 4)) {
-                    objectsSkippedNoFlat.incrementAndGet();
                     continue;
                 }
-                objectsRelaxed.incrementAndGet();
             }
 
             int wx = minX + pickedXf - fp.getTallestKx();
@@ -338,9 +280,6 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
                         writer.setData(b.getX(), b.getY(), b.getZ(), marker);
                     }
                 }, null, data);
-                objectsPlaced.incrementAndGet();
-                recordAnchorYHisto(pickTopY);
-                recordWriteStats(islandPlacer);
             } catch (Throwable e) {
                 Iris.reportError(e);
             }
@@ -356,25 +295,21 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
         double perAttempt = placement.getChance();
 
         for (int i = 0; i < density; i++) {
-            objectsInvertedAttempted.incrementAndGet();
             if (!rng.chance(perAttempt + rng.d(-0.005, 0.005))) {
                 continue;
             }
 
             IrisObject raw = placement.getObject(complex, rng);
             if (raw == null) {
-                objectsInvertedSkippedNullObj.incrementAndGet();
                 continue;
             }
             IrisObject obj0 = placement.getScale().get(rng, raw);
             if (obj0 == null) {
-                objectsInvertedSkippedShrink.incrementAndGet();
                 continue;
             }
             if (entry != null && entry.hasObjectShrink()) {
                 obj0 = entry.getShrinkScale().get(rng, obj0);
                 if (obj0 == null) {
-                    objectsInvertedSkippedShrink.incrementAndGet();
                     continue;
                 }
             }
@@ -385,9 +320,6 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
             IrisObjectRotation invertedRotation = IrisObjectRotation.xFlip180WithY(invertedYRotation);
 
             KList<Integer> pool = interior.isEmpty() ? columns : interior;
-            if (interior.isEmpty()) {
-                objectsInvertedFallbackNoInterior.incrementAndGet();
-            }
 
             int pickedXf = -1;
             int pickedZf = -1;
@@ -416,7 +348,6 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
                 break;
             }
             if (!foundBottomAnchor) {
-                objectsInvertedSkippedNoFlat.incrementAndGet();
                 continue;
             }
 
@@ -444,8 +375,6 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
                         writer.setData(b.getX(), b.getY(), b.getZ(), marker);
                     }
                 }, null, data);
-                objectsInvertedPlaced.incrementAndGet();
-                recordInvertedWriteStats(islandPlacer);
             } catch (Throwable e) {
                 Iris.reportError(e);
             }
@@ -552,20 +481,6 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
             return true;
         }
         return touchedChunkEdge;
-    }
-
-    private static void recordAnchorYHisto(int topY) {
-        String bucket = String.valueOf(topY >> 3);
-        if (anchorYHisto.size() < 32) {
-            anchorYHisto.computeIfAbsent(bucket, k -> new AtomicLong()).incrementAndGet();
-        } else {
-            AtomicLong existing = anchorYHisto.get(bucket);
-            if (existing != null) {
-                existing.incrementAndGet();
-            } else {
-                anchorYHisto.computeIfAbsent("other", k -> new AtomicLong()).incrementAndGet();
-            }
-        }
     }
 
     private static KList<Integer> interiorColumns(FloatingIslandSample[] samples, KList<Integer> columns) {

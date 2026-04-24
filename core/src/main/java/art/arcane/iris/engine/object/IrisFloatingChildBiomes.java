@@ -20,6 +20,7 @@ package art.arcane.iris.engine.object;
 
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.data.cache.AtomicCache;
+import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.annotations.ArrayType;
 import art.arcane.iris.engine.object.annotations.Desc;
 import art.arcane.iris.engine.object.annotations.MaxNumber;
@@ -51,6 +52,7 @@ public class IrisFloatingChildBiomes implements IRare {
     private final transient AtomicCache<CNG> bottomCache = new AtomicCache<>();
     private final transient AtomicCache<CNG> wallWarpCache = new AtomicCache<>();
     private final transient AtomicCache<CNG> carveCache = new AtomicCache<>();
+    private final transient AtomicCache<IrisCaveProfileSampler> carvingProfileSamplerCache = new AtomicCache<>(true);
     private final transient AtomicCache<IrisObjectScale> shrinkScaleCache = new AtomicCache<>();
 
     public CNG getFootprintCng(long baseSeed, IrisData data) {
@@ -87,6 +89,45 @@ public class IrisFloatingChildBiomes implements IRare {
             return null;
         }
         return carveCache.aquire(() -> style.create(new RNG(baseSeed ^ 0xCA5EC1EE5EL), data));
+    }
+
+    public IrisCaveProfileSampler getCarvingProfileSampler(Engine engine, IrisData data) {
+        if (!hasCarvingReference()) {
+            return null;
+        }
+
+        return carvingProfileSamplerCache.aquire(() -> {
+            IrisBiome resolved = resolveCarvingBiome(carving, engine, data);
+            if (resolved == null || resolved.getCaveProfile() == null || !resolved.getCaveProfile().isEnabled()) {
+                return null;
+            }
+
+            return new IrisCaveProfileSampler(engine, resolved.getCaveProfile());
+        });
+    }
+
+    public boolean hasCarvingReference() {
+        return carving != null && !carving.isBlank();
+    }
+
+    static IrisBiome resolveCarvingBiome(String carving, Engine engine, IrisData data) {
+        if (carving == null || carving.isBlank() || engine == null || data == null) {
+            return null;
+        }
+
+        IrisDimension dimension = engine.getDimension();
+        if (dimension != null && dimension.getCarvingEntryIndex() != null) {
+            IrisDimensionCarvingEntry entry = dimension.getCarvingEntryIndex().get(carving);
+            if (entry != null) {
+                return IrisDimensionCarvingResolver.resolveEntryBiome(engine, entry);
+            }
+        }
+
+        if (data.getBiomeLoader() == null) {
+            return null;
+        }
+
+        return data.getBiomeLoader().load(carving);
     }
 
     @RegistryListResource(IrisBiome.class)
@@ -185,9 +226,12 @@ public class IrisFloatingChildBiomes implements IRare {
     @Desc("Optional 3D noise that swiss-cheeses the island interior by marking individual blocks as air when the noise exceeds carveThreshold. Leave null to keep the island solid. Good defaults: {\"style\":\"CELLULAR\",\"zoom\":0.3} for bubble pockets, {\"style\":\"VASCULAR\",\"zoom\":0.25} for wormy tunnels.")
     private IrisGeneratorStyle carveStyle = null;
 
+    @Desc("Optional carving biome key or dimension carving entry id whose caveProfile drives floating-island internal air pockets. Dimension carving ids resolve first; biome keys such as carving/mushroom resolve second. When set, this overrides carveStyle while carveThreshold remains a final tuning bias.")
+    private String carving = "";
+
     @MinNumber(0)
     @MaxNumber(1)
-    @Desc("Threshold (0..1) above which carveStyle noise carves air pockets. 1.0 = no carving. 0.75 = sparse pockets. 0.55 = heavy swiss-cheese. 0.4 = shredded lattice. Ignored when carveStyle is null.")
+    @Desc("Threshold (0..1) above which carveStyle noise carves air pockets. 1.0 = no direct-noise carving. 0.75 = sparse pockets. 0.55 = heavy swiss-cheese. 0.4 = shredded lattice. When carving is set, lower values add a final positive threshold bias to the referenced caveProfile.")
     private double carveThreshold = 1.0;
 
     @Desc("Optional water surface height above the island base, in blocks. null = no internal water. Positive = water fills any dip in the top profile up to baseY + localFluidHeight (forms lakes/ponds in concavities of the biome-top heightmap).")

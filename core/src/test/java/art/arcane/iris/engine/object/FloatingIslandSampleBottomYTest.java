@@ -6,6 +6,9 @@ import art.arcane.volmlib.util.math.RNG;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 public class FloatingIslandSampleBottomYTest {
     private FloatingIslandSample buildSample(int islandBaseY, boolean[] solidMask) {
@@ -53,6 +56,20 @@ public class FloatingIslandSampleBottomYTest {
         int first = sample.bottomY();
         int second = sample.bottomY();
         assertEquals(first, second);
+    }
+
+    @Test
+    public void mergedEntryMask_preservesTopAndBottomOwners() {
+        IrisFloatingChildBiomes bottom = new IrisFloatingChildBiomes();
+        IrisFloatingChildBiomes top = new IrisFloatingChildBiomes();
+        boolean[] mask = {true, true, false, true};
+        IrisFloatingChildBiomes[] entryMask = {bottom, bottom, null, top};
+        FloatingIslandSample sample = FloatingIslandSample.constructForTest(top, 80, mask.length, 3, 3, mask, entryMask);
+
+        assertSame(top, sample.entry);
+        assertSame(bottom, sample.bottomEntry());
+        assertSame(bottom, sample.entryAt(1));
+        assertSame(top, sample.entryAt(3));
     }
 
     @Test
@@ -122,6 +139,173 @@ public class FloatingIslandSampleBottomYTest {
         assertEquals(false, mask[3]);
         assertEquals(true, mask[4]);
         assertEquals(false, mask[5]);
+    }
+
+    @Test
+    public void footprintPinholeFill_acceptsSingleColumnHoleWithSolidRing() {
+        CNG footprint = new CNG(new RNG(4)) {
+            @Override
+            public double noise(double x, double z) {
+                return x == 0 && z == 0 ? 0.46 : 1.0;
+            }
+
+            @Override
+            public double noise(double x, double y, double z) {
+                return noise(x, z);
+            }
+        };
+
+        FloatingIslandSample.NeighborSupport support = FloatingIslandSample.footprintNeighborSupport(footprint, 0, 0, 0.0);
+        assertTrue(FloatingIslandSample.isFootprintPinholeRepairable(-0.08, 0.0, support));
+    }
+
+    @Test
+    public void footprintPinholeFill_keepsBroadHoleOpen() {
+        CNG footprint = new CNG(new RNG(5)) {
+            @Override
+            public double noise(double x, double z) {
+                return Math.abs(x) <= 1 && Math.abs(z) <= 1 ? 0.0 : 1.0;
+            }
+
+            @Override
+            public double noise(double x, double y, double z) {
+                return noise(x, z);
+            }
+        };
+
+        FloatingIslandSample.NeighborSupport support = FloatingIslandSample.footprintNeighborSupport(footprint, 0, 0, 0.0);
+        assertFalse(FloatingIslandSample.isFootprintPinholeRepairable(-1.0, 0.0, support));
+    }
+
+    @Test
+    public void layerSupport_rejectsIsolatedSolidProtrusion() {
+        CNG footprint = new CNG(new RNG(6)) {
+            @Override
+            public double noise(double x, double z) {
+                return x == 0 && z == 0 ? 1.0 : 0.0;
+            }
+
+            @Override
+            public double noise(double x, double y, double z) {
+                return noise(x, z);
+            }
+        };
+
+        assertTrue(FloatingIslandSample.layerFootprintSolid(footprint, null, false, 0.0, 0, 64, 0, 0.0));
+        assertFalse(FloatingIslandSample.layerNeighborSupport(footprint, null, false, 0.0, 0, 64, 0, 0.0).hasSolidSupport());
+    }
+
+    @Test
+    public void layerSupport_fillsSingleColumnAirGap() {
+        CNG footprint = new CNG(new RNG(7)) {
+            @Override
+            public double noise(double x, double z) {
+                return x == 0 && z == 0 ? 0.0 : 1.0;
+            }
+
+            @Override
+            public double noise(double x, double y, double z) {
+                return noise(x, z);
+            }
+        };
+
+        assertFalse(FloatingIslandSample.layerFootprintSolid(footprint, null, false, 0.0, 0, 64, 0, 0.0));
+        assertTrue(FloatingIslandSample.layerNeighborSupport(footprint, null, false, 0.0, 0, 64, 0, 0.0).canFillPinhole());
+    }
+
+    @Test
+    public void carveSolidInterior_rejectsIsolatedCarveAir() {
+        boolean[] mask = {true, true, true, true, true};
+        CNG carve = new CNG(new RNG(8), new NoiseGenerator() {
+            @Override
+            public double noise(double x) {
+                return 0.0;
+            }
+
+            @Override
+            public double noise(double x, double z) {
+                return x == 0 && z == 0 ? 1.0 : 0.0;
+            }
+
+            @Override
+            public double noise(double x, double y, double z) {
+                return noise(x, z);
+            }
+        }, 1.0, 1);
+
+        int count = FloatingIslandSample.carveSolidInterior(mask, 100, 0, 0, carve, 0.5);
+
+        assertEquals(5, count);
+        assertEquals(true, mask[1]);
+        assertEquals(true, mask[2]);
+        assertEquals(true, mask[3]);
+    }
+
+    @Test
+    public void carveSolidInterior_capsBroadVerticalCarveSheet() {
+        boolean[] mask = new boolean[30];
+        for (int i = 0; i < mask.length; i++) {
+            mask[i] = true;
+        }
+        CNG carve = new CNG(new RNG(10), new NoiseGenerator() {
+            @Override
+            public double noise(double x) {
+                return 1.0;
+            }
+
+            @Override
+            public double noise(double x, double z) {
+                return 1.0;
+            }
+
+            @Override
+            public double noise(double x, double y, double z) {
+                return 1.0;
+            }
+        }, 1.0, 1);
+
+        int count = FloatingIslandSample.carveSolidInterior(mask, 100, 0, 0, carve, 0.5);
+
+        assertEquals(25, count);
+        for (int i = 0; i < FloatingIslandSample.carveShellThickness(mask.length); i++) {
+            assertTrue(mask[i]);
+            assertTrue(mask[mask.length - 1 - i]);
+        }
+        int longestAirRun = 0;
+        int currentAirRun = 0;
+        for (boolean solid : mask) {
+            if (solid) {
+                currentAirRun = 0;
+                continue;
+            }
+            currentAirRun++;
+            longestAirRun = Math.max(longestAirRun, currentAirRun);
+        }
+        assertEquals(FloatingIslandSample.maxVerticalCarveRun(mask.length), longestAirRun);
+    }
+
+    @Test
+    public void clampVerticalCarveRuns_keepsMiddleOfOversizedRunOnly() {
+        boolean[] carveMask = new boolean[12];
+        for (int i = 1; i <= 10; i++) {
+            carveMask[i] = true;
+        }
+
+        FloatingIslandSample.clampVerticalCarveRuns(carveMask, 1, 10, 4);
+
+        assertEquals(false, carveMask[2]);
+        assertEquals(true, carveMask[4]);
+        assertEquals(true, carveMask[7]);
+        assertEquals(false, carveMask[9]);
+    }
+
+    @Test
+    public void directCarveEnabled_respectsCarvingReferenceOverride() {
+        IrisFloatingChildBiomes entry = new IrisFloatingChildBiomes();
+        entry.setCarving("carving/mushroom");
+        CNG carve = new CNG(new RNG(9));
+
+        assertFalse(FloatingIslandSample.directCarveEnabled(entry, null, carve, 0.5));
     }
 
     @Test

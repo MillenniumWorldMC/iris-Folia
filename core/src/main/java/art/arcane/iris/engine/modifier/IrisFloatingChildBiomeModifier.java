@@ -49,6 +49,8 @@ import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
 import org.bukkit.block.Biome;
 import org.bukkit.block.data.BlockData;
 
+import java.util.IdentityHashMap;
+
 import static art.arcane.iris.engine.mantle.EngineMantle.AIR;
 
 public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<BlockData> {
@@ -132,7 +134,7 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
             bottomDepths[i] = -1;
         }
 
-        int depth = 0;
+        IdentityHashMap<IrisFloatingChildBiomes, Integer> depthByEntry = new IdentityHashMap<>();
         int max = Math.min(sample.topIdx, sample.solidMask.length - 1);
         for (int k = 0; k <= max; k++) {
             if (!sample.solidMask[k]) {
@@ -142,7 +144,10 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
             if (y < 0 || y >= chunkHeight) {
                 continue;
             }
-            bottomDepths[k] = depth++;
+            IrisFloatingChildBiomes entry = sample.entryAt(k);
+            int depth = depthByEntry.getOrDefault(entry, 0);
+            bottomDepths[k] = depth;
+            depthByEntry.put(entry, depth + 1);
         }
 
         return bottomDepths;
@@ -168,6 +173,30 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
         }
         BlockData block = blocks.hasIndex(depth) ? blocks.get(depth) : blocks.getLast();
         return block == null ? fallbackSolid : block;
+    }
+
+    private PaletteContext createPaletteContext(IrisBiome parent, IrisFloatingChildBiomes entry, IrisDimension dimension, int wx, int wz, long colSeed, int paletteDepth, IrisData data, IrisComplex complex) {
+        IrisBiome target = entry == null ? parent : entry.getRealBiome(parent, data);
+        int entrySeed = entry == null || entry.getBiome() == null ? 0 : entry.getBiome().hashCode();
+        RNG layerRng = rng.nextParallelRNG((int) (colSeed ^ 0x7A4E ^ entrySeed));
+        KList<BlockData> topBlocks = target == null ? null : target.generateLayers(dimension, wx, wz, layerRng, paletteDepth, paletteDepth, data, complex);
+        if (topBlocks == null || topBlocks.isEmpty()) {
+            topBlocks = parent.generateLayers(dimension, wx, wz, layerRng, paletteDepth, paletteDepth, data, complex);
+        }
+        KList<BlockData> bottomBlocks = generateBottomPaletteLayers(entry, dimension, wx, wz, layerRng, paletteDepth, data, complex);
+        return new PaletteContext(topBlocks, bottomBlocks, B.get("minecraft:stone"));
+    }
+
+    private static final class PaletteContext {
+        private final KList<BlockData> topBlocks;
+        private final KList<BlockData> bottomBlocks;
+        private final BlockData fallbackSolid;
+
+        private PaletteContext(KList<BlockData> topBlocks, KList<BlockData> bottomBlocks, BlockData fallbackSolid) {
+            this.topBlocks = topBlocks;
+            this.bottomBlocks = bottomBlocks;
+            this.fallbackSolid = fallbackSolid;
+        }
     }
 
     public IrisFloatingChildBiomeModifier(Engine engine) {
@@ -198,20 +227,11 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
                     continue;
                 }
 
-                IrisFloatingChildBiomes entry = sample.entry;
-                IrisBiome target = entry.getRealBiome(parent, data);
                 long colSeed = FloatingIslandSample.columnSeed(baseSeed, wx, wz);
-                RNG layerRng = rng.nextParallelRNG((int) (colSeed ^ 0x7A4E));
                 int paletteDepth = Math.max(4, sample.solidCount + 4);
-                KList<BlockData> blocks = target.generateLayers(dimension, wx, wz, layerRng, paletteDepth, paletteDepth, data, complex);
-                if (blocks == null || blocks.isEmpty()) {
-                    blocks = parent.generateLayers(dimension, wx, wz, layerRng, paletteDepth, paletteDepth, data, complex);
-                }
-                KList<BlockData> bottomBlocks = generateBottomPaletteLayers(entry, dimension, wx, wz, layerRng, paletteDepth, data, complex);
-                BlockData fallbackSolid = B.get("minecraft:stone");
-
-                int[] bottomDepths = usesBottomPalette(entry) ? bottomDepths(sample, chunkHeight) : null;
-                int depth = 0;
+                IdentityHashMap<IrisFloatingChildBiomes, PaletteContext> paletteContexts = new IdentityHashMap<>();
+                IdentityHashMap<IrisFloatingChildBiomes, Integer> topDepthByEntry = new IdentityHashMap<>();
+                int[] bottomDepths = bottomDepths(sample, chunkHeight);
                 for (int k = sample.topIdx; k >= 0; k--) {
                     if (!sample.solidMask[k]) {
                         continue;
@@ -220,14 +240,22 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
                     if (y < 0 || y >= chunkHeight) {
                         continue;
                     }
+                    IrisFloatingChildBiomes entry = sample.entryAt(k);
+                    PaletteContext paletteContext = paletteContexts.get(entry);
+                    if (paletteContext == null) {
+                        paletteContext = createPaletteContext(parent, entry, dimension, wx, wz, colSeed, paletteDepth, data, complex);
+                        paletteContexts.put(entry, paletteContext);
+                    }
+                    int depth = topDepthByEntry.getOrDefault(entry, 0);
                     int bottomDepth = bottomDepths == null || bottomDepths[k] < 0 ? depth : bottomDepths[k];
-                    BlockData block = selectPaletteBlock(entry, blocks, bottomBlocks, depth, bottomDepth, fallbackSolid);
+                    BlockData block = selectPaletteBlock(entry, paletteContext.topBlocks, paletteContext.bottomBlocks, depth, bottomDepth, paletteContext.fallbackSolid);
                     if (block != null) {
                         output.set(xf, y, zf, block);
                     }
-                    depth++;
+                    topDepthByEntry.put(entry, depth + 1);
                 }
 
+                IrisFloatingChildBiomes entry = sample.entry;
                 Integer localFluidHeight = entry.getLocalFluidHeight();
                 if (localFluidHeight != null && localFluidHeight > 0) {
                     BlockData fluid = B.get(entry.getFluidBlock());
@@ -256,9 +284,7 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
                     }
                 }
 
-                if (target != null) {
-                    writeIslandSkyBiome(target, wx, wz, sample, chunkHeight);
-                }
+                writeIslandSkyBiomes(parent, wx, wz, sample, chunkHeight, data);
             }
         }
 
@@ -339,23 +365,41 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
         }
     }
 
-    private void writeIslandSkyBiome(IrisBiome target, int wx, int wz, FloatingIslandSample sample, int chunkHeight) {
+    private void writeIslandSkyBiomes(IrisBiome parent, int wx, int wz, FloatingIslandSample sample, int chunkHeight, IrisData data) {
         try {
-            MatterBiomeInject matter;
-            if (target.isCustom()) {
-                IrisBiomeCustom custom = target.getCustomBiome(rng, wx, 0, wz);
-                matter = BiomeInjectMatter.get(INMS.get().getBiomeBaseIdForKey(getDimension().getLoadKey() + ":" + custom.getId()));
-            } else {
-                Biome v = target.getSkyBiome(rng, wx, 0, wz);
-                matter = BiomeInjectMatter.get(v);
-            }
-            int yFrom = Math.max(0, sample.islandBaseY);
-            int yTo = Math.min(chunkHeight - 1, sample.islandBaseY + sample.topIdx);
-            for (int y = yFrom; y <= yTo; y += 4) {
+            IdentityHashMap<IrisFloatingChildBiomes, MatterBiomeInject> matterByEntry = new IdentityHashMap<>();
+            for (int k = 0; k <= sample.topIdx; k++) {
+                if (!sample.solidMask[k]) {
+                    continue;
+                }
+                int y = sample.islandBaseY + k;
+                if (y < 0 || y >= chunkHeight) {
+                    continue;
+                }
+                IrisFloatingChildBiomes entry = sample.entryAt(k);
+                MatterBiomeInject matter = matterByEntry.get(entry);
+                if (matter == null) {
+                    IrisBiome target = entry == null ? parent : entry.getRealBiome(parent, data);
+                    if (target == null) {
+                        continue;
+                    }
+                    matter = createSkyBiomeMatter(target, wx, wz);
+                    matterByEntry.put(entry, matter);
+                }
                 getEngine().getMantle().getMantle().set(wx, y, wz, matter);
             }
         } catch (Throwable e) {
             art.arcane.iris.Iris.reportError(e);
         }
+    }
+
+    private MatterBiomeInject createSkyBiomeMatter(IrisBiome target, int wx, int wz) {
+        if (target.isCustom()) {
+            IrisBiomeCustom custom = target.getCustomBiome(rng, wx, 0, wz);
+            return BiomeInjectMatter.get(INMS.get().getBiomeBaseIdForKey(getDimension().getLoadKey() + ":" + custom.getId()));
+        }
+
+        Biome v = target.getSkyBiome(rng, wx, 0, wz);
+        return BiomeInjectMatter.get(v);
     }
 }

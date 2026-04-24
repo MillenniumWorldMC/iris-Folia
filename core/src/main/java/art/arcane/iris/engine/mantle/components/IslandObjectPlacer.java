@@ -42,11 +42,6 @@ public class IslandObjectPlacer implements IObjectPlacer {
     private final int chunkMinIslandBottomY;
     private final int anchorY;
     private final AnchorFace face;
-    private int writesAttempted;
-    private int writesDroppedBelow;
-    private int writesDroppedOverhang;
-    private int writesDroppedAboveBottom;
-    private int writesDroppedBottomOverhang;
 
     public IslandObjectPlacer(MantleWriter wrapped, FloatingIslandSample[] samples, int minX, int minZ, int anchorTopY) {
         this(wrapped, samples, minX, minZ, anchorTopY, AnchorFace.TOP);
@@ -64,9 +59,13 @@ public class IslandObjectPlacer implements IObjectPlacer {
         for (FloatingIslandSample s : samples) {
             if (s != null) {
                 int ty = s.topY();
-                if (ty > maxTopY) maxTopY = ty;
+                if (ty > maxTopY) {
+                    maxTopY = ty;
+                }
                 int by = s.bottomY();
-                if (by >= 0 && by < minBottomY) minBottomY = by;
+                if (by >= 0 && by < minBottomY) {
+                    minBottomY = by;
+                }
             }
         }
         this.chunkMaxIslandTopY = maxTopY;
@@ -105,34 +104,7 @@ public class IslandObjectPlacer implements IObjectPlacer {
         return mask;
     }
 
-    public int getWritesAttempted() {
-        return writesAttempted;
-    }
-
-    public int getWritesDroppedBelow() {
-        return writesDroppedBelow;
-    }
-
-    public int getWritesDroppedOverhang() {
-        return writesDroppedOverhang;
-    }
-
-    public int getWritesDroppedAboveBottom() {
-        return writesDroppedAboveBottom;
-    }
-
-    public int getWritesDroppedBottomOverhang() {
-        return writesDroppedBottomOverhang;
-    }
-
     private boolean shouldSkipAirColumn(int x, int y, int z) {
-        return shouldSkipAirColumn(x, y, z, true);
-    }
-
-    private boolean shouldSkipAirColumn(int x, int y, int z, boolean countWrite) {
-        if (countWrite) {
-            writesAttempted++;
-        }
         int xf = x - minX;
         int zf = z - minZ;
         if (xf >= 0 && xf < 16 && zf >= 0 && zf < 16) {
@@ -142,37 +114,22 @@ public class IslandObjectPlacer implements IObjectPlacer {
                     return false;
                 }
                 if (y >= anchorY) {
-                    if (countWrite) {
-                        writesDroppedAboveBottom++;
-                    }
                     return true;
                 }
                 return false;
             }
             if (face == AnchorFace.TOP) {
                 if (y <= anchorY) {
-                    if (countWrite) {
-                        writesDroppedBelow++;
-                    }
                     return true;
                 }
                 if (!overhangAllowed[idx]) {
-                    if (countWrite) {
-                        writesDroppedOverhang++;
-                    }
                     return true;
                 }
             } else {
                 if (y >= anchorY) {
-                    if (countWrite) {
-                        writesDroppedBottomOverhang++;
-                    }
                     return true;
                 }
                 if (!overhangAllowed[idx]) {
-                    if (countWrite) {
-                        writesDroppedBottomOverhang++;
-                    }
                     return true;
                 }
             }
@@ -180,27 +137,18 @@ public class IslandObjectPlacer implements IObjectPlacer {
         }
         if (face == AnchorFace.TOP) {
             if (y <= anchorY) {
-                if (countWrite) {
-                    writesDroppedBelow++;
-                }
                 return true;
             }
         } else {
             if (y >= anchorY) {
-                if (countWrite) {
-                    writesDroppedBottomOverhang++;
-                }
                 return true;
             }
-        }
-        if (countWrite) {
-            writesDroppedOverhang++;
         }
         return true;
     }
 
     public boolean canWriteObjectBlock(int x, int y, int z) {
-        return !shouldSkipAirColumn(x, y, z, false);
+        return !shouldSkipAirColumn(x, y, z);
     }
 
     private @Nullable FloatingIslandSample sampleAt(int x, int z) {
@@ -216,7 +164,9 @@ public class IslandObjectPlacer implements IObjectPlacer {
     public int getHighest(int x, int z, IrisData data) {
         FloatingIslandSample s = sampleAt(x, z);
         if (face == AnchorFace.TOP) {
-            if (s != null) return s.topY();
+            if (s != null) {
+                return s.topY();
+            }
             return chunkMaxIslandTopY;
         }
         if (s != null) {

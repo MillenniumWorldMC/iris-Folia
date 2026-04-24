@@ -167,8 +167,10 @@ public class IrisBiome extends IrisRegistrant implements IRare {
     @Desc("Objects define what schematics (iob files) iris will place in this biome")
     private KList<IrisObjectPlacement> objects = new KList<>();
     @ArrayType(min = 1, type = IrisFloatingChildBiomes.class)
-    @Desc("Floating child biomes that procedurally generate above this biome's terrain. Each entry references a target biome whose layers, decorators, and objects drive the floating island's visual design, while the config here drives size, shape, altitude, rarity, and water level. Multiple entries are supported and selected by rarity per column.")
+    @Desc("Floating child biomes that procedurally generate above this biome's terrain. Each entry references a target biome whose layers, decorators, and objects drive the floating island's visual design, while the config here drives size, shape, altitude, rarity, and water level. Multiple entries are supported and selected by rarity per column unless mergeFloatingChildBiomes is enabled.")
     private KList<IrisFloatingChildBiomes> floatingChildBiomes = new KList<>();
+    @Desc("When true, every floating child entry is sampled independently and their solid masks are unioned, so multiple floating islands can stack, overlap, and collide instead of the picker choosing only one child per column.")
+    private boolean mergeFloatingChildBiomes = false;
     @Required
     @ArrayType(min = 1, type = IrisBiomeGeneratorLink.class)
     @Desc("Generators for this biome. Multiple generators with different interpolation sizes will mix with other biomes how you would expect. This defines your biome height relative to the fluid height. Use negative for oceans.")
