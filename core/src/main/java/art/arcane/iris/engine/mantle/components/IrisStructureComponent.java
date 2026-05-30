@@ -86,9 +86,22 @@ public class IrisStructureComponent extends IrisMantleComponent {
 
         int sx = (cx << 4) + rng.i(0, 15);
         int sz = (cz << 4) + rng.i(0, 15);
-        int surfaceY = getEngineMantle().getEngine().getHeight(sx, sz, true) + getEngineMantle().getEngine().getMinHeight();
-        if (surfaceY < placement.getMinHeight() || surfaceY > placement.getMaxHeight()) {
-            return;
+        int baseY;
+        if (placement.isUnderground()) {
+            int worldMinY = getEngineMantle().getEngine().getMinHeight() + 1;
+            int worldMaxY = getEngineMantle().getEngine().getMinHeight() + getEngineMantle().getEngine().getHeight() - 1;
+            int bandMin = Math.max(worldMinY, Math.min(placement.getMinHeight(), placement.getMaxHeight()));
+            int bandMax = Math.min(worldMaxY, Math.max(placement.getMinHeight(), placement.getMaxHeight()));
+            if (bandMin > bandMax) {
+                return;
+            }
+            baseY = bandMin == bandMax ? bandMin : rng.i(bandMin, bandMax);
+        } else {
+            int surfaceY = getEngineMantle().getEngine().getHeight(sx, sz, true) + getEngineMantle().getEngine().getMinHeight();
+            if (surfaceY < placement.getMinHeight() || surfaceY > placement.getMaxHeight()) {
+                return;
+            }
+            baseY = surfaceY;
         }
 
         String key = placement.getStructures().get(rng.i(0, placement.getStructures().size() - 1));
@@ -97,14 +110,14 @@ public class IrisStructureComponent extends IrisMantleComponent {
             return;
         }
 
-        StructureAssembler assembler = new StructureAssembler(getData(), structure, sx, surfaceY, sz);
+        StructureAssembler assembler = new StructureAssembler(getData(), structure, sx, baseY, sz);
         KList<PlacedStructurePiece> pieces = assembler.assemble(rng);
         if (pieces == null || pieces.isEmpty()) {
             return;
         }
 
         ObjectPlaceMode mode = structure.getPlaceMode();
-        if (mode == ObjectPlaceMode.STRUCTURE_PIECE || mode == ObjectPlaceMode.FLOATING) {
+        if (placement.isUnderground() || mode == ObjectPlaceMode.STRUCTURE_PIECE || mode == ObjectPlaceMode.FLOATING) {
             for (PlacedStructurePiece p : pieces) {
                 placeObject(writer, structure, p, ObjectPlaceMode.STRUCTURE_PIECE, p.getY(), rng);
             }
@@ -115,7 +128,7 @@ public class IrisStructureComponent extends IrisMantleComponent {
             for (PlacedStructurePiece p : pieces) {
                 lowest = Math.min(lowest, p.getMinY());
             }
-            int shift = surfaceY - lowest;
+            int shift = baseY - lowest;
             for (PlacedStructurePiece p : pieces) {
                 placeObject(writer, structure, p, ObjectPlaceMode.STRUCTURE_PIECE, p.getY() + shift, rng);
             }

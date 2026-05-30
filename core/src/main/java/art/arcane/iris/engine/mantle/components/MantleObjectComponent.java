@@ -507,6 +507,9 @@ public class MantleObjectComponent extends IrisMantleComponent {
         int density = objectPlacement.getDensity(rng, minX, minZ, getData());
         KMap<Long, KList<Integer>> anchorCache = new KMap<>();
         IrisCaveAnchorMode anchorMode = resolveAnchorMode(objectPlacement, caveProfile);
+        if (objectPlacement.getMode() == ObjectPlaceMode.CEILING_HANG) {
+            anchorMode = IrisCaveAnchorMode.CEILING;
+        }
         int anchorScanStep = resolveAnchorScanStep(caveProfile);
         int objectMinDepthBelowSurface = resolveObjectMinDepthBelowSurface(caveProfile);
         int anchorSearchAttempts = resolveAnchorSearchAttempts(caveProfile);
@@ -595,7 +598,11 @@ public class MantleObjectComponent extends IrisMantleComponent {
             try {
                 int caveCeiling = findCaveCeiling(writer, x, y, z);
                 IObjectPlacer clampedPlacer = new CeilingClampedPlacer(writer, caveCeiling);
-                int result = object.place(x, y, z, clampedPlacer, effectivePlacement, rng, (b, data) -> {
+                int placeY = y;
+                if (effectivePlacement.getMode() == ObjectPlaceMode.CEILING_HANG) {
+                    placeY = Math.max(1, caveCeiling - 1 - Math.floorDiv(object.getH(), 2));
+                }
+                int result = object.place(x, placeY, z, clampedPlacer, effectivePlacement, rng, (b, data) -> {
                     wrotePlacementData.set(true);
                     String marker = placementMarker(object, id, "cave");
                     if (marker != null) {

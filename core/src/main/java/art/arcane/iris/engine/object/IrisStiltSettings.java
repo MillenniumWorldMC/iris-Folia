@@ -30,5 +30,17 @@ public class IrisStiltSettings {
     private int overStilt;
     @Desc("If defined, stilting will be done using this block palette rather than the last layer of the object.")
     private IrisMaterialPalette palette;
+    @MinNumber(1)
+    @MaxNumber(256)
+    @Desc("For ORGANIC_STILT / CEILING_HANG: the maximum number of blocks to scan toward the cave floor (or ceiling) looking for solid ground before giving up.")
+    private int organicMaxScan = 48;
+    @MinNumber(0)
+    @MaxNumber(32)
+    @Desc("For ORGANIC_STILT / CEILING_HANG: the maximum number of blocks each column's stilt is randomly shortened by, giving the underside a ragged organic edge instead of a flat disc.")
+    private int organicJitter = 3;
+    @MinNumber(0)
+    @MaxNumber(1)
+    @Desc("For ORGANIC_STILT / CEILING_HANG: in the deepest fraction of each stilt column, blocks are randomly skipped to break the tip up. Higher = more broken and scratchy. 0 disables.")
+    private double organicScratch = 0.55;
 
 }

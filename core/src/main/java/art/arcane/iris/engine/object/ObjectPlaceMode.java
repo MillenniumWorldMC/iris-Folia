@@ -66,6 +66,14 @@ public enum ObjectPlaceMode {
 
     ERODE_STILT,
 
+    @Desc("Organic stilting scans straight down from the bottom of the object to the first solid block (the cave floor, or terrain) and fills the gap with the object's own bottom block. Each column stops at a slightly different, noise-varied depth and the lower portion is randomly broken up, so the underside reads as rough organic roots rather than a flat disc. Designed for objects placed inside caves so they connect to the floor instead of floating. Tune with stilt-settings (organicMaxScan, organicJitter, organicScratch).")
+
+    ORGANIC_STILT,
+
+    @Desc("Hangs the object upside-down from a cave ceiling. The object is flipped vertically (its tip points down like a stalactite) and its top is anchored to the ceiling, while an organic, noise-varied stilt grows up into the ceiling so it never floats below the roof. Use inside caves; tune with stilt-settings (organicMaxScan, organicJitter, organicScratch).")
+
+    CEILING_HANG,
+
     @Desc("Samples the height of the terrain at every x,z position of your object and pushes it down to the surface. It's pretty much like a melt function over the terrain.")
 
     PAINT,

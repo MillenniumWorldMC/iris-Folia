@@ -19,8 +19,10 @@
 package art.arcane.iris.core.structure;
 
 import art.arcane.iris.core.loader.IrisData;
+import art.arcane.iris.engine.object.IrisObject;
 import com.google.gson.GsonBuilder;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 
 import java.io.File;
@@ -98,6 +100,10 @@ public final class VillageImporter {
             return new Result(false, "Could not resolve the start pool key for " + structureKey, 0, 0);
         }
 
+        if (mode == StructureImporter.Mode.ADD_ONLY && new File(data.getDataFolder(), "structures/" + name + ".json").exists()) {
+            return new Result(false, "Skipped (add-only): '" + name + "' already exists", 0, 0);
+        }
+
         Set<String> visitedPools = new HashSet<>();
         Set<String> importedPieces = new HashSet<>();
         Deque<String> poolQueue = new ArrayDeque<>();
@@ -106,6 +112,7 @@ public final class VillageImporter {
         Map<String, Map<String, Object>> emittedPools = new LinkedHashMap<>();
         Map<String, Map<String, Object>> emittedPieces = new LinkedHashMap<>();
         List<String> errors = new ArrayList<>();
+        String emptyPieceName = null;
         int pieceBlocks = 0;
 
         while (!poolQueue.isEmpty()) {
@@ -161,6 +168,21 @@ public final class VillageImporter {
                 }
                 String templateLocation = templateLocationOf(element);
                 if (templateLocation == null) {
+                    String elementType = element.getClass().getSimpleName();
+                    if (elementType.endsWith("EmptyPoolElement")) {
+                        if (emptyPieceName == null) {
+                            emptyPieceName = name + "/piece/empty";
+                            if (importedPieces.add(emptyPieceName) && writeEmptyPiece(data, emptyPieceName)) {
+                                emittedPieces.put(emptyPieceName, pieceJson(emptyPieceName, new ArrayList<Map<String, Object>>()));
+                            }
+                        }
+                        Map<String, Object> emptyEntry = new LinkedHashMap<>();
+                        emptyEntry.put("piece", emptyPieceName);
+                        emptyEntry.put("weight", weight);
+                        pieceEntries.add(emptyEntry);
+                    } else {
+                        errors.add("skipped unsupported element " + elementType + " in pool " + poolKey);
+                    }
                     continue;
                 }
                 NamespacedKey pieceNbtKey = NamespacedKey.fromString(templateLocation.toLowerCase());
@@ -586,6 +608,19 @@ public final class VillageImporter {
     private static void removeStrayPieceArtifacts(IrisData data, String pieceName) {
         new File(data.getDataFolder(), "jigsaw-pools/" + pieceName + ".json").delete();
         new File(data.getDataFolder(), "structures/" + pieceName + ".json").delete();
+    }
+
+    private static boolean writeEmptyPiece(IrisData data, String pieceName) {
+        try {
+            File objectFile = new File(data.getDataFolder(), "objects/" + pieceName + ".iob");
+            objectFile.getParentFile().mkdirs();
+            IrisObject object = new IrisObject(1, 1, 1);
+            object.setUnsigned(0, 0, 0, Material.AIR.createBlockData());
+            object.write(objectFile);
+            return true;
+        } catch (Throwable e) {
+            return false;
+        }
     }
 
     private static void writeJson(File file, Map<String, Object> content) throws Exception {

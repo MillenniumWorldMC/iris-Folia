@@ -692,9 +692,12 @@ public class IrisObject extends IrisRegistrant {
 
         boolean warped = !config.getWarp().isFlat();
         boolean rawStructurePiece = config.getMode() == ObjectPlaceMode.STRUCTURE_PIECE;
+        boolean organicFloor = config.getMode() == ObjectPlaceMode.ORGANIC_STILT;
+        boolean ceilingHang = config.getMode() == ObjectPlaceMode.CEILING_HANG;
+        boolean organic = organicFloor || ceilingHang;
         boolean stilting = (config.getMode().equals(ObjectPlaceMode.STILT) || config.getMode().equals(ObjectPlaceMode.FAST_STILT) ||
                 config.getMode() == ObjectPlaceMode.MIN_STILT || config.getMode() == ObjectPlaceMode.FAST_MIN_STILT ||
-                config.getMode() == ObjectPlaceMode.CENTER_STILT || config.getMode() == ObjectPlaceMode.ERODE_STILT);
+                config.getMode() == ObjectPlaceMode.CENTER_STILT || config.getMode() == ObjectPlaceMode.ERODE_STILT || organic);
         boolean eroding = config.getMode() == ObjectPlaceMode.ERODE_STILT;
         KMap<Position2, Integer> heightmap = config.getSnow() > 0 ? new KMap<>() : null;
         int spinx = rng.imax() / 1000;
@@ -717,7 +720,8 @@ public class IrisObject extends IrisRegistrant {
                 }
             }
         } else  if (yv < 0) {
-            if (config.getMode().equals(ObjectPlaceMode.CENTER_HEIGHT) || config.getMode() == ObjectPlaceMode.CENTER_STILT) {
+            if (config.getMode().equals(ObjectPlaceMode.CENTER_HEIGHT) || config.getMode() == ObjectPlaceMode.CENTER_STILT
+                    || organic) {
                 y = (c != null ? c.getSurface() : placer.getHighest(x, z, getLoader(), config.isUnderwater())) + rty;
                 if (!config.isForcePlace()) {
                     if (shouldBailForCarvingAnchor(placer, config, x, y, z)) {
@@ -923,6 +927,7 @@ public class IrisObject extends IrisRegistrant {
         }
 
         int lowest = Integer.MAX_VALUE;
+        int topLayer = Integer.MIN_VALUE;
         y += yrand;
         readLock.lock();
 
@@ -990,10 +995,18 @@ public class IrisObject extends IrisRegistrant {
                 BlockVector i = g.clone();
                 BlockData data = d.clone();
                 i = config.getRotation().rotate(i.clone(), spinx, spiny, spinz).clone();
+                if (ceilingHang) {
+                    i.setY(-i.getBlockY());
+                }
                 i = config.getTranslate().translate(i.clone(), config.getRotation(), spinx, spiny, spinz).clone();
 
-                if (stilting && i.getBlockY() < lowest && shouldStilt(data)) {
-                    lowest = i.getBlockY();
+                if (stilting && shouldStilt(data)) {
+                    if (i.getBlockY() < lowest) {
+                        lowest = i.getBlockY();
+                    }
+                    if (i.getBlockY() > topLayer) {
+                        topLayer = i.getBlockY();
+                    }
                 }
 
                 if (placer.isPreventingDecay() && (data) instanceof Leaves && !((Leaves) (data)).isPersistent()) {
@@ -1162,10 +1175,14 @@ public class IrisObject extends IrisRegistrant {
 
                 BlockVector i = g.clone();
                 i = config.getRotation().rotate(i.clone(), spinx, spiny, spinz).clone();
+                if (ceilingHang) {
+                    i.setY(-i.getBlockY());
+                }
                 i = config.getTranslate().translate(i.clone(), config.getRotation(), spinx, spiny, spinz).clone();
                 d = config.getRotation().rotate(d, spinx, spiny, spinz);
 
-                if (i.getBlockY() != lowest)
+                int targetLayer = ceilingHang ? topLayer : lowest;
+                if (i.getBlockY() != targetLayer)
                     continue;
 
                 for (IrisObjectReplace j : config.getEdit()) {
@@ -1195,13 +1212,66 @@ public class IrisObject extends IrisRegistrant {
                     zz += config.warp(rng, i.getZ() + z, i.getY() + y, i.getX() + x, getLoader());
                 }
 
+                if (organic) {
+                    int startY = targetLayer + y;
+                    int maxScan = settings != null ? Math.max(1, settings.getOrganicMaxScan()) : 48;
+                    int jitterMax = settings != null ? Math.max(0, settings.getOrganicJitter()) : 3;
+                    double scratch = settings != null ? Math.max(0, Math.min(1, settings.getOrganicScratch())) : 0.55;
+                    long colHash = ((long) xx * 341873128712L) ^ ((long) zz * 132897987541L);
+                    int jitter = jitterMax > 0 ? (int) (Math.abs(colHash) % (jitterMax + 1)) : 0;
+
+                    if (ceilingHang) {
+                        int scan = 0;
+                        int solidY = startY + 1;
+                        while (scan < maxScan && !placer.isSolid(xx, solidY, zz)) {
+                            solidY++;
+                            scan++;
+                        }
+                        int topBound = (scan < maxScan ? solidY - 1 : startY + Math.min(maxScan, 8)) - jitter;
+                        int total = topBound - startY;
+                        for (int j = startY; j <= topBound; j++) {
+                            if (scratch > 0 && total > 0) {
+                                double ratio = (double) (j - startY) / total;
+                                if (ratio > (1.0 - scratch)) {
+                                    long sh = ((long) xx * 341873128712L) ^ ((long) j * 132897987541L) ^ ((long) zz * 735791245321L);
+                                    double skipChance = (ratio - (1.0 - scratch)) / scratch;
+                                    if ((Math.abs(sh) % 1000) / 1000.0 < skipChance * 0.7) {
+                                        continue;
+                                    }
+                                }
+                            }
+                            placer.set(xx, j, zz, d);
+                        }
+                    } else {
+                        int scan = 0;
+                        int solidY = startY - 1;
+                        while (scan < maxScan && !placer.isSolid(xx, solidY, zz)) {
+                            solidY--;
+                            scan++;
+                        }
+                        int bottomBound = (scan < maxScan ? solidY + 1 : startY - Math.min(maxScan, 8)) + jitter;
+                        int total = startY - bottomBound;
+                        for (int j = startY; j >= bottomBound; j--) {
+                            if (scratch > 0 && total > 0) {
+                                double ratio = (double) (startY - j) / total;
+                                if (ratio > (1.0 - scratch)) {
+                                    long sh = ((long) xx * 341873128712L) ^ ((long) j * 132897987541L) ^ ((long) zz * 735791245321L);
+                                    double skipChance = (ratio - (1.0 - scratch)) / scratch;
+                                    if ((Math.abs(sh) % 1000) / 1000.0 < skipChance * 0.7) {
+                                        continue;
+                                    }
+                                }
+                            }
+                            placer.set(xx, j, zz, d);
+                        }
+                    }
+                    continue;
+                }
+
                 int highest = placer.getHighest(xx, zz, getLoader(), true);
 
                 if (d instanceof Waterlogged && shouldAutoWaterlogBlock(placer, config, yv, xx, highest, zz))
                     ((Waterlogged) d).setWaterlogged(true);
-
-                if (yv >= 0 && config.isBottom())
-                    y += Math.floorDiv(h, 2);
 
                 int lowerBound = highest - 1;
                 if (settings != null) {
@@ -1221,6 +1291,9 @@ public class IrisObject extends IrisRegistrant {
                 }
 
                 for (int j = lowest + y; j > lowerBound; j--) {
+                    if (B.isFluid(placer.get(xx, j, zz))) {
+                        break;
+                    }
                     if (eroding) {
                         int depth = (lowest + y) - j;
                         int totalDepth = (lowest + y) - lowerBound;

@@ -19,6 +19,7 @@
 package art.arcane.iris.core.commands;
 
 import art.arcane.iris.core.loader.IrisData;
+import art.arcane.iris.core.structure.BulkStructureImporter;
 import art.arcane.iris.core.structure.StructureImporter;
 import art.arcane.iris.core.structure.StructureIndexService;
 import art.arcane.iris.core.structure.VillageImporter;
@@ -131,6 +132,44 @@ public class CommandStructure implements DirectorExecutor {
         if (result.success()) {
             sender().sendMessage(C.GRAY + "Reference it from a biome/region/dimension structures list as '" + n + "'.");
             sender().sendMessage(C.GRAY + "Inspect the rebuilt jigsaw graph with: /iris structure info " + dimension.getLoadKey() + " " + n);
+        }
+    }
+
+    @Director(description = "Import EVERY vanilla structure into a pack: jigsaw structures rebuilt as pool graphs, single-template structures imported as objects. Idempotent in add-only mode.", aliases = {"import-all", "ia"}, origin = DirectorOrigin.BOTH)
+    public void importAllVanilla(
+            @Param(description = "The dimension whose pack to import into", aliases = "dim")
+            IrisDimension dimension,
+            @Param(description = "overwrite | add-only | merge", defaultValue = "add-only")
+            String mode,
+            @Param(description = "Also import non-jigsaw single-template structures", name = "include-non-jigsaw", aliases = {"single", "nbt"}, defaultValue = "true")
+            boolean includeNonJigsaw
+    ) {
+        IrisData data = dimension.getLoader();
+        if (data == null) {
+            sender().sendMessage(C.RED + "Could not resolve the pack for dimension " + dimension.getLoadKey());
+            return;
+        }
+        BulkStructureImporter.Report report = BulkStructureImporter.importAllVanilla(data, StructureImporter.parseMode(mode), includeNonJigsaw, sender());
+        if (report.imported() > 0) {
+            sender().sendMessage(C.GRAY + "Reference imported structures from a biome/region/dimension structures list, or run /iris structure list " + dimension.getLoadKey() + " to see the refreshed index.");
+        }
+    }
+
+    @Director(description = "Import EVERY vanilla structure TEMPLATE (the piece NBTs under minecraft:.../...) as editable Iris objects, including the non-jigsaw templates that import-all cannot reach. Idempotent in add-only mode.", aliases = {"import-templates", "it"}, origin = DirectorOrigin.BOTH)
+    public void importTemplates(
+            @Param(description = "The dimension whose pack to import into", aliases = "dim")
+            IrisDimension dimension,
+            @Param(description = "overwrite | add-only | merge", defaultValue = "add-only")
+            String mode
+    ) {
+        IrisData data = dimension.getLoader();
+        if (data == null) {
+            sender().sendMessage(C.RED + "Could not resolve the pack for dimension " + dimension.getLoadKey());
+            return;
+        }
+        BulkStructureImporter.Report report = BulkStructureImporter.importAllTemplates(data, StructureImporter.parseMode(mode), sender());
+        if (report.imported() > 0) {
+            sender().sendMessage(C.GRAY + "Reference imported templates from a biome/region/dimension structures list, or run /iris structure list " + dimension.getLoadKey() + " to see the refreshed index.");
         }
     }
 

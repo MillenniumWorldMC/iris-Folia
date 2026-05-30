@@ -90,11 +90,14 @@ public class IrisStructurePlacement {
     @Desc("IRIS_PLACED only: scale applied to the placed structure.")
     private IrisObjectScale scale = new IrisObjectScale();
 
-    @Desc("The minimum world Y this structure may start at.")
+    @Desc("IRIS_PLACED: when underground=false this is the minimum surface Y the placement is allowed at (a gate); when underground=true this is the lower bound of the Y band the structure is placed within.")
     private int minHeight = -2032;
 
-    @Desc("The maximum world Y this structure may start at.")
+    @Desc("IRIS_PLACED: when underground=false this is the maximum surface Y the placement is allowed at (a gate); when underground=true this is the upper bound of the Y band the structure is placed within.")
     private int maxHeight = 2032;
+
+    @Desc("IRIS_PLACED only: if true the structure is placed underground at a random world Y inside [minHeight, maxHeight] (raw stamp, no terrain matching) instead of being dropped onto the terrain surface. Use this for deep structures like ancient cities in a deep cave band.")
+    private boolean underground = false;
 
     @Desc("If false, this placement is skipped underwater.")
     private boolean underwater = false;

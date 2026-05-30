@@ -66,6 +66,10 @@ public final class StructureImporter {
         return (key.getNamespace() + "_" + key.getKey()).replace('/', '_').replace(':', '_');
     }
 
+    public static String deriveName(String key) {
+        return key.toLowerCase().replace('/', '_').replace(':', '_');
+    }
+
     public static Result importStructure(IrisData data, NamespacedKey key, String name, Mode mode) {
         Structure structure;
         try {
