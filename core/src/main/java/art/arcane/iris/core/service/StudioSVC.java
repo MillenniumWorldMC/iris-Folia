@@ -24,7 +24,6 @@ import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.ServerConfigurator;
 import art.arcane.iris.core.lifecycle.WorldLifecycleService;
 import art.arcane.iris.core.loader.IrisData;
-import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.pack.IrisPack;
 import art.arcane.iris.core.pack.PackValidationRegistry;
 import art.arcane.iris.core.pack.PackValidationResult;
@@ -72,9 +71,8 @@ public class StudioSVC implements IrisService {
 
             if (!f.exists()) {
                 if (pack.equals("overworld")) {
-                    Iris.info("Downloading Default Pack " + pack);
-                    String url = "https://github.com/IrisDimensions/overworld/releases/download/" + INMS.OVERWORLD_TAG + "/overworld.zip";
-                    Iris.service(StudioSVC.class).downloadRelease(Iris.getSender(), url, false);
+                    Iris.info("Downloading Default Pack " + pack + " (latest on master)");
+                    Iris.service(StudioSVC.class).downloadBranch(Iris.getSender(), "IrisDimensions/overworld", "master", false);
                 } else {
                     Iris.warn("Default pack '" + pack + "' is not installed. Please download it manually with /iris download");
                 }
@@ -120,6 +118,13 @@ public class StudioSVC implements IrisService {
         }
 
         activeProject = null;
+
+        try {
+            art.arcane.iris.core.tools.IrisCreator.removeTransientStudioWorldsFromBukkitYml();
+        } catch (Throwable e) {
+            Iris.reportError("Failed to unregister transient studio worlds from bukkit.yml during shutdown.", e);
+        }
+
         queueStudioWorldDeletionOnStartup(worldNamesToDelete);
     }
 
@@ -234,6 +239,16 @@ public class StudioSVC implements IrisService {
             Iris.reportError(e);
             e.printStackTrace();
             sender.sendMessage("Failed to download 'IrisDimensions/overworld' from " + url + ".");
+        }
+    }
+
+    public void downloadBranch(VolmitSender sender, String repo, String branch, boolean forceOverwrite) {
+        try {
+            download(sender, repo, branch, forceOverwrite, false);
+        } catch (Throwable e) {
+            Iris.reportError(e);
+            e.printStackTrace();
+            sender.sendMessage("Failed to download '" + repo + "' (branch " + branch + ").");
         }
     }
 

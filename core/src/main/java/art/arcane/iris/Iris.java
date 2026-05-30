@@ -707,6 +707,15 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
 
     private void processPendingStartupWorldDeletes() {
         try {
+            try {
+                int unregistered = art.arcane.iris.core.tools.IrisCreator.removeTransientStudioWorldsFromBukkitYml();
+                if (unregistered > 0) {
+                    Iris.info("Unregistered " + unregistered + " transient studio world(s) from bukkit.yml on startup.");
+                }
+            } catch (Throwable e) {
+                Iris.reportError("Failed to unregister transient studio worlds from bukkit.yml on startup.", e);
+            }
+
             LinkedHashMap<String, String> queue = loadPendingWorldDeleteMap();
             for (String transientStudioWorld : TransientWorldCleanupSupport.collectTransientStudioWorldNames(Bukkit.getWorldContainer())) {
                 queue.putIfAbsent(transientStudioWorld.toLowerCase(Locale.ROOT), transientStudioWorld);
@@ -722,10 +731,31 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
                     continue;
                 }
 
-                if (Bukkit.getWorld(worldName) != null) {
-                    Iris.warn("Skipping queued deletion for \"" + worldName + "\" because it is currently loaded.");
-                    remaining.put(worldName.toLowerCase(Locale.ROOT), worldName);
-                    continue;
+                org.bukkit.World loaded = Bukkit.getWorld(worldName);
+                if (loaded != null) {
+                    if (TransientWorldCleanupSupport.isTransientStudioWorldName(worldName)) {
+                        try {
+                            PlatformChunkGenerator generator = IrisToolbelt.access(loaded);
+                            if (generator != null) {
+                                generator.close();
+                            }
+                            IrisToolbelt.evacuate(loaded);
+                            Bukkit.unloadWorld(loaded, false);
+                            Iris.info("Unloaded leftover studio world \"" + worldName + "\" for deletion.");
+                        } catch (Throwable e) {
+                            Iris.reportError("Failed to unload leftover studio world \"" + worldName + "\".", e);
+                        }
+
+                        if (Bukkit.getWorld(worldName) != null) {
+                            Iris.warn("Studio world \"" + worldName + "\" is still loaded after unload; will retry next startup.");
+                            remaining.put(worldName.toLowerCase(Locale.ROOT), worldName);
+                            continue;
+                        }
+                    } else {
+                        Iris.warn("Skipping queued deletion for \"" + worldName + "\" because it is currently loaded.");
+                        remaining.put(worldName.toLowerCase(Locale.ROOT), worldName);
+                        continue;
+                    }
                 }
 
                 boolean foundAny = false;

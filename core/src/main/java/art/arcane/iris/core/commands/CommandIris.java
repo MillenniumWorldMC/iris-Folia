@@ -23,7 +23,6 @@ import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.IrisWorlds;
 import art.arcane.iris.core.lifecycle.WorldLifecycleService;
 import art.arcane.iris.core.loader.IrisData;
-import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.service.StudioSVC;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.framework.Engine;
@@ -611,8 +610,7 @@ public class CommandIris implements DirectorExecutor {
     ) {
         sender().sendMessage(C.GREEN + "Downloading pack: " + pack + "/" + branch + (overwrite ? " overwriting" : ""));
         if (pack.equals("overworld")) {
-            String url = "https://github.com/IrisDimensions/overworld/releases/download/" + INMS.OVERWORLD_TAG + "/overworld.zip";
-            Iris.service(StudioSVC.class).downloadRelease(sender(), url, overwrite);
+            Iris.service(StudioSVC.class).downloadBranch(sender(), "IrisDimensions/overworld", "master", overwrite);
         } else {
             Iris.service(StudioSVC.class).downloadSearch(sender(), "IrisDimensions/" + pack + "/" + branch, overwrite);
         }

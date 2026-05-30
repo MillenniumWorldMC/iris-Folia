@@ -18,6 +18,7 @@
 
 package art.arcane.iris.core.tools;
 
+import art.arcane.iris.core.runtime.TransientWorldCleanupSupport;
 import com.google.common.util.concurrent.AtomicDouble;
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.IrisRuntimeSchedulerMode;
@@ -124,6 +125,28 @@ public class IrisCreator {
         }
         yml.save(BUKKIT_YML);
         return true;
+    }
+
+    public static int removeTransientStudioWorldsFromBukkitYml() throws IOException {
+        YamlConfiguration yml = YamlConfiguration.loadConfiguration(BUKKIT_YML);
+        ConfigurationSection section = yml.getConfigurationSection("worlds");
+        if (section == null) {
+            return 0;
+        }
+        int removed = 0;
+        for (String name : new java.util.ArrayList<>(section.getKeys(false))) {
+            if (TransientWorldCleanupSupport.isTransientStudioWorldName(name)) {
+                section.set(name, null);
+                removed++;
+            }
+        }
+        if (removed > 0) {
+            if (section.getKeys(false).isEmpty()) {
+                yml.set("worlds", null);
+            }
+            yml.save(BUKKIT_YML);
+        }
+        return removed;
     }
     public static boolean worldLoaded(){
         return true;

@@ -99,6 +99,12 @@ public class IrisStructurePlacement {
     @Desc("IRIS_PLACED only: if true the structure is placed underground at a random world Y inside [minHeight, maxHeight] (raw stamp, no terrain matching) instead of being dropped onto the terrain surface. Use this for deep structures like ancient cities in a deep cave band.")
     private boolean underground = false;
 
+    @Desc("IRIS_PLACED only: if true, the structure's full bounding box (floor up to roof) is bored out to air before the pieces are stamped, so the structure sits inside an open cavern instead of being encased in solid terrain. Essential for underground structures such as ancient cities to be visible and enterable.")
+    private boolean bore = false;
+
+    @Desc("IRIS_PLACED only: extra blocks of air clearance added around the bored bounding box (horizontally and above) when bore=true. The floor is never bored below the structure so support is preserved.")
+    private int borePadding = 0;
+
     @Desc("If false, this placement is skipped underwater.")
     private boolean underwater = false;
 }

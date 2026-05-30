@@ -18,6 +18,7 @@
 
 package art.arcane.iris.engine.mantle.components;
 
+import art.arcane.iris.Iris;
 import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.data.cache.Cache;
 import art.arcane.iris.engine.framework.PlacedStructurePiece;
@@ -44,6 +45,8 @@ import art.arcane.volmlib.util.math.RNG;
 
 @ComponentFlag(ReservedFlag.JIGSAW)
 public class IrisStructureComponent extends IrisMantleComponent {
+    private static final long MAX_BORE_VOLUME = 6_000_000L;
+
     public IrisStructureComponent(EngineMantle engineMantle) {
         super(engineMantle, ReservedFlag.JIGSAW, 1);
     }
@@ -116,6 +119,10 @@ public class IrisStructureComponent extends IrisMantleComponent {
             return;
         }
 
+        if (placement.isBore()) {
+            boreStructure(writer, pieces, placement.getBorePadding());
+        }
+
         ObjectPlaceMode mode = structure.getPlaceMode();
         if (placement.isUnderground() || mode == ObjectPlaceMode.STRUCTURE_PIECE || mode == ObjectPlaceMode.FLOATING) {
             for (PlacedStructurePiece p : pieces) {
@@ -131,6 +138,49 @@ public class IrisStructureComponent extends IrisMantleComponent {
             int shift = baseY - lowest;
             for (PlacedStructurePiece p : pieces) {
                 placeObject(writer, structure, p, ObjectPlaceMode.STRUCTURE_PIECE, p.getY() + shift, rng);
+            }
+        }
+    }
+
+    private void boreStructure(MantleWriter writer, KList<PlacedStructurePiece> pieces, int padding) {
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (PlacedStructurePiece p : pieces) {
+            minX = Math.min(minX, p.getMinX());
+            minY = Math.min(minY, p.getMinY());
+            minZ = Math.min(minZ, p.getMinZ());
+            maxX = Math.max(maxX, p.getMaxX());
+            maxY = Math.max(maxY, p.getMaxY());
+            maxZ = Math.max(maxZ, p.getMaxZ());
+        }
+        int pad = Math.max(0, padding);
+        minX -= pad;
+        minZ -= pad;
+        maxX += pad;
+        maxZ += pad;
+        maxY += pad;
+        int worldMin = getEngineMantle().getEngine().getMinHeight() + 1;
+        int worldMax = getEngineMantle().getEngine().getMinHeight() + getEngineMantle().getEngine().getHeight() - 1;
+        minY = Math.max(minY, worldMin);
+        maxY = Math.min(maxY, worldMax);
+        if (maxX < minX || maxY < minY || maxZ < minZ) {
+            return;
+        }
+        long volume = (long) (maxX - minX + 1) * (long) (maxY - minY + 1) * (long) (maxZ - minZ + 1);
+        if (volume > MAX_BORE_VOLUME) {
+            Iris.warn("Skipping structure bore of " + volume + " blocks (cap " + MAX_BORE_VOLUME + "); use a smaller structure or larger spacing.");
+            return;
+        }
+        org.bukkit.block.data.BlockData air = org.bukkit.Material.AIR.createBlockData();
+        for (int bx = minX; bx <= maxX; bx++) {
+            for (int by = minY; by <= maxY; by++) {
+                for (int bz = minZ; bz <= maxZ; bz++) {
+                    writer.set(bx, by, bz, air);
+                }
             }
         }
     }

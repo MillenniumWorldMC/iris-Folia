@@ -37,13 +37,8 @@ public class INMS {
             new Version(21, 11, "v1_21_R7")
     );
 
-    private static final List<Version> PACKS = List.of(
-            new Version(21, 11, "31100")
-    );
-
     //@done
     private static final INMSBinding binding = bind();
-    public static final String OVERWORLD_TAG = getTag(PACKS, "31100");
 
     public static INMSBinding get() {
         return binding;
