@@ -38,23 +38,22 @@ import art.arcane.iris.engine.object.IrisRegion;
 import art.arcane.iris.engine.object.IrisStructure;
 import art.arcane.iris.engine.object.IrisStructurePlacement;
 import art.arcane.iris.engine.object.StructurePlacementRoute;
-import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.project.noise.CNG;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.volmlib.util.documentation.ChunkCoordinates;
+import art.arcane.volmlib.util.matter.MatterCavern;
 import art.arcane.volmlib.util.mantle.flag.ReservedFlag;
 import art.arcane.volmlib.util.math.RNG;
-import org.bukkit.block.data.BlockData;
 
 @ComponentFlag(ReservedFlag.JIGSAW)
 public class IrisStructureComponent extends IrisMantleComponent {
     private static final long MAX_BORE_VOLUME = 6_000_000L;
     private static final long MAX_OVERBORE_VOLUME = 48_000_000L;
-    private static final BlockData CARVE_AIR = B.get("CAVE_AIR");
+    private static final MatterCavern CARVE_CAVERN = new MatterCavern(true, "", (byte) 0);
 
     public IrisStructureComponent(EngineMantle engineMantle) {
-        super(engineMantle, ReservedFlag.JIGSAW, 1);
+        super(engineMantle, ReservedFlag.JIGSAW, 3);
     }
 
     @Override
@@ -93,6 +92,12 @@ public class IrisStructureComponent extends IrisMantleComponent {
             return;
         }
 
+        boolean trace = IrisSettings.get().getGeneral().isDebug();
+        if (trace) {
+            Iris.info("[StructTrace] ORIGIN chunk=" + cx + "," + cz + " structures=" + placement.getStructures()
+                    + " underground=" + placement.isUnderground() + " band=" + placement.getMinHeight() + ".." + placement.getMaxHeight());
+        }
+
         int sx = (cx << 4) + rng.i(0, 15);
         int sz = (cz << 4) + rng.i(0, 15);
         int baseY;
@@ -102,6 +107,10 @@ public class IrisStructureComponent extends IrisMantleComponent {
             int bandMin = Math.max(worldMinY, Math.min(placement.getMinHeight(), placement.getMaxHeight()));
             int bandMax = Math.min(worldMaxY, Math.max(placement.getMinHeight(), placement.getMaxHeight()));
             if (bandMin > bandMax) {
+                if (trace) {
+                    Iris.info("[StructTrace] BAIL band-inverted chunk=" + cx + "," + cz + " bandMin=" + bandMin + " bandMax=" + bandMax
+                            + " worldMinY=" + worldMinY + " worldMaxY=" + worldMaxY);
+                }
                 return;
             }
             baseY = bandMin == bandMax ? bandMin : rng.i(bandMin, bandMax);
@@ -116,13 +125,23 @@ public class IrisStructureComponent extends IrisMantleComponent {
         String key = placement.getStructures().get(rng.i(0, placement.getStructures().size() - 1));
         IrisStructure structure = art.arcane.iris.core.loader.IrisData.loadAnyStructure(key, getData());
         if (structure == null) {
+            if (trace) {
+                Iris.info("[StructTrace] BAIL structure-load-null chunk=" + cx + "," + cz + " key=" + key);
+            }
             return;
         }
 
         StructureAssembler assembler = new StructureAssembler(getData(), structure, sx, baseY, sz);
         KList<PlacedStructurePiece> pieces = assembler.assemble(rng);
         if (pieces == null || pieces.isEmpty()) {
+            if (trace) {
+                Iris.info("[StructTrace] BAIL no-pieces chunk=" + cx + "," + cz + " key=" + key + " baseY=" + baseY
+                        + " pieces=" + (pieces == null ? "null" : "empty"));
+            }
             return;
+        }
+        if (trace) {
+            Iris.info("[StructTrace] ASSEMBLED chunk=" + cx + "," + cz + " key=" + key + " baseY=" + baseY + " pieces=" + pieces.size());
         }
 
         if (placement.isOverbore()) {
@@ -132,7 +151,13 @@ public class IrisStructureComponent extends IrisMantleComponent {
         }
 
         ObjectPlaceMode mode = structure.getPlaceMode();
-        if (placement.isUnderground() || mode == ObjectPlaceMode.STRUCTURE_PIECE || mode == ObjectPlaceMode.FLOATING) {
+        if (placement.isUnderground()) {
+            ObjectPlaceMode undergroundMode = (mode == ObjectPlaceMode.ORGANIC_STILT || mode == ObjectPlaceMode.CEILING_HANG)
+                    ? mode : ObjectPlaceMode.STRUCTURE_PIECE;
+            for (PlacedStructurePiece p : pieces) {
+                placeObject(writer, structure, p, undergroundMode, p.getY(), rng);
+            }
+        } else if (mode == ObjectPlaceMode.STRUCTURE_PIECE || mode == ObjectPlaceMode.FLOATING) {
             for (PlacedStructurePiece p : pieces) {
                 placeObject(writer, structure, p, ObjectPlaceMode.STRUCTURE_PIECE, p.getY(), rng);
             }
@@ -174,10 +199,11 @@ public class IrisStructureComponent extends IrisMantleComponent {
             Iris.warn("Skipping structure bore of " + volume + " blocks (cap " + MAX_BORE_VOLUME + "); use a smaller structure or larger spacing.");
             return;
         }
+        int mantleOffset = getEngineMantle().getEngine().getMinHeight();
         for (int bx = minX; bx <= maxX; bx++) {
             for (int by = minY; by <= maxY; by++) {
                 for (int bz = minZ; bz <= maxZ; bz++) {
-                    writer.set(bx, by, bz, CARVE_AIR);
+                    writer.setDataIfAbsent(bx, by - mantleOffset, bz, CARVE_CAVERN);
                 }
             }
         }
@@ -188,82 +214,99 @@ public class IrisStructureComponent extends IrisMantleComponent {
         if (bounds == null) {
             return;
         }
-        int r = Math.max(0, radius);
-        int boxMinX = bounds[0];
-        int boxMinZ = bounds[2];
-        int boxMaxX = bounds[3];
-        int boxMaxZ = bounds[5];
+        int margin = Math.max(1, radius);
+        int head = Math.max(0, ceiling);
+        int floorCut = Math.max(0, floorDepth);
+        int mantleOffset = getEngineMantle().getEngine().getMinHeight();
         int worldMin = getEngineMantle().getEngine().getMinHeight() + 1;
         int worldMax = getEngineMantle().getEngine().getMinHeight() + getEngineMantle().getEngine().getHeight() - 1;
-        int floorY = Math.max(worldMin, bounds[1] - Math.max(0, floorDepth));
-        int apexY = Math.min(worldMax, bounds[4] + Math.max(0, ceiling));
-        if (apexY < floorY) {
-            return;
-        }
-        int expMinX = boxMinX - r;
-        int expMaxX = boxMaxX + r;
-        int expMinZ = boxMinZ - r;
-        int expMaxZ = boxMaxZ + r;
-        long volume = (long) (expMaxX - expMinX + 1) * (long) (apexY - floorY + 1) * (long) (expMaxZ - expMinZ + 1);
-        if (volume > MAX_OVERBORE_VOLUME) {
-            Iris.warn("Skipping structure overbore of " + volume + " blocks (cap " + MAX_OVERBORE_VOLUME + "); reduce overboreRadius or use larger spacing.");
-            return;
-        }
-        int span = apexY - floorY;
-        double rr = r <= 0 ? 1.0 : (double) r;
 
-        RNG noiseRng = new RNG(seed() + Cache.key(boxMinX, boxMinZ));
-        CNG outlineNoise = CNG.signature(noiseRng);
-        CNG ceilNoise = CNG.signature(noiseRng.nextParallelRNG(0x51E10));
-        CNG floorNoise = CNG.signature(noiseRng.nextParallelRNG(0xF1009));
-        double outlineFreq = 0.045;
-        double ceilFreq = 0.055;
-        double floorFreq = 0.07;
-        int floorAmp = Math.min(5, Math.max(1, span / 8));
-        double ceilLump = Math.min(4.0, span * 0.15);
+        double freq = 0.07;
+        double rollFreq = 0.03;
+        double clearMax = 1.45;
+        double reachSide = margin;
+        double reachUp = head < 1 ? 1.0 : head;
+        double reachDown = floorCut < 1 ? 1.0 : floorCut;
+        double upReachMin = 0.4;
+        double upReachSpan = 1.4;
+        int sideExt = (int) Math.ceil(reachSide * clearMax);
+        int upExt = (int) Math.ceil(reachUp * (upReachMin + upReachSpan) * clearMax);
+
+        long work = 0L;
+        for (PlacedStructurePiece p : pieces) {
+            long wx = (long) (p.getMaxX() - p.getMinX() + 1) + 2L * sideExt;
+            long wz = (long) (p.getMaxZ() - p.getMinZ() + 1) + 2L * sideExt;
+            long wy = (long) (p.getMaxY() - p.getMinY() + 1) + upExt + floorCut;
+            work += wx * wy * wz;
+        }
+        if (work > MAX_OVERBORE_VOLUME) {
+            Iris.warn("Skipping structure overbore of " + work + " blocks (cap " + MAX_OVERBORE_VOLUME + "); reduce overboreRadius/overboreHeight or use larger spacing.");
+            return;
+        }
+
+        RNG noiseRng = new RNG(seed() + Cache.key(bounds[0], bounds[2]));
+        CNG blob = CNG.signature(noiseRng);
+        CNG roll = CNG.signature(noiseRng.nextParallelRNG(0x2A17));
 
         if (IrisSettings.get().getGeneral().isDebug()) {
-            Iris.info("Overbore carving cavern: box=[" + boxMinX + "," + floorY + "," + boxMinZ + " -> " + boxMaxX + "," + apexY + "," + boxMaxZ + "] radius=" + r + " volume=" + volume);
+            Iris.info("Overbore carving organic cavern: pieces=" + pieces.size() + " margin=" + margin + " head=" + head + " floorCut=" + floorCut + " work=" + work);
         }
 
-        BlockData air = CARVE_AIR;
-        for (int bx = expMinX; bx <= expMaxX; bx++) {
-            int dx = bx < boxMinX ? boxMinX - bx : bx > boxMaxX ? bx - boxMaxX : 0;
-            for (int bz = expMinZ; bz <= expMaxZ; bz++) {
-                int dz = bz < boxMinZ ? boxMinZ - bz : bz > boxMaxZ ? bz - boxMaxZ : 0;
-                int floorYcol = floorY + (int) Math.round(floorNoise.fitDouble(-1.0, 1.0, bx * floorFreq, bz * floorFreq) * floorAmp);
-                if (floorYcol < worldMin) {
-                    floorYcol = worldMin;
-                }
-                int columnCeil;
-                if (dx == 0 && dz == 0) {
-                    int bump = (int) Math.round(ceilNoise.fitDouble(0.0, 1.0, bx * ceilFreq, bz * ceilFreq) * ceilLump);
-                    columnCeil = Math.min(worldMax, apexY - Math.max(0, bump));
-                } else {
-                    double dist = Math.sqrt((double) dx * dx + (double) dz * dz);
-                    double outline = outlineNoise.fitDouble(-1.0, 1.0, bx * outlineFreq, bz * outlineFreq);
-                    double rEff = rr * (0.80 + 0.35 * outline);
-                    if (rEff < 1.0) {
-                        rEff = 1.0;
+        for (PlacedStructurePiece p : pieces) {
+            int pMinX = p.getMinX();
+            int pMinY = p.getMinY();
+            int pMinZ = p.getMinZ();
+            int pMaxX = p.getMaxX();
+            int pMaxY = p.getMaxY();
+            int pMaxZ = p.getMaxZ();
+            int exMinX = pMinX - sideExt;
+            int exMaxX = pMaxX + sideExt;
+            int exMinZ = pMinZ - sideExt;
+            int exMaxZ = pMaxZ + sideExt;
+            int exMinY = Math.max(worldMin, pMinY - floorCut);
+            int exMaxY = Math.min(worldMax, pMaxY + upExt);
+            for (int bx = exMinX; bx <= exMaxX; bx++) {
+                double dx = bx < pMinX ? pMinX - bx : bx > pMaxX ? bx - pMaxX : 0;
+                double nx = dx / reachSide;
+                for (int bz = exMinZ; bz <= exMaxZ; bz++) {
+                    double dz = bz < pMinZ ? pMinZ - bz : bz > pMaxZ ? bz - pMaxZ : 0;
+                    double nz = dz / reachSide;
+                    double nxz = nx * nx + nz * nz;
+                    double w = roll.fitDouble(0.0, 1.0, bx * rollFreq, bz * rollFreq) * 0.7
+                            + roll.fitDouble(0.0, 1.0, bx * rollFreq * 3.0, bz * rollFreq * 3.0) * 0.3;
+                    double contrast = (w - 0.5) * 2.6 + 0.5;
+                    if (contrast < 0.0) {
+                        contrast = 0.0;
+                    } else if (contrast > 1.0) {
+                        contrast = 1.0;
                     }
-                    if (dist > rEff) {
-                        continue;
+                    double upReach = reachUp * (upReachMin + upReachSpan * contrast);
+                    if (upReach < 1.0) {
+                        upReach = 1.0;
                     }
-                    double t = dist / rEff;
-                    double dome = Math.sqrt(Math.max(0.0, 1.0 - t * t));
-                    double lump = ceilNoise.fitDouble(-1.0, 1.0, bx * ceilFreq, bz * ceilFreq);
-                    double mix = dome * (0.80 + 0.40 * lump);
-                    if (mix < 0.0) {
-                        mix = 0.0;
+                    for (int by = exMinY; by <= exMaxY; by++) {
+                        double ny;
+                        if (by > pMaxY) {
+                            ny = (by - pMaxY) / upReach;
+                        } else if (by < pMinY) {
+                            ny = (pMinY - by) / reachDown;
+                        } else {
+                            ny = 0.0;
+                        }
+                        double nd = Math.sqrt(nxz + ny * ny);
+                        if (nd > clearMax) {
+                            continue;
+                        }
+                        boolean carve = nd <= 0.45;
+                        if (!carve) {
+                            double n = blob.fitDouble(0.0, 1.0, bx * freq, by * freq, bz * freq);
+                            carve = nd <= 0.5 + 0.5 * n;
+                        }
+                        writer.clearBlock(bx, by - mantleOffset, bz);
+                        if (carve) {
+                            writer.setDataIfAbsent(bx, by - mantleOffset, bz, CARVE_CAVERN);
+                        }
                     }
-                    columnCeil = floorYcol + (int) Math.round(span * mix);
-                    if (columnCeil <= floorYcol) {
-                        continue;
-                    }
-                    columnCeil = Math.min(worldMax, columnCeil);
-                }
-                for (int by = floorYcol; by <= columnCeil; by++) {
-                    writer.set(bx, by, bz, air);
                 }
             }
         }
@@ -299,7 +342,11 @@ public class IrisStructureComponent extends IrisMantleComponent {
         if (!structure.getEdit().isEmpty()) {
             config.setEdit(structure.getEdit());
         }
-        object.place(p.getX(), y, p.getZ(), writer, config, rng, null, null, getData());
+        if (mode != ObjectPlaceMode.STRUCTURE_PIECE && mode != ObjectPlaceMode.FLOATING) {
+            config.setForcePlace(true);
+        }
+        int placeY = (y == -1) ? -1 : y - getEngineMantle().getEngine().getMinHeight();
+        object.place(p.getX(), placeY, p.getZ(), writer, config, rng, null, null, getData());
     }
 
     @Override

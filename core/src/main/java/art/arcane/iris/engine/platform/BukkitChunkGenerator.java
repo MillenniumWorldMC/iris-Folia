@@ -96,6 +96,10 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
     private final AtomicBoolean setup;
     private final boolean studio;
     private final AtomicInteger a = new AtomicInteger(0);
+    private final AtomicBoolean firstChunkLogged = new AtomicBoolean(false);
+    private volatile long firstChunkTime = 0L;
+    private final AtomicInteger chunkGenCount = new AtomicInteger(0);
+    private volatile long lastChunkGenTime = 0L;
     private final CompletableFuture<Integer> spawnChunks = new CompletableFuture<>();
     private final AtomicCache<EngineTarget> targetCache = new AtomicCache<>();
     private final AtomicReference<CompletableFuture<Void>> closeFuture = new AtomicReference<>();
@@ -308,7 +312,7 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
 
             setChunkReplacementPhase(phaseRef, effectiveListener, "generate", x, z);
             long generateStart = System.currentTimeMillis();
-            boolean useMulticore = IrisSettings.get().getGenerator().useMulticore && !J.isFolia();
+            boolean useMulticore = false;
             AtomicBoolean generateDone = new AtomicBoolean(false);
             AtomicLong generationWatchdogStart = new AtomicLong(System.currentTimeMillis());
             Thread generateThread = Thread.currentThread();
@@ -699,6 +703,18 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
 
         try {
             Engine engine = getEngine(world);
+            lastChunkGenTime = System.currentTimeMillis();
+            if (firstChunkLogged.compareAndSet(false, true)) {
+                firstChunkTime = System.currentTimeMillis();
+                Iris.info("[Studio timing] FIRST chunk generating in " + world.getName() + " at chunk " + x + "," + z + " (player-view terrain starts here — server-side open prep already done)");
+            }
+            if (studio) {
+                int gen = chunkGenCount.incrementAndGet();
+                if (gen % 64 == 0) {
+                    long el = Math.max(1L, System.currentTimeMillis() - firstChunkTime);
+                    Iris.info("[Studio timing] player-view terrain: " + gen + " chunks in " + el + "ms (" + (gen * 1000L / el) + " chunks/sec) — THIS is the wait you actually see");
+                }
+            }
             computeStudioGenerator();
             TerrainChunk tc = TerrainChunk.create(d);
             this.world.bind(world);
@@ -707,7 +723,8 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
             } else {
                 ChunkDataHunkHolder blocks = new ChunkDataHunkHolder(d);
                 Hunk<Biome> biomes = Hunk.viewBiomes(tc);
-                engine.generate(x << 4, z << 4, blocks, biomes, IrisSettings.get().getGenerator().useMulticore);
+                boolean useMulticore = studio && !J.isFolia();
+                engine.generate(x << 4, z << 4, blocks, biomes, useMulticore);
                 blocks.apply();
             }
 
@@ -760,6 +777,10 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
 
     private boolean shouldThrottleHotload() {
         if (isMaintenanceActive()) {
+            return true;
+        }
+
+        if (System.currentTimeMillis() - lastChunkGenTime < 2000L) {
             return true;
         }
 

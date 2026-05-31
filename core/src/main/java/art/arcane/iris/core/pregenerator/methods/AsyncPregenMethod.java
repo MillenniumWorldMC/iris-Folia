@@ -42,7 +42,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -64,7 +63,6 @@ public class AsyncPregenMethod implements PregeneratorMethod {
     private final int runtimeCpuThreads;
     private final int effectiveWorkerThreads;
     private final int recommendedRuntimeConcurrencyCap;
-    private final int configuredMaxConcurrency;
     private final Method directChunkAtAsyncUrgentMethod;
     private final Method directChunkAtAsyncMethod;
     private final String chunkAccessMode;
@@ -124,26 +122,18 @@ public class AsyncPregenMethod implements PregeneratorMethod {
                 this.backendMode = "paper-ticket";
             }
         }
-        int runtimeMaxConcurrency = foliaRuntime
-                ? pregen.getFoliaMaxConcurrency()
-                : pregen.getPaperLikeMaxConcurrency();
-        int configuredThreads = applyRuntimeConcurrencyCap(
-                runtimeMaxConcurrency,
-                foliaRuntime,
-                workerThreadsForCap
-        );
-        this.configuredMaxConcurrency = Math.max(1, pregen.getMaxConcurrency());
+        int configuredThreads = foliaRuntime
+                ? computeFoliaRecommendedCap(workerThreadsForCap)
+                : computePaperLikeRecommendedCap(workerThreadsForCap);
         this.threads = Math.max(1, configuredThreads);
         this.workerPoolThreads = detectedWorkerPoolThreads;
         this.runtimeCpuThreads = detectedCpuThreads;
         this.effectiveWorkerThreads = workerThreadsForCap;
-        this.recommendedRuntimeConcurrencyCap = foliaRuntime
-                ? computeFoliaRecommendedCap(workerThreadsForCap)
-                : computePaperLikeRecommendedCap(workerThreadsForCap);
+        this.recommendedRuntimeConcurrencyCap = configuredThreads;
         this.semaphore = new Semaphore(this.threads, true);
         this.timeoutSeconds = pregen.getChunkLoadTimeoutSeconds();
         this.timeoutWarnIntervalMs = pregen.getTimeoutWarnIntervalMs();
-        this.urgent = IrisSettings.get().getPregen().useHighPriority;
+        this.urgent = false;
         this.lastUse = new ConcurrentHashMap<>();
         this.adaptiveInFlightLimit = new AtomicInteger(this.threads);
         this.adaptiveMinInFlightLimit = Math.max(4, Math.min(16, Math.max(1, this.threads / 4)));
@@ -155,7 +145,7 @@ public class AsyncPregenMethod implements PregeneratorMethod {
             return configuredMode;
         }
 
-        return pregen.isUseVirtualThreads() ? IrisPaperLikeBackendMode.SERVICE : IrisPaperLikeBackendMode.TICKET;
+        return IrisPaperLikeBackendMode.TICKET;
     }
 
     private int resolveWorkerPoolThreads() {
@@ -394,14 +384,6 @@ public class AsyncPregenMethod implements PregeneratorMethod {
         return Math.max(detectedCpuThreads, Math.max(configuredWorldGenThreads, Math.max(1, detectedWorkerPoolThreads)));
     }
 
-    static int applyRuntimeConcurrencyCap(int maxConcurrency, boolean foliaRuntime, int workerThreads) {
-        int normalizedMaxConcurrency = Math.max(1, maxConcurrency);
-        int recommendedCap = foliaRuntime
-                ? computeFoliaRecommendedCap(workerThreads)
-                : computePaperLikeRecommendedCap(workerThreads);
-        return Math.min(normalizedMaxConcurrency, recommendedCap);
-    }
-
     private String metricsSnapshot() {
         long stalledFor = Math.max(0L, M.ms() - lastProgressAt.get());
         return "world=" + world.getName()
@@ -509,7 +491,6 @@ public class AsyncPregenMethod implements PregeneratorMethod {
                 + ", workerPoolThreads=" + workerPoolThreads
                 + ", cpuThreads=" + runtimeCpuThreads
                 + ", effectiveWorkerThreads=" + effectiveWorkerThreads
-                + ", maxConcurrency=" + configuredMaxConcurrency
                 + ", recommendedCap=" + recommendedRuntimeConcurrencyCap
                 + ", urgent=" + urgent
                 + ", timeout=" + timeoutSeconds + "s");
@@ -779,9 +760,7 @@ public class AsyncPregenMethod implements PregeneratorMethod {
     }
 
     private class ServiceExecutor implements Executor {
-        private final ExecutorService service = IrisSettings.get().getPregen().isUseVirtualThreads() ?
-                Executors.newVirtualThreadPerTaskExecutor() :
-                new MultiBurst("Iris Async Pregen");
+        private final ExecutorService service = new MultiBurst("Iris Async Pregen");
 
         public void generate(int x, int z, PregenListener listener) {
             service.submit(() -> {

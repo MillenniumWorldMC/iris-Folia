@@ -1012,6 +1012,10 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
         Locator.poi(type).find(p, teleport, "POI " + type);
     }
 
+    default void gotoStructure(String key, Player player, boolean teleport) {
+        Locator.structure(key).find(player, teleport, "Structure " + key);
+    }
+
     private static boolean containsObjectPlacement(KList<IrisObjectPlacement> placements, String normalizedObjectKey) {
         if (placements == null || placements.isEmpty() || normalizedObjectKey.isBlank()) {
             return false;

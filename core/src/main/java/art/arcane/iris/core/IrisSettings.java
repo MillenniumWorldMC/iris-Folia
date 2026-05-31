@@ -111,15 +111,7 @@ public class IrisSettings {
     }
 
     @Data
-    public static class IrisAsyncTeleport {
-        public boolean enabled = false;
-        public int loadViewDistance = 2;
-        public boolean urgent = false;
-    }
-
-    @Data
     public static class IrisSettingsWorld {
-        public IrisAsyncTeleport asyncTeleport = new IrisAsyncTeleport();
         public boolean postLoadBlockUpdates = true;
         public boolean forcePersistEntities = true;
         public boolean anbientEntitySpawningSystem = true;
@@ -133,33 +125,27 @@ public class IrisSettings {
 
     @Data
     public static class IrisSettingsConcurrency {
-        public int parallelism = -1;
-        public int ioParallelism = -2;
-        public int worldGenParallelism = -1;
+        public int getParallelism() {
+            return Math.max(2, Runtime.getRuntime().availableProcessors());
+        }
+
+        public int getIoParallelism() {
+            return Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
+        }
 
         public int getWorldGenThreads() {
-            return getThreadCount(worldGenParallelism);
+            return Math.max(2, Runtime.getRuntime().availableProcessors());
         }
     }
 
     @Data
     public static class IrisSettingsPregen {
-        public boolean useCacheByDefault = true;
-        public boolean useHighPriority = false;
-        public boolean useVirtualThreads = false;
         public boolean useTicketQueue = true;
         public IrisRuntimeSchedulerMode runtimeSchedulerMode = IrisRuntimeSchedulerMode.AUTO;
         public IrisPaperLikeBackendMode paperLikeBackendMode = IrisPaperLikeBackendMode.AUTO;
-        public int maxConcurrency = 256;
-        public int paperLikeMaxConcurrency = 96;
-        public int foliaMaxConcurrency = 32;
         public int chunkLoadTimeoutSeconds = 15;
         public int timeoutWarnIntervalMs = 500;
         public int saveIntervalMs = 30_000;
-        public boolean enablePregenPerformanceProfile = true;
-        public int pregenProfileNoiseCacheSize = 4_096;
-        public boolean pregenProfileEnableFastCache = true;
-        public boolean pregenProfileLogJvmHints = true;
 
         public int getChunkLoadTimeoutSeconds() {
             return Math.max(5, Math.min(chunkLoadTimeoutSeconds, 120));
@@ -167,14 +153,6 @@ public class IrisSettings {
 
         public int getTimeoutWarnIntervalMs() {
             return Math.max(timeoutWarnIntervalMs, 250);
-        }
-
-        public int getPaperLikeMaxConcurrency() {
-            return Math.max(1, paperLikeMaxConcurrency);
-        }
-
-        public int getFoliaMaxConcurrency() {
-            return Math.max(1, foliaMaxConcurrency);
         }
 
         public IrisPaperLikeBackendMode getPaperLikeBackendMode() {
@@ -200,16 +178,6 @@ public class IrisSettings {
         public int objectLoaderCacheSize = 4_096;
         public int tectonicPlateSize = -1;
         public int mantleCleanupDelay = 200;
-        public int heightBoundsInterpolationGrid = 4;
-
-        public int getHeightBoundsInterpolationGrid() {
-            int grid = heightBoundsInterpolationGrid;
-            if (grid <= 1) {
-                return 1;
-            }
-
-            return Math.min(16, Integer.highestOneBit(grid));
-        }
 
         public int getTectonicPlateSize() {
             if (tectonicPlateSize > 0)
@@ -234,7 +202,6 @@ public class IrisSettings {
         public int spinh = -20;
         public int spins = 7;
         public int spinb = 8;
-        public String cartographerMessage = "Iris does not allow cartographers in its world due to crashes.";
 
 
         @SuppressWarnings("BooleanMethodIsAlwaysInverted")
@@ -262,9 +229,6 @@ public class IrisSettings {
         public String defaultWorldType = "overworld";
         public int maxBiomeChildDepth = 4;
         public boolean preventLeafDecay = true;
-        public boolean useMulticore = false;
-        public boolean useMulticoreMantle = false;
-        public boolean earlyCustomBlocks = false;
     }
 
     @Data

@@ -253,7 +253,7 @@ public class IrisEngine implements Engine {
                         .filter(File::exists)
                         .filter(File::isDirectory)
                         .toArray(File[]::new);
-                hash32.complete(IO.hashRecursive(roots));
+                hash32.complete(IO.hashRecursiveMeta(roots));
             });
         } catch (Throwable e) {
             Iris.error("FAILED TO SETUP ENGINE!");

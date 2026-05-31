@@ -50,7 +50,7 @@ public interface MatterGenerator {
             return;
         }
 
-        boolean useMulticore = multicore || IrisSettings.get().getGenerator().isUseMulticoreMantle();
+        boolean useMulticore = multicore;
         String threadName = Thread.currentThread().getName();
         boolean regenThread = threadName.startsWith("Iris-Regen-");
         boolean traceRegen = regenThread && IrisSettings.get().getGeneral().isDebug();

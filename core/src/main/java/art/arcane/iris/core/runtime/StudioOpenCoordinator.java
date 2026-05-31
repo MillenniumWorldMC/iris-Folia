@@ -85,6 +85,9 @@ public final class StudioOpenCoordinator {
         World world = null;
         PlatformChunkGenerator provider = null;
         try {
+            long openStart = System.currentTimeMillis();
+            long t = openStart;
+            Iris.info("[Studio timing] ===== studio open START: " + request.worldName() + " =====");
             updateStage(request, "resolve_dimension", 0.04D);
             if (IrisToolbelt.getDimension(request.dimensionKey()) == null) {
                 throw new IrisException("Dimension cannot be found for id " + request.dimensionKey() + ".");
@@ -92,6 +95,7 @@ public final class StudioOpenCoordinator {
 
             updateStage(request, "prepare_world_pack", 0.10D);
             cleanupStaleTransientWorlds(request.worldName());
+            t = logStudioPhase("resolveDimension + cleanupStaleWorlds", t, openStart);
 
             updateStage(request, "install_datapacks", 0.18D);
             IrisCreator creator = IrisToolbelt.createWorld()
@@ -102,6 +106,7 @@ public final class StudioOpenCoordinator {
                     .dimension(request.dimensionKey())
                     .studioProgressConsumer((progress, stage) -> updateStage(request, mapCreatorStage(stage), progress));
             world = creator.create();
+            t = logStudioPhase("createWorld (datapacks + bukkit world + engine setup)", t, openStart);
             provider = IrisToolbelt.access(world);
             if (provider == null) {
                 throw new IllegalStateException("Studio runtime provider is unavailable for world \"" + request.worldName() + "\".");
@@ -109,14 +114,17 @@ public final class StudioOpenCoordinator {
 
             updateStage(request, "apply_world_rules", 0.72D);
             WorldRuntimeControlService.get().applyStudioWorldRules(world);
+            t = logStudioPhase("applyStudioWorldRules", t, openStart);
 
             updateStage(request, "prepare_generator", 0.78D);
             WorldRuntimeControlService.get().prepareGenerator(world);
+            t = logStudioPhase("prepareGenerator", t, openStart);
 
             Location entryAnchor = WorldRuntimeControlService.get().resolveEntryAnchor(world);
             if (entryAnchor == null) {
                 throw new IllegalStateException("Studio entry anchor could not be resolved.");
             }
+            t = logStudioPhase("resolveEntryAnchor", t, openStart);
 
             updateStage(request, "resolve_safe_entry", 0.84D);
             Location safeEntry;
@@ -129,6 +137,7 @@ public final class StudioOpenCoordinator {
             if (safeEntry == null) {
                 throw new IllegalStateException("Studio entry point could not be resolved for world \"" + request.worldName() + "\".");
             }
+            t = logStudioPhase("resolveSafeEntry (generates/loads spawn chunk to FULL)", t, openStart);
 
             if (request.playerName() != null && !request.playerName().isBlank()) {
                 updateStage(request, "teleport_player", 0.96D);
@@ -141,6 +150,7 @@ public final class StudioOpenCoordinator {
                 if (!Boolean.TRUE.equals(teleported)) {
                     throw new IllegalStateException("Studio teleport did not complete successfully.");
                 }
+                t = logStudioPhase("teleportPlayer", t, openStart);
             }
 
             updateStage(request, "finalize_open", 1.00D);
@@ -153,7 +163,9 @@ public final class StudioOpenCoordinator {
             if (request.onDone() != null) {
                 request.onDone().accept(world);
             }
+            t = logStudioPhase("finalize + openVSCode", t, openStart);
 
+            Iris.info("[Studio timing] ===== server-side open PREP done = " + (System.currentTimeMillis() - openStart) + "ms  (world " + world.getName() + ") — player-view terrain gen follows; the REAL wait is the [Studio timing] player-view lines below =====");
             future.complete(new StudioOpenResult(world, safeEntry));
         } catch (Throwable e) {
             Iris.reportError("Studio open failed for world \"" + request.worldName() + "\".", e);
@@ -167,6 +179,12 @@ public final class StudioOpenCoordinator {
             }
             future.completeExceptionally(e);
         }
+    }
+
+    private long logStudioPhase(String phase, long t, long openStart) {
+        long now = System.currentTimeMillis();
+        Iris.info("[Studio timing] " + phase + " = " + (now - t) + "ms  (cumulative " + (now - openStart) + "ms)");
+        return now;
     }
 
     private StudioCloseResult closeWorld(

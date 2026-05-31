@@ -62,6 +62,7 @@ import java.util.concurrent.atomic.AtomicLong;
 @ComponentFlag(ReservedFlag.OBJECT)
 public class MantleObjectComponent extends IrisMantleComponent {
     private static final long CAVE_REJECT_LOG_THROTTLE_MS = 5000L;
+    private static final int BEDROCK_CLEARANCE = 6;
     private static final int SURFACE_HEIGHT_CHUNK_FILL_THRESHOLD = 128;
     private static final Map<String, CaveRejectLogState> CAVE_REJECT_LOG_STATE = new ConcurrentHashMap<>();
     private static final Set<String> MISSING_LOAD_KEY_WARNED = ConcurrentHashMap.newKeySet();
@@ -258,7 +259,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
             if (chance) {
                 biomeCaveTriggered++;
                 try {
-                    ObjectPlacementResult result = placeCaveObject(writer, rng, x, z, i, biomeCaveProfile, complex, traceRegen, x, z, "biome-cave");
+                    ObjectPlacementResult result = placeCaveObject(writer, rng, x, z, i, biomeCaveProfile, complex, traceRegen, x, z, "biome-cave", caveBiome.getLoadKey());
                     attempts += result.attempts();
                     placed += result.placed();
                     rejected += result.rejected();
@@ -323,7 +324,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
             if (chance) {
                 regionCaveTriggered++;
                 try {
-                    ObjectPlacementResult result = placeCaveObject(writer, rng, x, z, i, regionCaveProfile, complex, traceRegen, x, z, "region-cave");
+                    ObjectPlacementResult result = placeCaveObject(writer, rng, x, z, i, regionCaveProfile, complex, traceRegen, x, z, "region-cave", null);
                     attempts += result.attempts();
                     placed += result.placed();
                     rejected += result.rejected();
@@ -484,6 +485,26 @@ public class MantleObjectComponent extends IrisMantleComponent {
     }
 
     @ChunkCoordinates
+    private boolean caveAnchorBiomeConflicts(int x, int y, int z, String expectedCaveBiomeKey) {
+        if (expectedCaveBiomeKey == null) {
+            return false;
+        }
+        Engine engine = getEngineMantle().getEngine();
+        IrisBiome at = engine.getCaveBiome(x, y, z);
+        if (at == null) {
+            return false;
+        }
+        String atKey = at.getLoadKey();
+        if (atKey == null || atKey.equals(expectedCaveBiomeKey)) {
+            return false;
+        }
+        IrisBiome surface = engine.getSurfaceBiome(x, z);
+        if (surface != null && atKey.equals(surface.getLoadKey())) {
+            return false;
+        }
+        return true;
+    }
+
     private ObjectPlacementResult placeCaveObject(
             MantleWriter writer,
             RNG rng,
@@ -495,7 +516,8 @@ public class MantleObjectComponent extends IrisMantleComponent {
             boolean traceRegen,
             int metricChunkX,
             int metricChunkZ,
-            String scope
+            String scope,
+            String expectedCaveBiomeKey
     ) {
         int attempts = 0;
         int placed = 0;
@@ -553,6 +575,10 @@ public class MantleObjectComponent extends IrisMantleComponent {
                 int candidateZ = rng.i(minZ, minZ + 15);
                 int candidateY = findCaveAnchorY(writer, rng, candidateX, candidateZ, anchorMode, anchorScanStep, objectMinDepthBelowSurface, anchorCache);
                 if (candidateY < 0) {
+                    continue;
+                }
+
+                if (caveAnchorBiomeConflicts(candidateX, candidateY, candidateZ, expectedCaveBiomeKey)) {
                     continue;
                 }
 
@@ -1053,7 +1079,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
 
     private KList<Integer> scanCaveAnchorRange(MantleWriter writer, IrisCaveAnchorMode anchorMode, int step, int x, int z, int height, int maxAnchorY) {
         KList<Integer> anchors = new KList<>();
-        for (int y = 1; y < maxAnchorY; y += step) {
+        for (int y = BEDROCK_CLEARANCE; y < maxAnchorY; y += step) {
             if (!writer.isCarved(x, y, z)) {
                 continue;
             }

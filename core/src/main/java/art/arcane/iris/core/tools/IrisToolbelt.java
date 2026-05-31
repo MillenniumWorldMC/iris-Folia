@@ -222,7 +222,7 @@ public class IrisToolbelt {
      * @return the pregenerator job (already started)
      */
     public static PregeneratorJob pregenerate(PregenTask task, PregeneratorMethod method, Engine engine) {
-        return pregenerate(task, method, engine, IrisSettings.get().getPregen().useCacheByDefault);
+        return pregenerate(task, method, engine, true);
     }
 
     /**
@@ -243,14 +243,9 @@ public class IrisToolbelt {
     }
 
     public static boolean applyPregenPerformanceProfile() {
-        IrisSettings.IrisSettingsPregen pregen = IrisSettings.get().getPregen();
-        if (!pregen.isEnablePregenPerformanceProfile()) {
-            return false;
-        }
-
         IrisSettings.IrisSettingsPerformance performance = IrisSettings.get().getPerformance();
         int previousNoiseCacheSize = performance.getNoiseCacheSize();
-        int targetNoiseCacheSize = Math.max(previousNoiseCacheSize, Math.max(1, pregen.getPregenProfileNoiseCacheSize()));
+        int targetNoiseCacheSize = Math.max(previousNoiseCacheSize, 4_096);
         boolean fastCacheEnabledBefore = Boolean.getBoolean("iris.cache.fast");
         boolean changed = false;
 
@@ -259,15 +254,12 @@ public class IrisToolbelt {
             changed = true;
         }
 
-        if (pregen.isPregenProfileEnableFastCache() && !fastCacheEnabledBefore) {
+        if (!fastCacheEnabledBefore) {
             System.setProperty("iris.cache.fast", "true");
             changed = true;
         }
 
-        if (pregen.isPregenProfileLogJvmHints()
-                && pregen.isPregenProfileEnableFastCache()
-                && PREGEN_PROFILE_JVM_HINT_LOGGED.compareAndSet(false, true)
-                && !fastCacheEnabledBefore) {
+        if (PREGEN_PROFILE_JVM_HINT_LOGGED.compareAndSet(false, true) && !fastCacheEnabledBefore) {
             Iris.info("For startup-wide cache-fast coverage, set JVM argument: -Diris.cache.fast=true");
         }
 

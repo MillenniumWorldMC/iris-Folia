@@ -34,6 +34,7 @@ import art.arcane.iris.util.common.plugin.IrisService;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.matter.MatterCavern;
 import lombok.Data;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -41,6 +42,10 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.scoreboard.DisplaySlot;
+import org.bukkit.scoreboard.Objective;
+import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.Team;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -58,8 +63,39 @@ public class BoardSVC implements IrisService, BoardProvider {
                 .scoreDirection(ScoreDirection.DOWN)
                 .build();
 
+        cleanupLeakedMainScoreboard();
+
         for (Player player : Iris.instance.getServer().getOnlinePlayers()) {
             J.runEntity(player, () -> updatePlayer(player));
+        }
+    }
+
+    private void cleanupLeakedMainScoreboard() {
+        try {
+            if (Bukkit.getScoreboardManager() == null) {
+                return;
+            }
+            Scoreboard main = Bukkit.getScoreboardManager().getMainScoreboard();
+            if (main == null) {
+                return;
+            }
+
+            Objective named = main.getObjective("board");
+            if (named != null) {
+                named.unregister();
+            }
+
+            Objective sidebar = main.getObjective(DisplaySlot.SIDEBAR);
+            if (sidebar != null && "board".equals(sidebar.getName())) {
+                sidebar.unregister();
+            }
+
+            Team team = main.getTeam("board");
+            if (team != null) {
+                team.unregister();
+            }
+        } catch (Throwable e) {
+            Iris.reportError(e);
         }
     }
 
@@ -159,6 +195,13 @@ public class BoardSVC implements IrisService, BoardProvider {
 
         public PlayerBoard(Player player) {
             this.player = player;
+            try {
+                if (Bukkit.getScoreboardManager() != null
+                        && player.getScoreboard().equals(Bukkit.getScoreboardManager().getMainScoreboard())) {
+                    player.setScoreboard(Bukkit.getScoreboardManager().getNewScoreboard());
+                }
+            } catch (Throwable ignored) {
+            }
             this.board = new Board(player, settings);
             this.lines = new ArrayList<>();
             this.cancelled = false;

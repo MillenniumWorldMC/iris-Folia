@@ -23,33 +23,31 @@ import art.arcane.iris.core.structure.BulkStructureImporter;
 import art.arcane.iris.core.structure.StructureImporter;
 import art.arcane.iris.core.structure.StructureIndexService;
 import art.arcane.iris.core.structure.VillageImporter;
-import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.PlacedStructurePiece;
 import art.arcane.iris.engine.framework.StructureAssembler;
-import art.arcane.iris.engine.framework.StructurePlacementGrid;
 import art.arcane.iris.engine.object.IObjectPlacer;
-import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisDimension;
-import art.arcane.iris.engine.object.IrisRegion;
 import art.arcane.iris.engine.object.IrisObjectPlacement;
 import art.arcane.iris.engine.object.IrisStructure;
-import art.arcane.iris.engine.object.IrisStructurePlacement;
 import art.arcane.iris.engine.object.ObjectPlaceMode;
-import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.iris.util.common.director.DirectorExecutor;
 import art.arcane.iris.util.common.director.DirectorHelp;
 import art.arcane.iris.util.common.format.C;
-import art.arcane.iris.engine.data.cache.Cache;
 import art.arcane.volmlib.util.director.DirectorOrigin;
 import art.arcane.volmlib.util.director.annotations.Director;
 import art.arcane.volmlib.util.director.annotations.Param;
+import art.arcane.iris.core.tools.IrisToolbelt;
+import art.arcane.iris.engine.platform.PlatformChunkGenerator;
 import art.arcane.volmlib.util.math.RNG;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.util.StructureSearchResult;
 
 import java.io.File;
 import java.util.HashMap;
@@ -173,6 +171,93 @@ public class CommandStructure implements DirectorExecutor {
         }
     }
 
+    @Director(description = "Re-ingest EVERY vanilla structure and jigsaw template from scratch (overwrite), regenerating all .iob objects so they pick up the latest jigsaw/structure-block conversion. Use this after updating Iris if imported structures show raw markers.", aliases = {"reimport", "ri"}, origin = DirectorOrigin.BOTH)
+    public void reingest(
+            @Param(description = "The dimension whose pack to re-ingest", aliases = "dim")
+            IrisDimension dimension
+    ) {
+        IrisData data = dimension.getLoader();
+        if (data == null) {
+            sender().sendMessage(C.RED + "Could not resolve the pack for dimension " + dimension.getLoadKey());
+            return;
+        }
+        sender().sendMessage(C.GREEN + "Re-ingesting all vanilla structures and jigsaws for " + C.WHITE + dimension.getLoadKey() + C.GREEN + " (overwrite)...");
+        BulkStructureImporter.Report jigsaws = BulkStructureImporter.importAllVanilla(data, StructureImporter.Mode.OVERWRITE, true, sender());
+        BulkStructureImporter.Report templates = BulkStructureImporter.importAllTemplates(data, StructureImporter.Mode.OVERWRITE, sender());
+        BulkStructureImporter.Report groups = BulkStructureImporter.importTemplateGroups(data, StructureImporter.Mode.OVERWRITE, sender());
+        int imported = jigsaws.imported() + templates.imported() + groups.imported();
+        int failed = jigsaws.failed() + templates.failed() + groups.failed();
+        sender().sendMessage(C.GREEN + "Re-ingest complete: " + C.WHITE + imported + C.GREEN + " objects rewritten, " + C.WHITE + failed + C.GREEN + " failed.");
+        sender().sendMessage(C.GRAY + "Regenerate chunks (or use a fresh world) for structures to place from the rewritten objects. Run /iris structure list " + dimension.getLoadKey() + " to refresh the index.");
+    }
+
+    @Director(description = "Locate every vanilla/datapack/iris structure to verify which are locatable in this world. Heavy synchronous search per structure - keep the radius modest. 'Not found' can mean rarer than the radius, a different dimension (nether/end structures never appear in the overworld), or a structure that generates but cannot be located; generation itself happens during chunk decoration, independent of locate.", aliases = {"verify", "test", "locateall"}, origin = DirectorOrigin.BOTH, sync = true)
+    public void verify(
+            @Param(description = "The dimension to verify", aliases = "dim")
+            IrisDimension dimension,
+            @Param(description = "Search radius in chunks around the origin (larger is much slower)", defaultValue = "48")
+            int radius
+    ) {
+        World world = resolveIrisWorld(dimension);
+        if (world == null) {
+            sender().sendMessage(C.RED + "No loaded Iris world found for " + dimension.getLoadKey() + ". Join or create one first (the search runs against a live world).");
+            return;
+        }
+        boolean senderIsPlayer = sender() != null && sender().isPlayer();
+        Location center = (senderIsPlayer && player().getWorld() == world) ? player().getLocation() : world.getSpawnLocation();
+        int searchRadius = Math.max(1, Math.min(radius, 1000));
+
+        sender().sendMessage(C.GREEN + "Verifying structures in " + C.WHITE + world.getName() + C.GREEN + " from " + center.getBlockX() + "," + center.getBlockZ() + " within " + searchRadius + " chunks...");
+
+        int found = 0;
+        int missing = 0;
+        KList<String> notFound = new KList<>();
+        for (org.bukkit.generator.structure.Structure structure : Registry.STRUCTURE) {
+            NamespacedKey key = structure.getKey();
+            String keyName = key == null ? structure.toString() : key.toString();
+            try {
+                StructureSearchResult result = world.locateNearestStructure(center, structure, searchRadius, true);
+                if (result != null && result.getLocation() != null) {
+                    found++;
+                    Location l = result.getLocation();
+                    sender().sendMessage(C.GREEN + "[ok] " + C.WHITE + keyName + C.GREEN + " @ " + l.getBlockX() + "," + l.getBlockZ());
+                } else {
+                    missing++;
+                    notFound.add(keyName);
+                }
+            } catch (Throwable e) {
+                missing++;
+                notFound.add(keyName + " (error: " + e.getClass().getSimpleName() + ")");
+            }
+        }
+
+        sender().sendMessage(C.GREEN + "Structure verify: " + C.WHITE + found + C.GREEN + " generate, " + C.WHITE + missing + C.GREEN + " not found within " + searchRadius + " chunks.");
+        if (!notFound.isEmpty()) {
+            sender().sendMessage(C.YELLOW + "Not found (rarer than radius, disabled, or non-generating): " + C.GRAY + String.join(", ", notFound));
+        }
+    }
+
+    private World resolveIrisWorld(IrisDimension dimension) {
+        if (sender() != null && sender().isPlayer() && IrisToolbelt.isIrisWorld(player().getWorld())) {
+            return player().getWorld();
+        }
+        World fallback = null;
+        for (World w : Bukkit.getWorlds()) {
+            if (!IrisToolbelt.isIrisWorld(w)) {
+                continue;
+            }
+            if (fallback == null) {
+                fallback = w;
+            }
+            PlatformChunkGenerator gen = IrisToolbelt.access(w);
+            if (gen != null && gen.getEngine() != null && gen.getEngine().getDimension() != null
+                    && dimension.getLoadKey().equals(gen.getEngine().getDimension().getLoadKey())) {
+                return w;
+            }
+        }
+        return fallback;
+    }
+
     @Director(description = "Resolve an iris structure's jigsaw graph and report piece count & bounds", origin = DirectorOrigin.BOTH)
     public void info(
             @Param(description = "The dimension whose pack holds the structure", aliases = "dim")
@@ -249,64 +334,4 @@ public class CommandStructure implements DirectorExecutor {
         sender().sendMessage(C.GREEN + "Placed '" + structure + "' (" + pieces.size() + " pieces) at your location.");
     }
 
-    @Director(description = "Find the nearest placement of an iris structure around you", aliases = {"l"}, origin = DirectorOrigin.PLAYER)
-    public void locate(
-            @Param(description = "The iris structure key to find")
-            String structure,
-            @Param(description = "Search radius in chunks", defaultValue = "96")
-            int radius
-    ) {
-        World world = player().getWorld();
-        if (!IrisToolbelt.isIrisWorld(world)) {
-            sender().sendMessage(C.RED + "You must be in an Iris world");
-            return;
-        }
-        Engine engine = IrisToolbelt.access(world).getEngine();
-        IrisData data = engine.getData();
-        long seed = engine.getSeedManager().getMantle();
-        int pcx = player().getLocation().getBlockX() >> 4;
-        int pcz = player().getLocation().getBlockZ() >> 4;
-        int max = Math.max(1, Math.min(radius, 512));
-        for (int r = 0; r <= max; r++) {
-            for (int dx = -r; dx <= r; dx++) {
-                for (int dz = -r; dz <= r; dz++) {
-                    if (Math.max(Math.abs(dx), Math.abs(dz)) != r) {
-                        continue;
-                    }
-                    int cx = pcx + dx;
-                    int cz = pcz + dz;
-                    if (chunkStarts(engine, seed, structure, cx, cz)) {
-                        sender().sendMessage(C.GREEN + "Nearest '" + structure + "' starts near chunk " + cx + ", " + cz + " (block " + (cx << 4) + ", " + (cz << 4) + ")");
-                        return;
-                    }
-                }
-            }
-        }
-        sender().sendMessage(C.YELLOW + "No '" + structure + "' placement found within " + max + " chunks.");
-    }
-
-    private boolean chunkStarts(Engine engine, long seed, String structure, int cx, int cz) {
-        int bx = 8 + (cx << 4);
-        int bz = 8 + (cz << 4);
-        IrisBiome biome = engine.getComplex().getTrueBiomeStream().get(bx, bz);
-        IrisRegion region = engine.getComplex().getRegionStream().get(bx, bz);
-        KList<IrisStructurePlacement> placements = new KList<>();
-        if (biome != null) {
-            placements.addAll(biome.getStructures());
-        }
-        if (region != null) {
-            placements.addAll(region.getStructures());
-        }
-        placements.addAll(engine.getDimension().getStructures());
-        RNG rng = new RNG(Cache.key(cx, cz) + seed);
-        for (IrisStructurePlacement placement : placements) {
-            if (!placement.getStructures().contains(structure)) {
-                continue;
-            }
-            if (StructurePlacementGrid.startsInChunk(placement, cx, cz, seed, rng)) {
-                return true;
-            }
-        }
-        return false;
-    }
 }

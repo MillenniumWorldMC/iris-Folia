@@ -206,11 +206,14 @@ public class CommandSVC implements IrisService, CommandExecutor, TabCompleter, D
     }
 
     private List<String> runDirectorTab(CommandSender sender, String alias, String[] args) {
+        DirectorContext.touch(new VolmitSender(sender));
         try {
             return getDirector().tabComplete(new DirectorInvocation(new BukkitDirectorSender(sender), alias, Arrays.asList(args)));
         } catch (Throwable e) {
             Iris.warn("Director tab completion failed: " + e.getClass().getSimpleName() + " " + e.getMessage());
             return List.of();
+        } finally {
+            DirectorContext.remove();
         }
     }
 

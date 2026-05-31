@@ -22,15 +22,6 @@ public class AsyncPregenMethodConcurrencyCapTest {
     }
 
     @Test
-    public void runtimeCapUsesGlobalCeilingAndWorkerRecommendation() {
-        assertEquals(80, AsyncPregenMethod.applyRuntimeConcurrencyCap(256, true, 20));
-        assertEquals(12, AsyncPregenMethod.applyRuntimeConcurrencyCap(12, true, 20));
-        assertEquals(64, AsyncPregenMethod.applyRuntimeConcurrencyCap(256, true, 8));
-        assertEquals(16, AsyncPregenMethod.applyRuntimeConcurrencyCap(256, false, 8));
-        assertEquals(20, AsyncPregenMethod.applyRuntimeConcurrencyCap(20, false, 40));
-    }
-
-    @Test
     public void paperLikeConcurrencyProvisionsForWorldGenThreadBump() {
         assertEquals(32, AsyncPregenMethod.resolvePaperLikeConcurrencyWorkerThreads(4, 16, 32));
         assertEquals(16, AsyncPregenMethod.resolvePaperLikeConcurrencyWorkerThreads(4, 16, 16));

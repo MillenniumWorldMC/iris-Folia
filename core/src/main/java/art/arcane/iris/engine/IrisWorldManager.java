@@ -21,9 +21,7 @@ package art.arcane.iris.engine;
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.gui.PregeneratorJob;
-import art.arcane.iris.core.link.Identifier;
 import art.arcane.iris.core.loader.IrisData;
-import art.arcane.iris.core.service.ExternalDataSVC;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.data.cache.Cache;
 import art.arcane.iris.engine.framework.Engine;
@@ -699,48 +697,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
             cleanup.remove(key);
             getEngine().cleanupMantleChunk(cX, cZ);
         }, Math.max(IrisSettings.get().getPerformance().mantleCleanupDelay * 50L, 0), TimeUnit.MILLISECONDS));
-
-        if (generated) {
-            //INMS.get().injectBiomesFromMantle(e, getMantle());
-
-            if (!IrisSettings.get().getGenerator().earlyCustomBlocks) return;
-            if (isPregenActiveForThisWorld()) return;
-
-            World world = e.getWorld();
-            int chunkX = e.getX();
-            int chunkZ = e.getZ();
-            int minY = getTarget().getWorld().minHeight();
-            int delay = RNG.r.i(20, 60);
-            Iris.tickets.addTicket(e);
-
-            Runnable applyCustomBlocks = () -> {
-                if (J.isFolia() && (!world.isChunkLoaded(chunkX, chunkZ) || !Chunks.isSafe(world, chunkX, chunkZ))) {
-                    Iris.tickets.removeTicket(e);
-                    return;
-                }
-
-                Chunk chunkRef = world.getChunkAt(chunkX, chunkZ);
-                MantleChunk<Matter> mantleChunk = getMantle().getChunk(chunkRef).use();
-                try {
-                    mantleChunk.raiseFlagUnchecked(MantleFlag.CUSTOM, () -> {
-                        mantleChunk.iterate(Identifier.class, (x, y, z, v) -> {
-                            Iris.service(ExternalDataSVC.class).processUpdate(getEngine(), chunkRef.getBlock(x & 15, y + minY, z & 15), v);
-                        });
-                    });
-                } finally {
-                    mantleChunk.release();
-                    Iris.tickets.removeTicket(e);
-                }
-            };
-
-            if (J.isFolia()) {
-                if (!J.runRegion(world, chunkX, chunkZ, applyCustomBlocks, delay)) {
-                    Iris.tickets.removeTicket(e);
-                }
-            } else {
-                J.s(applyCustomBlocks, delay);
-            }
-        }
     }
 
     @Override
@@ -777,19 +733,17 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
 
     @Override
     public void teleportAsync(PlayerTeleportEvent e) {
-        if (IrisSettings.get().getWorld().getAsyncTeleport().isEnabled()) {
-            e.setCancelled(true);
-            warmupAreaAsync(e.getPlayer(), e.getTo(), () -> J.runEntity(e.getPlayer(), () -> {
-                ignoreTP.set(true);
-                e.getPlayer().teleport(e.getTo(), e.getCause());
-                ignoreTP.set(false);
-            }));
-        }
+        e.setCancelled(true);
+        warmupAreaAsync(e.getPlayer(), e.getTo(), () -> J.runEntity(e.getPlayer(), () -> {
+            ignoreTP.set(true);
+            e.getPlayer().teleport(e.getTo(), e.getCause());
+            ignoreTP.set(false);
+        }));
     }
 
     private void warmupAreaAsync(Player player, Location to, Runnable r) {
         J.a(() -> {
-            int viewDistance = IrisSettings.get().getWorld().getAsyncTeleport().getLoadViewDistance();
+            int viewDistance = 2;
             KList<Future<Chunk>> futures = new KList<>();
             for (int i = -viewDistance; i <= viewDistance; i++) {
                 for (int j = -viewDistance; j <= viewDistance; j++) {
@@ -805,7 +759,7 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
                             -> PaperLib.getChunkAtAsync(to.getWorld(),
                             (to.getBlockX() >> 4) + finalI,
                             (to.getBlockZ() >> 4) + finalJ,
-                            true, IrisSettings.get().getWorld().getAsyncTeleport().isUrgent()).get()));
+                            true, false).get()));
                 }
             }
 

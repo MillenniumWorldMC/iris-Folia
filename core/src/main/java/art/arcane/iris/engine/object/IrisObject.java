@@ -321,7 +321,12 @@ public class IrisObject extends IrisRegistrant {
         int s = din.readInt();
 
         for (int i = 0; i < s; i++) {
-            blocks.put(new Vector3i(din.readShort(), din.readShort(), din.readShort()), B.get(din.readUTF()));
+            Vector3i pos = new Vector3i(din.readShort(), din.readShort(), din.readShort());
+            BlockData data = B.get(din.readUTF());
+            if (isStructureMarker(data)) {
+                continue;
+            }
+            blocks.put(pos, data);
         }
 
         if (din.available() == 0)
@@ -358,7 +363,12 @@ public class IrisObject extends IrisRegistrant {
         s = din.readInt();
 
         for (i = 0; i < s; i++) {
-            blocks.put(new Vector3i(din.readShort(), din.readShort(), din.readShort()), B.get(palette.get(din.readShort())));
+            Vector3i pos = new Vector3i(din.readShort(), din.readShort(), din.readShort());
+            BlockData data = B.get(palette.get(din.readShort()));
+            if (isStructureMarker(data)) {
+                continue;
+            }
+            blocks.put(pos, data);
         }
 
         s = din.readInt();
@@ -366,6 +376,14 @@ public class IrisObject extends IrisRegistrant {
         for (i = 0; i < s; i++) {
             states.put(new Vector3i(din.readShort(), din.readShort(), din.readShort()), TileData.read(din));
         }
+    }
+
+    private static boolean isStructureMarker(BlockData data) {
+        if (data == null) {
+            return false;
+        }
+        Material m = data.getMaterial();
+        return m == Material.JIGSAW || m == Material.STRUCTURE_BLOCK || m == Material.STRUCTURE_VOID;
     }
 
     public void write(OutputStream o) throws IOException {

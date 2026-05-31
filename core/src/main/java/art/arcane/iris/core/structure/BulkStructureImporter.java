@@ -87,6 +87,9 @@ public final class BulkStructureImporter {
                         sender.sendMessage(C.GRAY + "[single] " + keyString + " -> " + name);
                     } else if (single.message() != null && single.message().startsWith("Skipped")) {
                         skipped++;
+                    } else if (single.message() != null && single.message().contains("No loadable structure NBT")) {
+                        skipped++;
+                        sender.sendMessage(C.YELLOW + "[skip] " + keyString + ": no single-template NBT - vanilla builds this in code or from separate piece templates (imported via the templates pass); nothing to import as one structure.");
                     } else {
                         failed++;
                         sender.sendMessage(C.RED + "[fail] " + keyString + ": " + single.message());
@@ -111,6 +114,42 @@ public final class BulkStructureImporter {
 
         sender.sendMessage(C.GREEN + "Bulk import complete: " + C.WHITE + imported + C.GREEN + " imported, " + C.WHITE + skipped + C.GREEN + " skipped, " + C.WHITE + failed + C.GREEN + " failed (" + C.WHITE + total + C.GREEN + " total).");
         return new Report(total, imported, skipped, failed);
+    }
+
+    public static Report importTemplateGroups(IrisData data, StructureImporter.Mode mode, VolmitSender sender) {
+        String[][] groups = {
+                {"shipwreck", "minecraft:shipwreck", "shipwreck"},
+                {"ruined_portal", "minecraft:ruined_portal", "ruined_portal"},
+                {"ocean_ruin", "minecraft:ocean_ruin_cold", "underwater_ruin"},
+                {"nether_fossil", "minecraft:nether_fossil", "nether_fossils"},
+        };
+
+        int imported = 0;
+        int skipped = 0;
+        int failed = 0;
+
+        sender.sendMessage(C.GREEN + "Building single-template structures from imported pieces (one variant placed per generation)...");
+        for (String[] g : groups) {
+            try {
+                StructureImporter.Result result = StructureImporter.importTemplateGroup(data, g[0], g[1], g[2], mode);
+                if (result.success()) {
+                    imported++;
+                    sender.sendMessage(C.GRAY + "[group] " + g[1] + " -> " + g[0] + " (" + result.blocks() + " variants)");
+                } else if (result.message() != null && result.message().startsWith("Skipped")) {
+                    skipped++;
+                } else {
+                    skipped++;
+                    sender.sendMessage(C.YELLOW + "[skip] " + g[0] + ": " + result.message());
+                }
+            } catch (Throwable e) {
+                failed++;
+                sender.sendMessage(C.RED + "[fail] " + g[0] + ": " + e.getMessage());
+            }
+        }
+
+        StructureIndexService.write(data);
+        sender.sendMessage(C.GREEN + "Single-template structures: " + C.WHITE + imported + C.GREEN + " built, " + C.WHITE + skipped + C.GREEN + " skipped, " + C.WHITE + failed + C.GREEN + " failed.");
+        return new Report(groups.length, imported, skipped, failed);
     }
 
     public static Report importAllTemplates(IrisData data, StructureImporter.Mode mode, VolmitSender sender) {

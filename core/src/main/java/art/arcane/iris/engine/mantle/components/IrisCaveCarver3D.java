@@ -69,6 +69,7 @@ public class IrisCaveCarver3D {
     private final double warpStrength;
     private final boolean hasWarp;
     private final boolean hasModules;
+    private final int warpResolution;
 
     public IrisCaveCarver3D(Engine engine, IrisCaveProfile profile) {
         this.engine = engine;
@@ -89,6 +90,7 @@ public class IrisCaveCarver3D {
         this.detailWeight = profile.getDetailWeight();
         this.warpStrength = profile.getWarpStrength();
         this.hasWarp = this.warpStrength > 0D;
+        this.warpResolution = 2;
 
         double weight = Math.abs(baseWeight) + Math.abs(detailWeight);
         int index = 0;
@@ -1589,9 +1591,17 @@ public class IrisCaveCarver3D {
         return density <= thresholdLimit;
     }
 
+    private int snapWarp(int c) {
+        int g = warpResolution;
+        return g <= 1 ? c : Math.floorDiv(c, g) * g;
+    }
+
     private boolean classifyDensityPointWarpOnly(int x, int y, int z, double thresholdLimit) {
-        double warpA = warpDensity.noiseFastSigned3D(x, y, z);
-        double warpB = warpDensity.noiseFastSigned3D(x + 31.37D, y - 17.21D, z + 23.91D);
+        int sx = snapWarp(x);
+        int sy = snapWarp(y);
+        int sz = snapWarp(z);
+        double warpA = warpDensity.noiseFastSigned3D(sx, sy, sz);
+        double warpB = warpDensity.noiseFastSigned3D(sx + 31.37D, sy - 17.21D, sz + 23.91D);
         double warpedX = x + (warpA * warpStrength);
         double warpedY = y + (warpB * warpStrength);
         double warpedZ = z + ((warpA - warpB) * 0.5D * warpStrength);
@@ -1621,8 +1631,11 @@ public class IrisCaveCarver3D {
             return classifyDensityPointWarpOnly(x, y, z, thresholdLimit);
         }
 
-        double warpA = warpDensity.noiseFastSigned3D(x, y, z);
-        double warpB = warpDensity.noiseFastSigned3D(x + 31.37D, y - 17.21D, z + 23.91D);
+        int sx = snapWarp(x);
+        int sy = snapWarp(y);
+        int sz = snapWarp(z);
+        double warpA = warpDensity.noiseFastSigned3D(sx, sy, sz);
+        double warpB = warpDensity.noiseFastSigned3D(sx + 31.37D, sy - 17.21D, sz + 23.91D);
         double warpedX = x + (warpA * warpStrength);
         double warpedY = y + (warpB * warpStrength);
         double warpedZ = z + ((warpA - warpB) * 0.5D * warpStrength);
@@ -1716,8 +1729,11 @@ public class IrisCaveCarver3D {
             return true;
         }
 
-        double warpA = warpDensity.noiseFastSigned3D(x, y, z);
-        double warpB = warpDensity.noiseFastSigned3D(x + 31.37D, y - 17.21D, z + 23.91D);
+        int sx = snapWarp(x);
+        int sy = snapWarp(y);
+        int sz = snapWarp(z);
+        double warpA = warpDensity.noiseFastSigned3D(sx, sy, sz);
+        double warpB = warpDensity.noiseFastSigned3D(sx + 31.37D, sy - 17.21D, sz + 23.91D);
         double warpedX = x + (warpA * warpStrength);
         double warpedY = y + (warpB * warpStrength);
         double warpedZ = z + ((warpA - warpB) * 0.5D * warpStrength);
@@ -1844,8 +1860,11 @@ public class IrisCaveCarver3D {
     }
 
     private double sampleDensityWarpOnly(int x, int y, int z) {
-        double warpA = warpDensity.noiseFastSigned3D(x, y, z);
-        double warpB = warpDensity.noiseFastSigned3D(x + 31.37D, y - 17.21D, z + 23.91D);
+        int sx = snapWarp(x);
+        int sy = snapWarp(y);
+        int sz = snapWarp(z);
+        double warpA = warpDensity.noiseFastSigned3D(sx, sy, sz);
+        double warpB = warpDensity.noiseFastSigned3D(sx + 31.37D, sy - 17.21D, sz + 23.91D);
         double warpedX = x + (warpA * warpStrength);
         double warpedY = y + (warpB * warpStrength);
         double warpedZ = z + ((warpA - warpB) * 0.5D * warpStrength);
@@ -1866,8 +1885,11 @@ public class IrisCaveCarver3D {
     }
 
     private double sampleDensityWarpModules(int x, int y, int z, ModuleState[] localModules, int activeModuleCount) {
-        double warpA = warpDensity.noiseFastSigned3D(x, y, z);
-        double warpB = warpDensity.noiseFastSigned3D(x + 31.37D, y - 17.21D, z + 23.91D);
+        int sx = snapWarp(x);
+        int sy = snapWarp(y);
+        int sz = snapWarp(z);
+        double warpA = warpDensity.noiseFastSigned3D(sx, sy, sz);
+        double warpB = warpDensity.noiseFastSigned3D(sx + 31.37D, sy - 17.21D, sz + 23.91D);
         double warpedX = x + (warpA * warpStrength);
         double warpedY = y + (warpB * warpStrength);
         double warpedZ = z + ((warpA - warpB) * 0.5D * warpStrength);

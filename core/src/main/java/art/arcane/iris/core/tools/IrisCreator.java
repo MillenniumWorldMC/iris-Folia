@@ -164,6 +164,7 @@ public class IrisCreator {
             throw new IrisException("You cannot invoke create() on the main thread.");
         }
 
+        long createStart = System.currentTimeMillis();
         reportStudioProgress(0.02D, "resolve_dimension");
         reportStudioProgress(0.08D, "resolve_dimension");
         IrisDimension d = IrisToolbelt.getDimension(dimension());
@@ -198,6 +199,7 @@ public class IrisCreator {
             IrisWorlds.get().put(name(), dimension());
         }
         ServerConfigurator.installDataPacksIfChanged(!studio());
+        Iris.info("[Studio timing]   create.packPrep + datapacks = " + (System.currentTimeMillis() - createStart) + "ms (cumulative in create)");
         reportStudioProgress(0.40D, "install_datapacks");
 
         PlatformChunkGenerator access = (PlatformChunkGenerator) wc.generator();
@@ -207,12 +209,14 @@ public class IrisCreator {
 
         World world;
         reportStudioProgress(0.46D, "create_world");
+        long nmsStart = System.currentTimeMillis();
         try {
             WorldLifecycleCaller callerKind = benchmark ? WorldLifecycleCaller.BENCHMARK : studio() ? WorldLifecycleCaller.STUDIO : WorldLifecycleCaller.CREATE;
             WorldLifecycleRequest request = WorldLifecycleRequest.fromCreator(wc, studio(), benchmark, callerKind);
             world = J.sfut(() -> INMS.get().createWorldAsync(wc, request))
                     .thenCompose(Function.identity())
                     .get();
+            Iris.info("[Studio timing]   create.createWorldAsync (NMS bukkit world load + spawn prep) = " + (System.currentTimeMillis() - nmsStart) + "ms");
         } catch (Throwable e) {
             done.set(true);
             cancelRepeatingTask(createProgressTask);

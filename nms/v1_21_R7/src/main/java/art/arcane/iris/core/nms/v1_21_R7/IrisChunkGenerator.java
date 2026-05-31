@@ -31,6 +31,7 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.core.registries.Registries;
 import java.util.stream.Collectors;
+import art.arcane.iris.engine.framework.IrisStructureLocator;
 import art.arcane.iris.engine.framework.StructurePlacementGrid;
 import art.arcane.iris.engine.object.IrisStructurePlacement;
 import art.arcane.iris.engine.object.StructurePlacementRoute;
@@ -66,10 +67,43 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
 
     @Override
     public @Nullable Pair<BlockPos, Holder<Structure>> findNearestMapStructure(ServerLevel level, HolderSet<Structure> holders, BlockPos pos, int radius, boolean findUnexplored) {
+        try {
+            Registry<Structure> registry = level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
+            BlockPos best = null;
+            Holder<Structure> bestHolder = null;
+            long bestDist = Long.MAX_VALUE;
+            for (Holder<Structure> holder : holders) {
+                Object id = registry.getKey(holder.value());
+                if (id == null) {
+                    continue;
+                }
+                int[] at = IrisStructureLocator.locate(engine, id.toString(), pos.getX(), pos.getZ(), Math.max(1, radius));
+                if (at == null) {
+                    continue;
+                }
+                long dx = (long) at[0] - pos.getX();
+                long dz = (long) at[2] - pos.getZ();
+                long d = dx * dx + dz * dz;
+                if (d < bestDist) {
+                    bestDist = d;
+                    best = new BlockPos(at[0], at[1], at[2]);
+                    bestHolder = holder;
+                }
+            }
+            if (best != null) {
+                return Pair.of(best, bestHolder);
+            }
+        } catch (Throwable e) {
+            Iris.reportError(e);
+        }
         if (!vanillaControl().active()) {
             return null;
         }
-        return delegate.findNearestMapStructure(level, holders, pos, radius, findUnexplored);
+        try {
+            return delegate.findNearestMapStructure(level, holders, pos, radius, findUnexplored);
+        } catch (Throwable e) {
+            return null;
+        }
     }
 
     @Override

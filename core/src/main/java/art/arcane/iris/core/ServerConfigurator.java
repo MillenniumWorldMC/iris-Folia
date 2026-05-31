@@ -235,6 +235,9 @@ public class ServerConfigurator {
         }
         for (File file : files) {
             if (file.isDirectory()) {
+                if (file.getName().startsWith(".")) {
+                    continue;
+                }
                 collectFingerprintEntries(file, rootPath, entries);
             } else {
                 String relative = file.getAbsolutePath().substring(rootPath.length());

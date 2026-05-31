@@ -35,14 +35,25 @@ public final class StructurePlacementGrid {
 
     public static boolean randomSpreadStart(int cx, int cz, int spacing, int separation, int salt, long seed) {
         int sp = Math.max(1, spacing);
-        int sep = Math.max(0, Math.min(separation, sp - 1));
         int cellX = Math.floorDiv(cx, sp);
         int cellZ = Math.floorDiv(cz, sp);
+        int[] start = randomSpreadCellChunk(cellX, cellZ, spacing, separation, salt, seed);
+        return start[0] == cx && start[1] == cz;
+    }
+
+    /**
+     * Returns the single {chunkX, chunkZ} that a RANDOM_SPREAD placement occupies within the given
+     * grid cell. This is the inverse of {@link #randomSpreadStart} and uses the identical formula, so
+     * a locator can jump straight to the one candidate per cell instead of testing every chunk.
+     */
+    public static int[] randomSpreadCellChunk(int cellX, int cellZ, int spacing, int separation, int salt, long seed) {
+        int sp = Math.max(1, spacing);
+        int sep = Math.max(0, Math.min(separation, sp - 1));
         RNG r = new RNG(mix(seed, cellX, cellZ, salt));
         int range = Math.max(1, sp - sep);
         int startCx = cellX * sp + r.i(0, range - 1);
         int startCz = cellZ * sp + r.i(0, range - 1);
-        return startCx == cx && startCz == cz;
+        return new int[]{startCx, startCz};
     }
 
     private static boolean concentricRingsStart(int cx, int cz, IrisStructurePlacement placement, long seed) {

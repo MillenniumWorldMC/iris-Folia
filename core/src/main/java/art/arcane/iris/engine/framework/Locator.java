@@ -77,6 +77,10 @@ public interface Locator<T> {
         return (e, c) -> e.getSurfaceBiome((c.getX() << 4) + 8, (c.getZ() << 4) + 8).getLoadKey().equals(loadKey);
     }
 
+    static Locator<art.arcane.iris.engine.object.IrisStructure> structure(String key) {
+        return (e, c) -> IrisStructureLocator.startsInChunk(e, key, c.getX(), c.getZ());
+    }
+
     static Locator<BlockPos> poi(String type) {
         return (e, c) -> {
             Set<Pair<String, BlockPos>> pos = e.getPOIsAt((c.getX() << 4) + 8, (c.getZ() << 4) + 8);

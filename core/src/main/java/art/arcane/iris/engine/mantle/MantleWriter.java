@@ -201,6 +201,25 @@ public class MantleWriter implements IObjectPlacer, AutoCloseable {
         return true;
     }
 
+    public void clearBlock(int x, int y, int z) {
+        if (y < 0 || y >= mantle.getWorldHeight()) {
+            return;
+        }
+        MantleChunk<Matter> chunk = acquireChunk(x >> 4, z >> 4);
+        if (chunk == null) {
+            return;
+        }
+        int section = y >> 4;
+        if (!chunk.exists(section)) {
+            return;
+        }
+        Matter matter = chunk.get(section);
+        if (matter == null) {
+            return;
+        }
+        matter.<BlockData>slice(BlockData.class).set(x & 15, y & 15, z & 15, null);
+    }
+
     public <T> T getData(int x, int y, int z, Class<T> type) {
         int cx = x >> 4;
         int cz = z >> 4;

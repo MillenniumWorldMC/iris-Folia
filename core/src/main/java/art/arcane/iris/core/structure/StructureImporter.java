@@ -24,13 +24,20 @@ import art.arcane.iris.engine.object.LegacyTileData;
 import com.google.gson.GsonBuilder;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.BlockState;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.structure.Palette;
 import org.bukkit.structure.Structure;
 import org.bukkit.util.BlockVector;
 
+import java.util.Optional;
+
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -108,12 +115,29 @@ public final class StructureImporter {
             if (x < 0 || y < 0 || z < 0 || x >= w || y >= h || z >= d) {
                 continue;
             }
-            object.setUnsigned(x, y, z, block.getBlockData());
+            BlockData blockData = block.getBlockData();
+            Material mat = blockData.getMaterial();
+            if (mat == Material.STRUCTURE_VOID) {
+                continue;
+            }
+            boolean structural = mat == Material.JIGSAW || mat == Material.STRUCTURE_BLOCK;
+            if (mat == Material.JIGSAW) {
+                BlockData resolved = readJigsawFinalState(block);
+                if (resolved == null || isAir(resolved)) {
+                    continue;
+                }
+                blockData = resolved;
+            } else if (mat == Material.STRUCTURE_BLOCK) {
+                continue;
+            }
+            object.setUnsigned(x, y, z, blockData);
             count++;
-            LegacyTileData tile = captureTile(block);
-            if (tile != null) {
-                object.setUnsignedTile(x, y, z, tile);
-                tiles++;
+            if (!structural) {
+                LegacyTileData tile = captureTile(block);
+                if (tile != null) {
+                    object.setUnsignedTile(x, y, z, tile);
+                    tiles++;
+                }
             }
         }
 
@@ -130,12 +154,120 @@ public final class StructureImporter {
         return new Result(true, "Imported " + key + " as '" + name + "' (" + count + " blocks, " + tiles + " tiles, " + w + "x" + h + "x" + d + ")", count);
     }
 
+    private static boolean isAir(BlockData data) {
+        Material m = data.getMaterial();
+        return m == Material.AIR || m == Material.CAVE_AIR || m == Material.VOID_AIR;
+    }
+
+    private static BlockData readJigsawFinalState(BlockState block) {
+        try {
+            Object nbt = block.getClass().getMethod("getSnapshotNBT").invoke(block);
+            if (nbt == null) {
+                return null;
+            }
+            Object res = nbt.getClass().getMethod("getString", String.class).invoke(nbt, "final_state");
+            String finalState = null;
+            if (res instanceof String s) {
+                finalState = s;
+            } else if (res instanceof Optional<?> o && o.isPresent()) {
+                finalState = String.valueOf(o.get());
+            }
+            if (finalState == null || finalState.isBlank()) {
+                return null;
+            }
+            return Bukkit.createBlockData(finalState);
+        } catch (Throwable e) {
+            return null;
+        }
+    }
+
     private static LegacyTileData captureTile(BlockState block) {
         try {
             return LegacyTileData.fromBukkit(block);
         } catch (Throwable e) {
             return null;
         }
+    }
+
+    public static Result importTemplateGroup(IrisData data, String groupName, String vanillaSource, String prefix, Mode mode) {
+        File objectsRoot = new File(data.getDataFolder(), "objects");
+        File prefixDir = new File(objectsRoot, prefix);
+        if (!prefixDir.isDirectory()) {
+            return new Result(false, "No imported templates under objects/" + prefix + " for " + groupName, 0);
+        }
+
+        List<File> iobs = new ArrayList<>();
+        collectIob(prefixDir, iobs);
+        if (iobs.isEmpty()) {
+            return new Result(false, "No .iob templates under objects/" + prefix + " for " + groupName, 0);
+        }
+
+        File structureFile = new File(data.getDataFolder(), "structures/" + groupName + ".json");
+        if (mode == Mode.ADD_ONLY && structureFile.exists()) {
+            return new Result(false, "Skipped (add-only): structure '" + groupName + "' already exists", 0);
+        }
+
+        String rootPath = objectsRoot.getAbsolutePath() + File.separator;
+        List<String> pieceNames = new ArrayList<>();
+        int maxSpan = 1;
+        for (File iob : iobs) {
+            String rel = iob.getAbsolutePath().substring(rootPath.length()).replace(File.separatorChar, '/');
+            if (rel.endsWith(".iob")) {
+                rel = rel.substring(0, rel.length() - ".iob".length());
+            }
+            pieceNames.add(rel);
+            maxSpan = Math.max(maxSpan, readObjectSpan(iob));
+        }
+
+        try {
+            for (String piece : pieceNames) {
+                writeJson(new File(data.getDataFolder(), "jigsaw-pieces/" + piece + ".json"), pieceJson(piece));
+            }
+            writeJson(new File(data.getDataFolder(), "jigsaw-pools/" + groupName + ".json"), poolJsonMulti(pieceNames));
+            writeJson(structureFile, structureJson(groupName, vanillaSource, maxSpan));
+        } catch (Throwable e) {
+            return new Result(false, "Failed writing group structure '" + groupName + "': " + e.getMessage(), 0);
+        }
+
+        return new Result(true, "Built structure '" + groupName + "' from " + pieceNames.size() + " template variants", pieceNames.size());
+    }
+
+    private static void collectIob(File dir, List<File> out) {
+        File[] files = dir.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File f : files) {
+            if (f.isDirectory()) {
+                collectIob(f, out);
+            } else if (f.getName().endsWith(".iob")) {
+                out.add(f);
+            }
+        }
+    }
+
+    private static int readObjectSpan(File iob) {
+        try (DataInputStream din = new DataInputStream(new BufferedInputStream(new FileInputStream(iob)))) {
+            int w = din.readInt();
+            din.readInt();
+            int d = din.readInt();
+            return Math.max(1, Math.max(w, d));
+        } catch (Throwable e) {
+            return 1;
+        }
+    }
+
+    private static Map<String, Object> poolJsonMulti(List<String> pieceNames) {
+        List<Object> pieces = new ArrayList<>();
+        for (String name : pieceNames) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("piece", name);
+            entry.put("weight", 1);
+            pieces.add(entry);
+        }
+        Map<String, Object> pool = new LinkedHashMap<>();
+        pool.put("pieces", pieces);
+        return pool;
     }
 
     private static Map<String, Object> pieceJson(String name) {

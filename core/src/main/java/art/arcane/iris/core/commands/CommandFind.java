@@ -21,15 +21,23 @@ package art.arcane.iris.core.commands;
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.service.ObjectStudioSaveService;
 import art.arcane.iris.engine.framework.Engine;
+import art.arcane.iris.engine.framework.IrisStructureLocator;
 import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisRegion;
 import art.arcane.iris.util.common.director.DirectorExecutor;
 import art.arcane.iris.util.common.director.specialhandlers.ObjectHandler;
+import art.arcane.iris.util.common.director.specialhandlers.StructureHandler;
 import art.arcane.iris.util.common.format.C;
+import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.director.DirectorOrigin;
 import art.arcane.volmlib.util.director.annotations.Director;
 import art.arcane.volmlib.util.director.annotations.Param;
+import io.papermc.lib.PaperLib;
+import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
 import org.bukkit.entity.Player;
+import org.bukkit.util.StructureSearchResult;
 
 @Director(name = "find", origin = DirectorOrigin.PLAYER, description = "Iris Find commands", aliases = "goto")
 public class CommandFind implements DirectorExecutor {
@@ -81,6 +89,60 @@ public class CommandFind implements DirectorExecutor {
         }
 
         e.gotoPOI(type, player(), teleport);
+    }
+
+    @Director(description = "Find a structure (a vanilla key like minecraft:village_plains or minecraft:stronghold, or an imported iris structure key)")
+    public void structure(
+            @Param(description = "The structure to look for (e.g. minecraft:village_plains, minecraft:stronghold, minecraft_ancient_city)", customHandler = StructureHandler.class)
+            String structure
+    ) {
+        Engine e = engine();
+
+        if (e == null) {
+            sender().sendMessage(C.GOLD + "Not in an Iris World!");
+            return;
+        }
+
+        if (IrisStructureLocator.isPlaced(e, structure)) {
+            e.gotoStructure(structure, player(), true);
+            return;
+        }
+
+        Player target = player();
+        if (target == null) {
+            sender().sendMessage(C.GOLD + "Run this in-game to teleport to a structure.");
+            return;
+        }
+
+        sender().sendMessage(C.GRAY + "Locating " + structure + "...");
+        J.s(() -> {
+            try {
+                org.bukkit.generator.structure.Structure match = null;
+                for (org.bukkit.generator.structure.Structure s : Registry.STRUCTURE) {
+                    NamespacedKey key = s.getKey();
+                    if (key != null && key.toString().equalsIgnoreCase(structure)) {
+                        match = s;
+                        break;
+                    }
+                }
+                if (match == null) {
+                    sender().sendMessage(C.RED + "Unknown structure: " + structure);
+                    return;
+                }
+                StructureSearchResult result = target.getWorld().locateNearestStructure(target.getLocation(), match, 100, true);
+                if (result == null || result.getLocation() == null) {
+                    sender().sendMessage(C.YELLOW + "No " + structure + " found within range of you.");
+                    return;
+                }
+                Location at = result.getLocation();
+                int y = target.getWorld().getHighestBlockYAt(at.getBlockX(), at.getBlockZ()) + 2;
+                Location dest = new Location(target.getWorld(), at.getBlockX() + 0.5, y, at.getBlockZ() + 0.5);
+                PaperLib.teleportAsync(target, dest);
+                sender().sendMessage(C.GREEN + "Teleported to " + structure + " @ " + at.getBlockX() + ", " + at.getBlockZ());
+            } catch (Throwable t) {
+                sender().sendMessage(C.RED + "Could not locate " + structure + ": " + t.getClass().getSimpleName());
+            }
+        });
     }
 
     @Director(description = "Find an object")

@@ -50,6 +50,7 @@ public class IrisComplex implements DataProvider {
     private static final BlockData AIR = Material.AIR.createBlockData();
     private static final NoiseBounds ZERO_NOISE_BOUNDS = new NoiseBounds(0D, 0D);
     private static final int GRID_BOUNDS_CACHE_SIZE = 8192;
+    private static final int HEIGHT_BOUNDS_GRID = 4;
     private static final ThreadLocal<GridBoundsCache> GRID_BOUNDS_CACHE = ThreadLocal.withInitial(GridBoundsCache::new);
     private RNG rng;
     private double fluidHeight;
@@ -337,7 +338,7 @@ public class IrisComplex implements DataProvider {
     }
 
     private NoiseBounds gridSampleBounds(Engine engine, IrisInterpolator interpolator, int interpolatorIndex, Set<IrisGenerator> generators, double x, double z) {
-        int grid = IrisSettings.get().getPerformance().getHeightBoundsInterpolationGrid();
+        int grid = HEIGHT_BOUNDS_GRID;
         if (grid <= 1) {
             return sampleBoundsRaw(engine, interpolator, generators, x, z);
         }
