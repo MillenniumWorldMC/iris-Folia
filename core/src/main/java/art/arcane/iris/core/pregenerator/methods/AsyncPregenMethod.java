@@ -91,8 +91,6 @@ public class AsyncPregenMethod implements PregeneratorMethod {
     private final int maxResidentTectonicPlates;
     private final int mantleBackpressureWaitMs;
     private final long mantleBackpressureTimeoutMs;
-    private final long mantleReclaimIntervalMs;
-    private final AtomicLong lastMantleReclaim = new AtomicLong(0L);
 
     public AsyncPregenMethod(World world, int unusedThreads) {
         if (!PaperLib.isPaper()) {
@@ -145,7 +143,6 @@ public class AsyncPregenMethod implements PregeneratorMethod {
         this.maxResidentTectonicPlates = pregen.getMaxResidentTectonicPlates();
         this.mantleBackpressureWaitMs = pregen.getMantleBackpressureWaitMs();
         this.mantleBackpressureTimeoutMs = pregen.getMantleBackpressureTimeoutMs();
-        this.mantleReclaimIntervalMs = 1_000L;
     }
 
     private IrisPaperLikeBackendMode resolvePaperLikeBackendMode(IrisSettings.IrisSettingsPregen pregen) {
@@ -501,31 +498,25 @@ public class AsyncPregenMethod implements PregeneratorMethod {
             return;
         }
 
-        long now = M.ms();
-        long lastReclaimAt = lastMantleReclaim.get();
-        if (now - lastReclaimAt >= mantleReclaimIntervalMs && lastMantleReclaim.compareAndSet(lastReclaimAt, now)) {
-            mantle.trim(0L, 0);
-            mantle.unloadTectonicPlate(0);
-        }
-
-        if (mantle.getLoadedRegionCount() <= cap) {
+        int hardCap = cap * 2;
+        if (mantle.getLoadedRegionCount() <= hardCap) {
             return;
         }
 
         long waitStart = M.ms();
         long lastLog = 0L;
-        while (mantle.getLoadedRegionCount() > cap) {
+        while (mantle.getLoadedRegionCount() > hardCap) {
             mantle.trim(0L, 0);
             int freed = mantle.unloadTectonicPlate(0);
             int resident = mantle.getLoadedRegionCount();
-            if (resident <= cap) {
+            if (resident <= hardCap) {
                 break;
             }
 
             long elapsed = M.ms() - waitStart;
             if (elapsed >= mantleBackpressureTimeoutMs) {
                 Iris.warn("Pregen mantle backpressure exceeded " + mantleBackpressureTimeoutMs + "ms with " + resident
-                        + " tectonic plates resident (cap " + cap + "); proceeding to avoid deadlock. "
+                        + " tectonic plates resident (hard cap " + hardCap + "); proceeding to avoid deadlock. "
                         + "Raise pregen.maxResidentTectonicPlates if this persists. " + metricsSnapshot());
                 return;
             }
@@ -533,7 +524,7 @@ public class AsyncPregenMethod implements PregeneratorMethod {
             long logNow = M.ms();
             if (logNow - lastLog >= 5_000L) {
                 lastLog = logNow;
-                Iris.warn("Pregen mantle backpressure: " + resident + " tectonic plates resident (cap " + cap
+                Iris.warn("Pregen mantle backpressure: " + resident + " tectonic plates resident (hard cap " + hardCap
                         + "), freed " + freed + " last pass, waited " + elapsed + "ms.");
             }
 

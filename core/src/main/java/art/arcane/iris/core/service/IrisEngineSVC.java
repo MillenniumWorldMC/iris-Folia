@@ -33,7 +33,6 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class IrisEngineSVC implements IrisService {
     private static final int TRIM_PERIOD = 2_000;
-    private static final long ACTIVE_PREGEN_IDLE_MILLIS = 500L;
     private final AtomicInteger tectonicLimit = new AtomicInteger(30);
     private final AtomicInteger tectonicPlates = new AtomicInteger();
     private final AtomicInteger queuedTectonicPlates = new AtomicInteger();
@@ -188,7 +187,8 @@ public class IrisEngineSVC implements IrisService {
     }
 
     private void add(World world) {
-        var access = IrisToolbelt.access(world);
+        if (world == null || worlds.containsKey(world)) return;
+        PlatformChunkGenerator access = IrisToolbelt.access(world);
         if (access == null) return;
         worlds.put(world, new Registered(world.getName(), access));
     }
@@ -201,6 +201,10 @@ public class IrisEngineSVC implements IrisService {
             @Override
             protected long loop() {
                 try {
+                    for (World world : Bukkit.getWorlds()) {
+                        add(world);
+                    }
+
                     int queuedPlates = 0;
                     int totalPlates = 0;
                     long chunks = 0;
@@ -372,15 +376,11 @@ public class IrisEngineSVC implements IrisService {
                 return limit;
             }
 
-            return Math.max(1, Math.min(limit, Math.max(2, limit / 8)));
+            return Math.max(limit, IrisSettings.get().getPregen().getMaxResidentTectonicPlates());
         }
 
         private long activeIdleDuration(Engine engine) {
-            if (!pregenTargets(engine)) {
-                return TimeUnit.SECONDS.toMillis(IrisSettings.get().getPerformance().getMantleKeepAlive());
-            }
-
-            return ACTIVE_PREGEN_IDLE_MILLIS;
+            return TimeUnit.SECONDS.toMillis(IrisSettings.get().getPerformance().getMantleKeepAlive());
         }
 
         @Synchronized
