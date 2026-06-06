@@ -299,6 +299,16 @@ public final class StructureImporter {
         return pool;
     }
 
+    public static void writeSinglePieceStructure(IrisData data, String name, String vanillaSource, int maxSpan, String placeMode) throws Exception {
+        writeJson(new File(data.getDataFolder(), "jigsaw-pieces/" + name + ".json"), pieceJson(name));
+        writeJson(new File(data.getDataFolder(), "jigsaw-pools/" + name + ".json"), poolJson(name));
+        Map<String, Object> structure = structureJson(name, vanillaSource, maxSpan);
+        if (placeMode != null && !placeMode.isEmpty()) {
+            structure.put("placeMode", placeMode);
+        }
+        writeJson(new File(data.getDataFolder(), "structures/" + name + ".json"), structure);
+    }
+
     private static Map<String, Object> structureJson(String name, String source, int maxSpan) {
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("startPool", name);

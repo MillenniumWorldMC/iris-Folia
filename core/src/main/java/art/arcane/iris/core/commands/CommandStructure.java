@@ -20,6 +20,7 @@ package art.arcane.iris.core.commands;
 
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.structure.BulkStructureImporter;
+import art.arcane.iris.core.structure.StructureCaptureImporter;
 import art.arcane.iris.core.structure.StructureImporter;
 import art.arcane.iris.core.structure.StructureIndexService;
 import art.arcane.iris.engine.framework.Engine;
@@ -86,10 +87,25 @@ public class CommandStructure implements DirectorExecutor {
         BulkStructureImporter.Report jigsaws = BulkStructureImporter.importAllVanilla(data, StructureImporter.Mode.OVERWRITE, true, sender());
         BulkStructureImporter.Report templates = BulkStructureImporter.importAllTemplates(data, StructureImporter.Mode.OVERWRITE, sender());
         BulkStructureImporter.Report groups = BulkStructureImporter.importTemplateGroups(data, StructureImporter.Mode.OVERWRITE, sender());
-        int imported = jigsaws.imported() + templates.imported() + groups.imported();
-        int failed = jigsaws.failed() + templates.failed() + groups.failed();
+        StructureCaptureImporter.Report captured = StructureCaptureImporter.importAllStructures(data, StructureImporter.Mode.OVERWRITE, sender());
+        int imported = jigsaws.imported() + templates.imported() + groups.imported() + captured.imported();
+        int failed = jigsaws.failed() + templates.failed() + groups.failed() + captured.failed();
         sender().sendMessage(C.GREEN + "Import complete: " + C.WHITE + imported + C.GREEN + " structures/objects written, " + C.WHITE + failed + C.GREEN + " failed.");
         sender().sendMessage(C.GRAY + "Reference them from a biome/region/dimension 'structures' list, or run /iris structure list " + dimension.getLoadKey() + " to refresh the index. Regenerate chunks for changes to take effect.");
+    }
+
+    @Director(name = "capture", description = "Capture code-generated structures that have no NBT template (swamp huts, igloos, etc.) into editable Iris objects by generating each one in a throwaway scratch world and reading back its blocks. Skips structures that already import as a structure, structures wider/taller than the capture cap (strongholds, mansions, monuments stay vanilla), and anything that will not generate in a flat overworld. Each captured structure becomes a single-piece Iris structure you can place from a biome/region/dimension 'structures' list. Runs automatically as the last pass of /iris structure import.", aliases = {"cap"}, origin = DirectorOrigin.BOTH)
+    public void capture(
+            @Param(description = "The dimension whose pack to capture into", aliases = "dim")
+            IrisDimension dimension
+    ) {
+        IrisData data = dimension.getLoader();
+        if (data == null) {
+            sender().sendMessage(C.RED + "Could not resolve the pack for dimension " + dimension.getLoadKey());
+            return;
+        }
+        StructureCaptureImporter.Report report = StructureCaptureImporter.importAllStructures(data, StructureImporter.Mode.OVERWRITE, sender());
+        sender().sendMessage(C.GRAY + "Captured " + report.imported() + " structures. Place them from a 'structures' list and regenerate chunks. Delete a structures/*.json to re-capture it.");
     }
 
     @Director(description = "Locate every vanilla/datapack/iris structure to verify which are locatable in this world. Heavy synchronous search per structure - keep the radius modest. 'Not found' can mean rarer than the radius, a different dimension (nether/end structures never appear in the overworld), or a structure that generates but cannot be located; generation itself happens during chunk decoration, independent of locate.", aliases = {"locateall"}, origin = DirectorOrigin.BOTH, sync = true)

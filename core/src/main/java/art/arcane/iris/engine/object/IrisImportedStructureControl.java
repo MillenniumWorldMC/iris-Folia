@@ -56,6 +56,10 @@ public class IrisImportedStructureControl {
     @Desc("When true (the default), ingested datapacks generate normally: a datapack that redefines a VANILLA structure key (e.g. an ancient-city datapack overriding 'minecraft:ancient_city') REPLACES the vanilla placement, structure definition, jigsaw pools and pieces exactly as the datapack intends, and the datapack's OWN new structures generate too. When false, datapack structures do NOT generate at all - Iris strips the vanilla-key overrides from the installed datapack copy so the original vanilla structures generate untouched, and holds every datapack-namespaced structure out of natural generation so it never appears over or beside the vanilla one. Datapacks stay installed and importable either way, so when false the only way to get a datapack structure is to run '/iris structure import' and place it manually from a biome/region/dimension 'structures' list. Resolved globally across every loaded pack: if ANY dimension sets this false, vanilla-key overrides are stripped for every installed datapack.")
     private boolean datapackOverrides = true;
 
+    @ArrayType(type = IrisVanillaStructureAdjustment.class, min = 1)
+    @Desc("Per-structure transforms applied to the vanilla & datapack structures that still generate natively. Each entry translates the matched structure by (xShift, yShift, zShift). Use this to relocate structures you do not own through the Iris 'structures' placement system - e.g. push 'minecraft:stronghold' down 64 blocks. Multiple matching entries stack, and any underground shift here adds on top of 'undergroundYShift'. A structure suppressed by an Iris placement is unaffected (Iris already controls its position).")
+    private KList<IrisVanillaStructureAdjustment> adjustments = new KList<>();
+
     public boolean active() {
         return mode == VanillaStructureMode.ALL_ON || !enabled.isEmpty();
     }
@@ -68,6 +72,20 @@ public class IrisImportedStructureControl {
             return !matches(disabled, key);
         }
         return matches(enabled, key);
+    }
+
+    public int[] resolveOffset(String key, boolean undergroundStep) {
+        int x = 0;
+        int y = undergroundStep ? undergroundYShift : 0;
+        int z = 0;
+        for (IrisVanillaStructureAdjustment adjustment : adjustments) {
+            if (adjustment != null && adjustment.matches(key)) {
+                x += adjustment.getXShift();
+                y += adjustment.getYShift();
+                z += adjustment.getZShift();
+            }
+        }
+        return new int[]{x, y, z};
     }
 
     private static boolean isDatapackKey(String key) {

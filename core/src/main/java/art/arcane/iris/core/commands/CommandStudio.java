@@ -25,6 +25,9 @@ import art.arcane.iris.core.gui.VisionGUI;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.project.IrisProject;
 import art.arcane.iris.core.service.StudioSVC;
+import art.arcane.iris.core.structure.BulkStructureImporter;
+import art.arcane.iris.core.structure.FeatureImporter;
+import art.arcane.iris.core.structure.StructureImporter;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.*;
@@ -103,6 +106,44 @@ public class CommandStudio implements DirectorExecutor {
             long seed) {
         sender().sendMessage(C.GREEN + "Opening studio for the \"" + dimension.getName() + "\" pack (seed: " + seed + ")");
         Iris.service(StudioSVC.class).open(sender(), seed, dimension.getLoadKey());
+    }
+
+    @Director(description = "Import vanilla trees, mushrooms & objects (and structures/jigsaw) from the server into a pack's objects/vanilla folder", aliases = {"importv", "iv"}, origin = DirectorOrigin.BOTH)
+    public void importvanilla(
+            @Param(description = "The dimension pack to import vanilla content into", aliases = {"pack", "dim"}, customHandler = DimensionHandler.class)
+            IrisDimension dimension,
+            @Param(description = "How many variants to capture per tree/object feature", defaultValue = "3")
+            int variants,
+            @Param(description = "Also import vanilla & datapack structures/jigsaw into the pack", defaultValue = "true")
+            boolean structures
+    ) {
+        if (dimension == null) {
+            sender().sendMessage(C.RED + "Provide a dimension pack: /iris std importvanilla pack=<dimension>");
+            return;
+        }
+        IrisData data = dimension.getLoader();
+        if (data == null) {
+            sender().sendMessage(C.RED + "Could not resolve the pack for dimension " + dimension.getLoadKey());
+            return;
+        }
+
+        VolmitSender sender = sender();
+        sender.sendMessage(C.GREEN + "Importing vanilla content into " + C.WHITE + dimension.getLoadKey() + C.GREEN + "...");
+
+        FeatureImporter.Report features = FeatureImporter.importAllObjectFeatures(data, variants, sender);
+        int imported = features.imported();
+        int failed = features.failed();
+
+        if (structures) {
+            BulkStructureImporter.Report jigsaws = BulkStructureImporter.importAllVanilla(data, StructureImporter.Mode.OVERWRITE, true, sender);
+            BulkStructureImporter.Report templates = BulkStructureImporter.importAllTemplates(data, StructureImporter.Mode.OVERWRITE, sender);
+            BulkStructureImporter.Report groups = BulkStructureImporter.importTemplateGroups(data, StructureImporter.Mode.OVERWRITE, sender);
+            imported += jigsaws.imported() + templates.imported() + groups.imported();
+            failed += jigsaws.failed() + templates.failed() + groups.failed();
+        }
+
+        sender.sendMessage(C.GREEN + "importvanilla complete: " + C.WHITE + imported + C.GREEN + " objects/structures written, " + C.WHITE + failed + C.GREEN + " failed.");
+        sender.sendMessage(C.GRAY + "Trees/objects are under objects/vanilla/...; reference them from biome object placements.");
     }
 
     @Director(description = "Open VSCode for a dimension", aliases = {"vsc"})

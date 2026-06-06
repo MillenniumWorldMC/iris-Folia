@@ -235,7 +235,6 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
         BoundingBox area = writableArea(chunk);
         int steps = GenerationStep.Decoration.values().length;
         IrisImportedStructureControl control = importedControl();
-        int undergroundShift = control.getUndergroundYShift();
         for (int step = 0; step < steps; step++) {
             int index = 0;
             for (Structure structure : byStep.getOrDefault(step, List.of())) {
@@ -243,11 +242,15 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
                 String structureId = id == null ? null : id.toString();
                 if (control.shouldGenerate(structureId) && !IrisStructureLocator.suppressesVanilla(engine, structureId)) {
                     random.setFeatureSeed(decoSeed, index, step);
-                    int yShift = (undergroundShift != 0 && isUndergroundStep(structure.step())) ? undergroundShift : 0;
-                    WorldGenLevel target = yShift == 0 ? world : yShiftedLevel(world, yShift);
+                    int[] offset = control.resolveOffset(structureId, isUndergroundStep(structure.step()));
+                    boolean shifted = offset[0] != 0 || offset[1] != 0 || offset[2] != 0;
+                    WorldGenLevel target = shifted ? shiftedLevel(world, offset[0], offset[1], offset[2]) : world;
+                    BoundingBox placeArea = shifted
+                            ? new BoundingBox(area.minX() - offset[0], area.minY(), area.minZ() - offset[2], area.maxX() - offset[0], area.maxY(), area.maxZ() - offset[2])
+                            : area;
                     try {
                         structureManager.startsForStructure(sectionPos, structure)
-                                .forEach(start -> start.placeInChunk(target, structureManager, this, random, area, chunkPos));
+                                .forEach(start -> start.placeInChunk(target, structureManager, this, random, placeArea, chunkPos));
                     } catch (Throwable e) {
                         Iris.reportError(e);
                     }
@@ -262,7 +265,7 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
                 || step == GenerationStep.Decoration.STRONGHOLDS;
     }
 
-    private WorldGenLevel yShiftedLevel(WorldGenLevel world, int yShift) {
+    private WorldGenLevel shiftedLevel(WorldGenLevel world, int dx, int dy, int dz) {
         return (WorldGenLevel) Proxy.newProxyInstance(
                 WorldGenLevel.class.getClassLoader(),
                 new Class<?>[]{WorldGenLevel.class},
@@ -270,7 +273,7 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
                     if (args != null) {
                         for (int i = 0; i < args.length; i++) {
                             if (args[i] instanceof BlockPos bp) {
-                                args[i] = new BlockPos(bp.getX(), bp.getY() + yShift, bp.getZ());
+                                args[i] = new BlockPos(bp.getX() + dx, bp.getY() + dy, bp.getZ() + dz);
                             }
                         }
                     }

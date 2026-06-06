@@ -109,6 +109,22 @@ public interface INMSBinding {
         return new KList<>();
     }
 
+    default KList<String> getObjectFeatureKeys() {
+        return new KList<>();
+    }
+
+    default boolean placeFeature(World world, int x, int y, int z, String featureKey, long seed) {
+        throw new UnsupportedOperationException("The active NMS binding does not support feature placement.");
+    }
+
+    default int[] placeStructure(World world, int chunkX, int chunkZ, String structureKey, long seed, int maxSpan) {
+        throw new UnsupportedOperationException("The active NMS binding does not support structure placement.");
+    }
+
+    default boolean supportsStructureCapture() {
+        return false;
+    }
+
     boolean isBukkit();
 
     int getBiomeId(Biome biome);

@@ -59,6 +59,13 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.chunk.status.WorldGenContext;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.FlatLevelSource;
+import net.minecraft.world.level.levelgen.WorldgenRandom;
+import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
+import net.minecraft.world.level.levelgen.feature.AbstractHugeMushroomFeature;
+import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
+import net.minecraft.world.level.levelgen.feature.FallenTreeFeature;
+import net.minecraft.world.level.levelgen.feature.Feature;
+import net.minecraft.world.level.levelgen.feature.TreeFeature;
 import net.minecraft.world.level.levelgen.flat.FlatLayerInfo;
 import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
 import net.minecraft.world.level.storage.LevelStorageSource;
@@ -451,6 +458,129 @@ public class NMSBinding implements INMSBinding {
             Iris.reportError(e);
         }
         return keys;
+    }
+
+    @Override
+    public KList<String> getObjectFeatureKeys() {
+        KList<String> keys = new KList<>();
+        try {
+            Registry<ConfiguredFeature<?, ?>> reg = registry().lookupOrThrow(Registries.CONFIGURED_FEATURE);
+            for (Identifier id : reg.keySet()) {
+                ConfiguredFeature<?, ?> cf = reg.getValue(id);
+                if (cf == null) {
+                    continue;
+                }
+                String group = classifyFeature(cf.feature());
+                if (group == null) {
+                    continue;
+                }
+                keys.add(group + "|" + id);
+            }
+        } catch (Throwable e) {
+            Iris.reportError(e);
+        }
+        return keys;
+    }
+
+    private static String classifyFeature(Feature<?> feature) {
+        if (feature instanceof TreeFeature) {
+            return "trees";
+        }
+        if (feature instanceof FallenTreeFeature) {
+            return "fallen_trees";
+        }
+        if (feature instanceof AbstractHugeMushroomFeature) {
+            return "mushrooms";
+        }
+        return null;
+    }
+
+    @Override
+    public boolean placeFeature(World world, int x, int y, int z, String featureKey, long seed) {
+        try {
+            ServerLevel level = ((CraftWorld) world).getHandle();
+            net.minecraft.world.level.chunk.ChunkGenerator generator = level.getChunkSource().getGenerator();
+            Registry<ConfiguredFeature<?, ?>> reg = registry().lookupOrThrow(Registries.CONFIGURED_FEATURE);
+            ConfiguredFeature<?, ?> cf = reg.getValue(Identifier.parse(featureKey));
+            if (cf == null) {
+                return false;
+            }
+            WorldgenRandom random = new WorldgenRandom(new XoroshiroRandomSource(seed));
+            return cf.place(level, generator, random, new BlockPos(x, y, z));
+        } catch (Throwable e) {
+            Iris.reportError(e);
+            return false;
+        }
+    }
+
+    @Override
+    public int[] placeStructure(World world, int chunkX, int chunkZ, String structureKey, long seed, int maxSpan) {
+        try {
+            ServerLevel level = ((CraftWorld) world).getHandle();
+            net.minecraft.world.level.chunk.ChunkGenerator generator = level.getChunkSource().getGenerator();
+            Registry<net.minecraft.world.level.levelgen.structure.Structure> reg = registry().lookupOrThrow(Registries.STRUCTURE);
+            net.minecraft.world.level.levelgen.structure.Structure structure = reg.getValue(Identifier.parse(structureKey));
+            if (structure == null) {
+                return null;
+            }
+            net.minecraft.core.Holder<net.minecraft.world.level.levelgen.structure.Structure> holder = reg.wrapAsHolder(structure);
+            net.minecraft.world.level.levelgen.RandomState randomState = level.getChunkSource().randomState();
+            net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager templateManager = level.getStructureManager();
+            net.minecraft.world.level.StructureManager structureManager = level.structureManager();
+            net.minecraft.world.level.biome.BiomeSource biomeSource = generator.getBiomeSource();
+            net.minecraft.world.level.ChunkPos chunkPos = new net.minecraft.world.level.ChunkPos(chunkX, chunkZ);
+
+            net.minecraft.world.level.levelgen.structure.StructureStart start = structure.generate(
+                    holder,
+                    level.dimension(),
+                    level.registryAccess(),
+                    generator,
+                    biomeSource,
+                    randomState,
+                    templateManager,
+                    seed,
+                    chunkPos,
+                    0,
+                    level,
+                    biome -> true);
+
+            if (start == null || !start.isValid()) {
+                return null;
+            }
+
+            net.minecraft.world.level.levelgen.structure.BoundingBox box = start.getBoundingBox();
+            int spanX = box.maxX() - box.minX() + 1;
+            int spanY = box.maxY() - box.minY() + 1;
+            int spanZ = box.maxZ() - box.minZ() + 1;
+            if (maxSpan > 0 && (spanX > maxSpan || spanZ > maxSpan || spanY > maxSpan)) {
+                return null;
+            }
+
+            WorldgenRandom random = new WorldgenRandom(new XoroshiroRandomSource(seed));
+            int minCX = box.minX() >> 4;
+            int maxCX = box.maxX() >> 4;
+            int minCZ = box.minZ() >> 4;
+            int maxCZ = box.maxZ() >> 4;
+            for (int cx = minCX; cx <= maxCX; cx++) {
+                for (int cz = minCZ; cz <= maxCZ; cz++) {
+                    level.getChunk(cx, cz);
+                    net.minecraft.world.level.ChunkPos cp = new net.minecraft.world.level.ChunkPos(cx, cz);
+                    net.minecraft.world.level.levelgen.structure.BoundingBox chunkBox = new net.minecraft.world.level.levelgen.structure.BoundingBox(
+                            cp.getMinBlockX(), box.minY(), cp.getMinBlockZ(),
+                            cp.getMaxBlockX(), box.maxY(), cp.getMaxBlockZ());
+                    start.placeInChunk(level, structureManager, generator, random, chunkBox, cp);
+                }
+            }
+            return new int[]{box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ()};
+        } catch (Throwable e) {
+            Iris.reportError(e);
+            return null;
+        }
+    }
+
+    @Override
+    public boolean supportsStructureCapture() {
+        return true;
     }
 
     @Override

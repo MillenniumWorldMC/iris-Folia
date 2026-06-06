@@ -49,7 +49,7 @@ import art.arcane.volmlib.util.math.RNG;
 public class IrisStructureComponent extends IrisMantleComponent {
     private static final long MAX_BORE_VOLUME = 6_000_000L;
     private static final long MAX_OVERBORE_VOLUME = 48_000_000L;
-    private static final MatterCavern CARVE_CAVERN = new MatterCavern(true, "", (byte) 0);
+    private static final MatterCavern CARVE_CAVERN = new MatterCavern(true, "", (byte) 3);
 
     public IrisStructureComponent(EngineMantle engineMantle) {
         super(engineMantle, ReservedFlag.JIGSAW, 3);
