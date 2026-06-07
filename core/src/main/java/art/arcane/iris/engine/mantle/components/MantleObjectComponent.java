@@ -128,6 +128,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
                     + " regionCavePlacers=" + region.getCarvingObjects().size());
         }
         ObjectPlacementSummary summary = placeObjects(writer, rng, x, z, surfaceBiome, caveBiome, region, complex, traceRegen, surfaceHeightLookup);
+        placeProceduralTrees(writer, rng, x, z, surfaceBiome);
         UpperDimensionContext upperCtx = getEngineMantle().getEngine().getUpperContext();
         IrisDimension dimension = getDimension();
         if (upperCtx != null && dimension.isUpperDimensionObjects()) {
@@ -356,6 +357,41 @@ public class MantleObjectComponent extends IrisMantleComponent {
                 nullObjects,
                 errors
         );
+    }
+
+    @ChunkCoordinates
+    private void placeProceduralTrees(MantleWriter writer, RNG rng, int x, int z, IrisBiome surfaceBiome) {
+        IrisProceduralObjects proceduralObjects = surfaceBiome.getProceduralObjects();
+        if (proceduralObjects == null || proceduralObjects.isEmpty()) {
+            return;
+        }
+
+        int blockX = x << 4;
+        int blockZ = z << 4;
+        for (IrisProceduralTree tree : proceduralObjects.getTrees()) {
+            if (!rng.chance(tree.getChance() + rng.d(-0.005, 0.005))) {
+                continue;
+            }
+
+            IrisObjectPlacement placement = tree.asPlacement();
+            IObjectPlacer placer = tree.isPlausible() ? new DecayControlPlacer(writer) : writer;
+            int density = Math.max(1, tree.getDensity());
+            for (int i = 0; i < density; i++) {
+                IrisObject variant = tree.getVariantObject(getData(), rng);
+                if (variant == null) {
+                    continue;
+                }
+                int xx = rng.i(blockX, blockX + 15);
+                int zz = rng.i(blockZ, blockZ + 15);
+                try {
+                    variant.place(xx, -1, zz, placer, placement, rng, getData());
+                } catch (Throwable e) {
+                    Iris.reportError(e);
+                    Iris.error("Failed to place procedural tree '" + tree.getName() + "' in biome " + surfaceBiome.getName());
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 
     @BlockCoordinates

@@ -165,6 +165,8 @@ public class IrisBiome extends IrisRegistrant implements IRare {
     @ArrayType(min = 1, type = IrisObjectPlacement.class)
     @Desc("Objects define what schematics (iob files) iris will place in this biome")
     private KList<IrisObjectPlacement> objects = new KList<>();
+    @Desc("Procedural objects (such as trees) iris generates from scratch and places in this biome, instead of loading them from iob files")
+    private IrisProceduralObjects proceduralObjects = new IrisProceduralObjects();
     @ArrayType(min = 1, type = IrisStructurePlacement.class)
     @Desc("Structures define jigsaw or vanilla/datapack structures iris will place in this biome")
     private KList<IrisStructurePlacement> structures = new KList<>();
