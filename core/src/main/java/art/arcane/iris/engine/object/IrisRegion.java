@@ -92,6 +92,8 @@ public class IrisRegion extends IrisRegistrant implements IRare {
     @ArrayType(min = 1, type = IrisObjectPlacement.class)
     @Desc("Objects define what schematics (iob files) iris will place in this region")
     private KList<IrisObjectPlacement> objects = new KList<>();
+    @Desc("Procedural objects (trees, ruins, formations, coral, fungi, crystals) iris generates from scratch and places across this region")
+    private IrisProceduralObjects proceduralObjects = new IrisProceduralObjects();
     @ArrayType(min = 1, type = IrisStructurePlacement.class)
     @Desc("Structures define jigsaw or vanilla/datapack structures iris will place in this region")
     private KList<IrisStructurePlacement> structures = new KList<>();

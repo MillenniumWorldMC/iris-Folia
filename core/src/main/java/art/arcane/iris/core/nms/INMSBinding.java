@@ -125,8 +125,6 @@ public interface INMSBinding {
         return false;
     }
 
-    boolean isBukkit();
-
     int getBiomeId(Biome biome);
 
     MCABiomeContainer newBiomeContainer(int min, int max, int[] data);
@@ -187,10 +185,6 @@ public interface INMSBinding {
 
     default int getSpawnChunkCount(World world) {
         return 441;
-    }
-
-    default boolean purgeChunk(World world, int x, int z) {
-        throw new UnsupportedOperationException("The active NMS binding does not support chunk purge (regen).");
     }
 
     boolean missingDimensionTypes(String... keys);

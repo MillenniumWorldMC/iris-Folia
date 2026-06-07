@@ -97,12 +97,9 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO;
 
 public class NMSBinding implements INMSBinding {
     private final KMap<Biome, Object> baseBiomeCache = new KMap<>();
@@ -584,11 +581,6 @@ public class NMSBinding implements INMSBinding {
     }
 
     @Override
-    public boolean isBukkit() {
-        return true;
-    }
-
-    @Override
     public int getBiomeId(Biome biome) {
         for (World i : Bukkit.getWorlds()) {
             if (i.getEnvironment().equals(World.Environment.NORMAL)) {
@@ -724,42 +716,6 @@ public class NMSBinding implements INMSBinding {
                 }
             }
         });
-    }
-
-    @Override
-    public boolean purgeChunk(World world, int x, int z) {
-        ServerLevel level = ((CraftWorld) world).getHandle();
-        try {
-            CountDownLatch latch = new CountDownLatch(1);
-            Runnable unload = () -> {
-                try {
-                    if (world.isChunkLoaded(x, z)) {
-                        world.unloadChunk(x, z, false);
-                    }
-                } finally {
-                    latch.countDown();
-                }
-            };
-            if (!J.runRegion(world, x, z, unload)) {
-                return false;
-            }
-            if (!latch.await(15, TimeUnit.SECONDS)) {
-                Iris.warn("Chunk purge timed out waiting to unload " + x + "," + z + " in " + world.getName() + ".");
-                return false;
-            }
-
-            for (MoonriseRegionFileIO.RegionFileType type : MoonriseRegionFileIO.RegionFileType.values()) {
-                MoonriseRegionFileIO.scheduleSave(level, x, z, null, type);
-            }
-            MoonriseRegionFileIO.flush(level);
-            return true;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
-        } catch (Throwable e) {
-            Iris.reportError(e);
-            return false;
-        }
     }
 
     public ItemStack applyCustomNbt(ItemStack itemStack, KMap<String, Object> customNbt) throws IllegalArgumentException {

@@ -1,0 +1,129 @@
+/*
+ * Iris is a World Generator for Minecraft Bukkit Servers
+ * Copyright (c) 2022 Arcane Arts (Volmit Software)
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package art.arcane.iris.engine.object;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+public class IrisObjectVacuumTest {
+
+    @Test
+    public void footprintExtentsMatchObjectWidthForEvenAndOdd() {
+        int evenLow = IrisObjectVacuum.footprintLow(10);
+        int evenHigh = IrisObjectVacuum.footprintHigh(10);
+        assertEquals(-5, evenLow);
+        assertEquals(4, evenHigh);
+        assertEquals(10, evenHigh - evenLow + 1);
+
+        int oddLow = IrisObjectVacuum.footprintLow(15);
+        int oddHigh = IrisObjectVacuum.footprintHigh(15);
+        assertEquals(-7, oddLow);
+        assertEquals(7, oddHigh);
+        assertEquals(15, oddHigh - oddLow + 1);
+
+        assertEquals(0, IrisObjectVacuum.footprintLow(1));
+        assertEquals(0, IrisObjectVacuum.footprintHigh(1));
+    }
+
+    @Test
+    public void evenObjectRaisesFlushWithNoOverhang() {
+        int low = IrisObjectVacuum.footprintLow(10);
+        int high = IrisObjectVacuum.footprintHigh(10);
+        int originalY = 100;
+        int meetY = 110;
+
+        for (int dx = low; dx <= high; dx++) {
+            for (int dz = low; dz <= high; dz++) {
+                int target = IrisObjectVacuum.columnTargetY(dx, dz, low, high, low, high, 12.0, 2.0, originalY, meetY);
+                assertEquals("column inside footprint must be flush at the object base", meetY, target);
+            }
+        }
+
+        int justOutsideHigh = IrisObjectVacuum.columnTargetY(high + 1, 0, low, high, low, high, 12.0, 2.0, originalY, meetY);
+        assertTrue("one block past the high edge must taper, not stay full", justOutsideHigh < meetY);
+        assertTrue(justOutsideHigh > originalY);
+
+        int justOutsideLow = IrisObjectVacuum.columnTargetY(low - 1, 0, low, high, low, high, 12.0, 2.0, originalY, meetY);
+        assertEquals("taper must be symmetric on both axes", justOutsideHigh, justOutsideLow);
+    }
+
+    @Test
+    public void downwardBendCarvesWhenBaseBelowSurface() {
+        int low = IrisObjectVacuum.footprintLow(10);
+        int high = IrisObjectVacuum.footprintHigh(10);
+        int originalY = 120;
+        int meetY = 105;
+
+        int center = IrisObjectVacuum.columnTargetY(0, 0, low, high, low, high, 12.0, 2.0, originalY, meetY);
+        assertEquals("inside footprint must carve down to the object base", meetY, center);
+        assertTrue("downward bend must drop below the original surface", center < originalY);
+
+        int far = IrisObjectVacuum.columnTargetY(high + 200, 0, low, high, low, high, 12.0, 2.0, originalY, meetY);
+        assertEquals("beyond the radius the surface is untouched", originalY, far);
+    }
+
+    @Test
+    public void columnsOutsideRadiusAreUnchanged() {
+        int low = -5;
+        int high = 4;
+        int originalY = 64;
+        int meetY = 80;
+
+        int beyond = IrisObjectVacuum.columnTargetY(high + 13, 0, low, high, low, high, 12.0, 2.0, originalY, meetY);
+        assertEquals(originalY, beyond);
+
+        int atRadiusEdge = IrisObjectVacuum.columnTargetY(high + 12, 0, low, high, low, high, 12.0, 2.0, originalY, meetY);
+        assertEquals(originalY, atRadiusEdge);
+    }
+
+    @Test
+    public void resolveRadiusMatchesModesAndHonorsSettingsOverride() {
+        assertEquals(12, IrisObjectVacuum.resolveRadius(ObjectPlaceMode.VACUUM, null));
+        assertEquals(20, IrisObjectVacuum.resolveRadius(ObjectPlaceMode.VACUUM_HIGH, null));
+        assertEquals(8, IrisObjectVacuum.resolveRadius(ObjectPlaceMode.VACUUM_FAST, null));
+        assertEquals(12, IrisObjectVacuum.resolveRadius(ObjectPlaceMode.VACUUM_ORGANIC, null));
+
+        IrisVacuumSettings settings = new IrisVacuumSettings();
+        settings.setRadius(30);
+        assertEquals(30, IrisObjectVacuum.resolveRadius(ObjectPlaceMode.VACUUM_FAST, settings));
+    }
+
+    @Test
+    public void resolveStepIsCoarseOnlyForFast() {
+        assertEquals(1, IrisObjectVacuum.resolveStep(ObjectPlaceMode.VACUUM));
+        assertEquals(1, IrisObjectVacuum.resolveStep(ObjectPlaceMode.VACUUM_HIGH));
+        assertEquals(2, IrisObjectVacuum.resolveStep(ObjectPlaceMode.VACUUM_FAST));
+        assertEquals(1, IrisObjectVacuum.resolveStep(ObjectPlaceMode.VACUUM_ORGANIC));
+    }
+
+    @Test
+    public void isVacuumModeOnlyTrueForVacuumModes() {
+        assertTrue(IrisObjectVacuum.isVacuumMode(ObjectPlaceMode.VACUUM));
+        assertTrue(IrisObjectVacuum.isVacuumMode(ObjectPlaceMode.VACUUM_HIGH));
+        assertTrue(IrisObjectVacuum.isVacuumMode(ObjectPlaceMode.VACUUM_FAST));
+        assertTrue(IrisObjectVacuum.isVacuumMode(ObjectPlaceMode.VACUUM_ORGANIC));
+        assertFalse(IrisObjectVacuum.isVacuumMode(ObjectPlaceMode.CENTER_HEIGHT));
+        assertFalse(IrisObjectVacuum.isVacuumMode(ObjectPlaceMode.STILT));
+        assertFalse(IrisObjectVacuum.isVacuumMode(ObjectPlaceMode.PAINT));
+        assertFalse(IrisObjectVacuum.isVacuumMode(ObjectPlaceMode.FLOATING));
+    }
+}

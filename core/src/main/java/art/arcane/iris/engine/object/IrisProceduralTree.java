@@ -40,7 +40,7 @@ import lombok.experimental.Accessors;
 @AllArgsConstructor
 @Desc("A single procedurally generated tree. Iris bakes a pool of deterministic variants from these settings and scatters them at world-gen time, exactly like an object placement but generated from scratch instead of loaded from an iob file.")
 @Data
-public class IrisProceduralTree {
+public class IrisProceduralTree implements IrisProceduralPlacement {
     private final transient AtomicCache<KList<IrisObject>> variantCache = new AtomicCache<>();
 
     @Desc("A human readable name used in logs and as the variant load key.")
@@ -80,6 +80,15 @@ public class IrisProceduralTree {
 
     @Desc("If true, the tree anchors on the terrain height ignoring the water surface.")
     private boolean underwater = false;
+
+    @Desc("Translate (offset) this placement along each axis; for example set a negative y to sink it into the ground.")
+    private IrisObjectTranslate translate = new IrisObjectTranslate();
+
+    @Desc("Settings for the stilt place modes (STILT, MIN_STILT, FAST_STILT, CENTER_STILT, ERODE_STILT, ORGANIC_STILT).")
+    private IrisStiltSettings stiltSettings;
+
+    @Desc("Settings for the vacuum place modes (VACUUM, VACUUM_HIGH, VACUUM_FAST, VACUUM_ORGANIC).")
+    private IrisVacuumSettings vacuumSettings;
 
     @Required
     @Desc("The trunk (log) block, e.g. minecraft:oak_log. Ignored when trunkPalette is set.")
@@ -289,6 +298,9 @@ public class IrisProceduralTree {
         placement.setClamp(clamp);
         placement.setCarvingSupport(carvingSupport);
         placement.setUnderwater(underwater);
+        placement.setTranslate(translate);
+        placement.setStiltSettings(stiltSettings);
+        placement.setVacuumSettings(vacuumSettings);
         placement.setChance(chance);
         placement.setDensity(density);
         return placement;

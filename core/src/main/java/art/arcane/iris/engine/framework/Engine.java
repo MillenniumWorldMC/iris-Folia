@@ -945,6 +945,9 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
         if (object.isEmpty() || object.equals("null")) {
             return null;
         }
+        if (object.startsWith("procedural/")) {
+            return null;
+        }
         int id = Integer.parseInt(v[1]);
 
 

@@ -24,10 +24,9 @@ import com.google.gson.JsonObject;
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.ServerConfigurator;
-import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.nms.datapack.DataVersion;
-import art.arcane.iris.core.pregenerator.PregenTask;
-import art.arcane.iris.core.pregenerator.methods.RegenPregenMethod;
+import art.arcane.iris.core.runtime.ChunkClearer;
+import art.arcane.iris.core.runtime.InPlaceChunkRegenerator;
 import art.arcane.iris.core.service.IrisEngineSVC;
 import art.arcane.iris.core.service.StudioSVC;
 import art.arcane.iris.core.tools.IrisPackBenchmarking;
@@ -49,7 +48,6 @@ import art.arcane.iris.util.common.format.C;
 import art.arcane.volmlib.util.format.Form;
 import art.arcane.volmlib.util.io.CountingDataInputStream;
 import art.arcane.volmlib.util.mantle.runtime.TectonicPlate;
-import art.arcane.volmlib.util.math.Position2;
 import art.arcane.volmlib.util.math.M;
 import art.arcane.volmlib.util.matter.Matter;
 import art.arcane.iris.util.nbt.common.mca.MCAFile;
@@ -58,9 +56,7 @@ import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
 import lombok.SneakyThrows;
 import org.bukkit.Bukkit;
-import org.bukkit.Chunk;
 import org.bukkit.World;
-import org.bukkit.entity.Player;
 
 import java.io.*;
 import java.net.InetAddress;
@@ -294,47 +290,15 @@ public class CommandDeveloper implements DirectorExecutor {
             return;
         }
 
-        art.arcane.volmlib.util.mantle.runtime.Mantle mantle = access.getEngine().getMantle().getMantle();
         int centerX = player().getLocation().getBlockX() >> 4;
         int centerZ = player().getLocation().getBlockZ() >> 4;
-        int minY = world.getMinHeight();
-        int maxY = world.getMaxHeight();
-        int total = (radius * 2 + 1) * (radius * 2 + 1);
-        int processed = 0;
-        int failed = 0;
+        int chunks = (radius * 2 + 1) * (radius * 2 + 1);
 
-        for (int x = -radius; x <= radius; x++) {
-            for (int z = -radius; z <= radius; z++) {
-                int chunkX = centerX + x;
-                int chunkZ = centerZ + z;
-                try {
-                    Chunk chunk = world.getChunkAt(chunkX, chunkZ);
-                    for (org.bukkit.entity.Entity entity : chunk.getEntities()) {
-                        if (!(entity instanceof Player)) {
-                            entity.remove();
-                        }
-                    }
-                    for (int xx = 0; xx < 16; xx++) {
-                        for (int zz = 0; zz < 16; zz++) {
-                            for (int yy = minY; yy < maxY; yy++) {
-                                chunk.getBlock(xx, yy, zz).setType(org.bukkit.Material.AIR, false);
-                            }
-                        }
-                    }
-                    mantle.deleteChunk(chunkX, chunkZ);
-                    processed++;
-                } catch (Throwable e) {
-                    failed++;
-                    Iris.reportError(e);
-                }
-            }
-        }
+        sender().sendMessage(C.GREEN + "Delete started: " + C.GOLD + chunks + C.GREEN
+                + " chunk(s) around " + C.GOLD + centerX + "," + centerZ + C.GREEN
+                + ". Clearing blocks to air.");
 
-        if (failed == 0) {
-            sender().sendMessage(C.GREEN + "Deleted blocks in " + C.GOLD + processed + C.GREEN + "/" + C.GOLD + total + C.GREEN + " chunk(s).");
-        } else {
-            sender().sendMessage(C.YELLOW + "Deleted blocks in " + C.GOLD + processed + C.YELLOW + "/" + C.GOLD + total + C.YELLOW + " chunk(s); " + C.RED + failed + C.YELLOW + " failed.");
-        }
+        new ChunkClearer(world, access.getEngine(), sender(), centerX, centerZ, radius).start();
     }
 
     @Director(description = "Test", aliases = {"ip"})
@@ -355,7 +319,7 @@ public class CommandDeveloper implements DirectorExecutor {
 
     // --- Regen ---
 
-    @Director(name = "regen", aliases = {"rg"}, description = "Regenerate nearby chunks using Iris generation", origin = DirectorOrigin.PLAYER, sync = true)
+    @Director(name = "regen", aliases = {"rg"}, description = "Delete and regenerate nearby chunks in place using Iris generation", origin = DirectorOrigin.PLAYER, sync = true)
     public void regen(
             @Param(name = "radius", description = "The radius of nearby chunks", defaultValue = "5")
             int radius
@@ -371,11 +335,6 @@ public class CommandDeveloper implements DirectorExecutor {
             return;
         }
 
-        if (INMS.get().isBukkit()) {
-            sender().sendMessage(C.RED + "Regen requires the native chunk system; it is unavailable in Bukkit fallback mode.");
-            return;
-        }
-
         Engine engine = IrisToolbelt.access(world).getEngine();
         if (engine == null) {
             sender().sendMessage(C.RED + "The engine access for this world is null. Generate nearby chunks first.");
@@ -385,22 +344,16 @@ public class CommandDeveloper implements DirectorExecutor {
         int centerX = player().getLocation().getBlockX() >> 4;
         int centerZ = player().getLocation().getBlockZ() >> 4;
         int chunks = (radius * 2 + 1) * (radius * 2 + 1);
-        PregenTask task = PregenTask.builder()
-                .center(new Position2(centerX << 4, centerZ << 4))
-                .radiusX(radius << 4)
-                .radiusZ(radius << 4)
-                .gui(false)
-                .build();
 
         sender().sendMessage(C.GREEN + "Regen started: " + C.GOLD + chunks + C.GREEN
                 + " chunk(s) around " + C.GOLD + centerX + "," + centerZ + C.GREEN
-                + ". Chunks purge and regenerate through the async pipeline.");
+                + ". Deleting and regenerating in place.");
         Iris.info("Regen run start: world=" + world.getName()
                 + " center=" + centerX + "," + centerZ
                 + " radius=" + radius
                 + " chunks=" + chunks);
 
-        IrisToolbelt.pregenerate(task, new RegenPregenMethod(world), engine, false);
+        new InPlaceChunkRegenerator(world, engine, sender(), centerX, centerZ, radius).start();
     }
 
 }

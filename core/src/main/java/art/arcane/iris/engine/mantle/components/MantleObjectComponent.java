@@ -128,7 +128,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
                     + " regionCavePlacers=" + region.getCarvingObjects().size());
         }
         ObjectPlacementSummary summary = placeObjects(writer, rng, x, z, surfaceBiome, caveBiome, region, complex, traceRegen, surfaceHeightLookup);
-        placeProceduralTrees(writer, rng, x, z, surfaceBiome);
+        placeProceduralObjects(writer, rng, x, z, surfaceBiome, caveBiome, region);
         UpperDimensionContext upperCtx = getEngineMantle().getEngine().getUpperContext();
         IrisDimension dimension = getDimension();
         if (upperCtx != null && dimension.isUpperDimensionObjects()) {
@@ -360,34 +360,64 @@ public class MantleObjectComponent extends IrisMantleComponent {
     }
 
     @ChunkCoordinates
-    private void placeProceduralTrees(MantleWriter writer, RNG rng, int x, int z, IrisBiome surfaceBiome) {
-        IrisProceduralObjects proceduralObjects = surfaceBiome.getProceduralObjects();
+    private void placeProceduralObjects(MantleWriter writer, RNG rng, int x, int z, IrisBiome surfaceBiome, IrisBiome caveBiome, IrisRegion region) {
+        placeProceduralFrom(writer, rng, x, z, surfaceBiome.getProceduralObjects(), surfaceBiome.getName());
+        placeProceduralFrom(writer, rng, x, z, region.getProceduralObjects(), region.getName());
+        if (caveBiome != null && caveBiome != surfaceBiome) {
+            placeProceduralFrom(writer, rng, x, z, caveBiome.getProceduralObjects(), caveBiome.getName());
+        }
+    }
+
+    @ChunkCoordinates
+    private void placeProceduralFrom(MantleWriter writer, RNG rng, int x, int z, IrisProceduralObjects proceduralObjects, String scope) {
         if (proceduralObjects == null || proceduralObjects.isEmpty()) {
             return;
         }
 
         int blockX = x << 4;
         int blockZ = z << 4;
-        for (IrisProceduralTree tree : proceduralObjects.getTrees()) {
-            if (!rng.chance(tree.getChance() + rng.d(-0.005, 0.005))) {
+        for (IrisProceduralPlacement p : proceduralObjects.getAllPlacements()) {
+            if (!rng.chance(p.getChance() + rng.d(-0.005, 0.005))) {
                 continue;
             }
 
-            IrisObjectPlacement placement = tree.asPlacement();
-            IObjectPlacer placer = tree.isPlausible() ? new DecayControlPlacer(writer) : writer;
-            int density = Math.max(1, tree.getDensity());
+            IrisObjectPlacement placement = p.asPlacement();
+            boolean carving = placement.getCarvingSupport() == CarvingMode.CARVING_ONLY;
+            if (carving && placement.getMode() == ObjectPlaceMode.CENTER_HEIGHT) {
+                placement.setMode(ObjectPlaceMode.FAST_MIN_HEIGHT);
+            }
+            IObjectPlacer placer = p.isPlausible() ? new DecayControlPlacer(writer) : writer;
+            int density = Math.max(1, p.getDensity());
             for (int i = 0; i < density; i++) {
-                IrisObject variant = tree.getVariantObject(getData(), rng);
+                IrisObject variant = p.getVariantObject(getData(), rng);
                 if (variant == null) {
                     continue;
                 }
                 int xx = rng.i(blockX, blockX + 15);
                 int zz = rng.i(blockZ, blockZ + 15);
+                int id = rng.i(0, Integer.MAX_VALUE);
                 try {
-                    variant.place(xx, -1, zz, placer, placement, rng, getData());
+                    if (carving) {
+                        int caveFloorY = findNearestCaveFloor(writer, xx, zz);
+                        if (caveFloorY > 0) {
+                            variant.place(xx, caveFloorY, zz, placer, placement, rng, (b, data) -> {
+                                String marker = placementMarker(variant, id, "procedural");
+                                if (marker != null) {
+                                    writer.setData(b.getX(), b.getY(), b.getZ(), marker);
+                                }
+                            }, null, getData());
+                        }
+                    } else {
+                        variant.place(xx, -1, zz, placer, placement, rng, (b, data) -> {
+                            String marker = placementMarker(variant, id, "procedural");
+                            if (marker != null) {
+                                writer.setData(b.getX(), b.getY(), b.getZ(), marker);
+                            }
+                        }, null, getData());
+                    }
                 } catch (Throwable e) {
                     Iris.reportError(e);
-                    Iris.error("Failed to place procedural tree '" + tree.getName() + "' in biome " + surfaceBiome.getName());
+                    Iris.error("Failed to place procedural object '" + p.getName() + "' in " + scope);
                     e.printStackTrace();
                 }
             }
@@ -1339,12 +1369,16 @@ public class MantleObjectComponent extends IrisMantleComponent {
 
         KSet<String> objects = new KSet<>();
         KMap<IrisObjectScale, KList<String>> scalars = new KMap<>();
+        KList<IrisObjectPlacement> vacuumPlacements = new KList<>();
         for (IrisRegion region : dimension.getAllRegions(this::getData)) {
             for (IrisObjectPlacement j : region.getObjects()) {
                 if (j.getScale().canScaleBeyond()) {
                     scalars.put(j.getScale(), j.getPlace());
                 } else {
                     objects.addAll(j.getPlace());
+                }
+                if (IrisObjectVacuum.isVacuumMode(j.getMode())) {
+                    vacuumPlacements.add(j);
                 }
             }
         }
@@ -1354,6 +1388,9 @@ public class MantleObjectComponent extends IrisMantleComponent {
                     scalars.put(j.getScale(), j.getPlace());
                 } else {
                     objects.addAll(j.getPlace());
+                }
+                if (IrisObjectVacuum.isVacuumMode(j.getMode())) {
+                    vacuumPlacements.add(j);
                 }
             }
         }
@@ -1368,6 +1405,10 @@ public class MantleObjectComponent extends IrisMantleComponent {
             for (String j : entry.getValue()) {
                 updateRadiusBounds(sizeCache, xg, zg, j, ms);
             }
+        }
+
+        for (IrisObjectPlacement j : vacuumPlacements) {
+            updateVacuumRadiusBounds(sizeCache, xg, zg, j);
         }
 
         return Math.max(xg.get(), zg.get());
@@ -1398,6 +1439,35 @@ public class MantleObjectComponent extends IrisMantleComponent {
             zg.getAndSet(Math.max((int) Math.ceil(bv.getBlockZ() * scale), zg.get()));
         } catch (Throwable e) {
             Iris.reportError(e);
+        }
+    }
+
+    private void updateVacuumRadiusBounds(
+            KMap<String, BlockVector> sizeCache,
+            AtomicInteger xg,
+            AtomicInteger zg,
+            IrisObjectPlacement placement
+    ) {
+        int pad = 2 * IrisObjectVacuum.resolveRadius(placement.getMode(), placement.getVacuumSettings());
+        if (pad <= 0) {
+            return;
+        }
+
+        double scale = placement.getScale() != null ? Math.max(1D, placement.getScale().getMaxScale()) : 1D;
+        for (String objectKey : placement.getPlace()) {
+            try {
+                BlockVector bv = loadObjectSize(sizeCache, objectKey);
+                if (bv == null) {
+                    continue;
+                }
+
+                int reachX = (int) Math.ceil(Math.abs(bv.getBlockX()) * scale) + pad;
+                int reachZ = (int) Math.ceil(Math.abs(bv.getBlockZ()) * scale) + pad;
+                xg.getAndSet(Math.max(reachX, xg.get()));
+                zg.getAndSet(Math.max(reachZ, zg.get()));
+            } catch (Throwable e) {
+                Iris.reportError(e);
+            }
         }
     }
 

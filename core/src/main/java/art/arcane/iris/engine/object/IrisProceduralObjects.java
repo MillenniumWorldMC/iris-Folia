@@ -31,14 +31,57 @@ import lombok.experimental.Accessors;
 @Accessors(chain = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Desc("Procedurally generated objects placed in a biome. Unlike the objects block (which loads iob files), these are generated from scratch at world-gen time.")
+@Desc("Procedurally generated objects placed in a biome or region. Unlike the objects block (which loads iob files), these are generated from scratch at world-gen time.")
 @Data
 public class IrisProceduralObjects {
     @ArrayType(min = 1, type = IrisProceduralTree.class)
-    @Desc("Procedurally generated trees placed in this biome.")
+    @Desc("Procedurally generated trees.")
     private KList<IrisProceduralTree> trees = new KList<>();
 
+    @ArrayType(min = 1, type = IrisRuin.class)
+    @Desc("Procedurally generated ruins (crumbling pillars, walls, arches, rubble).")
+    private KList<IrisRuin> ruins = new KList<>();
+
+    @ArrayType(min = 1, type = IrisFormation.class)
+    @Desc("Procedurally generated natural rock formations (spires, hoodoos, arches, sea stacks, boulders, basalt columns).")
+    private KList<IrisFormation> formations = new KList<>();
+
+    @ArrayType(min = 1, type = IrisCoral.class)
+    @Desc("Procedurally generated underwater coral structures.")
+    private KList<IrisCoral> coral = new KList<>();
+
+    @ArrayType(min = 1, type = IrisFungus.class)
+    @Desc("Procedurally generated mushrooms and shelf fungi.")
+    private KList<IrisFungus> fungi = new KList<>();
+
+    @ArrayType(min = 1, type = IrisCrystal.class)
+    @Desc("Procedurally generated crystal clusters (usually placed in caves).")
+    private KList<IrisCrystal> crystals = new KList<>();
+
+    public KList<IrisProceduralPlacement> getAllPlacements() {
+        KList<IrisProceduralPlacement> all = new KList<>();
+        if (trees != null) {
+            all.addAll(trees);
+        }
+        if (ruins != null) {
+            all.addAll(ruins);
+        }
+        if (formations != null) {
+            all.addAll(formations);
+        }
+        if (coral != null) {
+            all.addAll(coral);
+        }
+        if (fungi != null) {
+            all.addAll(fungi);
+        }
+        if (crystals != null) {
+            all.addAll(crystals);
+        }
+        return all;
+    }
+
     public boolean isEmpty() {
-        return trees == null || trees.isEmpty();
+        return getAllPlacements().isEmpty();
     }
 }

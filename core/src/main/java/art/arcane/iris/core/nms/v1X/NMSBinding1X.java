@@ -118,11 +118,6 @@ public class NMSBinding1X implements INMSBinding {
     }
 
     @Override
-    public boolean purgeChunk(World world, int x, int z) {
-        throw new UnsupportedOperationException("Regen is unavailable: Iris is running in Bukkit fallback mode (NMS disabled). Regen requires the native chunk system.");
-    }
-
-    @Override
     public KMap<Material, List<BlockProperty>> getBlockProperties() {
         KMap<Material, List<BlockProperty>> map = new KMap<>();
         for (Material m : Material.values()) {
@@ -212,11 +207,6 @@ public class NMSBinding1X implements INMSBinding {
             biomes.add(biome);
         }
         return biomes;
-    }
-
-    @Override
-    public boolean isBukkit() {
-        return true;
     }
 
     @Override

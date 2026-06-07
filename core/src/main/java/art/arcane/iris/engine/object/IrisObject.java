@@ -715,8 +715,7 @@ public class IrisObject extends IrisRegistrant {
         boolean organicFloor = config.getMode() == ObjectPlaceMode.ORGANIC_STILT;
         boolean ceilingHang = config.getMode() == ObjectPlaceMode.CEILING_HANG;
         boolean organic = organicFloor || ceilingHang;
-        boolean vacuuming = config.getMode() == ObjectPlaceMode.VACUUM || config.getMode() == ObjectPlaceMode.VACUUM_HIGH
-                || config.getMode() == ObjectPlaceMode.VACUUM_FAST || config.getMode() == ObjectPlaceMode.VACUUM_ORGANIC;
+        boolean vacuuming = IrisObjectVacuum.isVacuumMode(config.getMode());
         boolean stilting = (config.getMode().equals(ObjectPlaceMode.STILT) || config.getMode().equals(ObjectPlaceMode.FAST_STILT) ||
                 config.getMode() == ObjectPlaceMode.MIN_STILT || config.getMode() == ObjectPlaceMode.FAST_MIN_STILT ||
                 config.getMode() == ObjectPlaceMode.CENTER_STILT || config.getMode() == ObjectPlaceMode.ERODE_STILT || organic);
@@ -1365,11 +1364,13 @@ public class IrisObject extends IrisRegistrant {
 
         if (vacuuming && vacuumLowest != Integer.MAX_VALUE && placer.getEngine() != null) {
             BlockVector rotDim = config.getRotation().rotate(new BlockVector(getW(), getH(), getD()), spinx, spiny, spinz).clone();
-            int halfW = Math.max(0, Math.abs(rotDim.getBlockX()) / 2);
-            int halfD = Math.max(0, Math.abs(rotDim.getBlockZ()) / 2);
+            int lowX = IrisObjectVacuum.footprintLow(rotDim.getBlockX());
+            int highX = IrisObjectVacuum.footprintHigh(rotDim.getBlockX());
+            int lowZ = IrisObjectVacuum.footprintLow(rotDim.getBlockZ());
+            int highZ = IrisObjectVacuum.footprintHigh(rotDim.getBlockZ());
             int centerX = x + config.getTranslate().getX();
             int centerZ = z + config.getTranslate().getZ();
-            vacuumTerrain(placer, config, centerX, centerZ, halfW, halfD, vacuumLowest);
+            vacuumTerrain(placer, config, centerX, centerZ, lowX, highX, lowZ, highZ, vacuumLowest);
         }
 
         if (heightmap != null) {
@@ -1408,29 +1409,12 @@ public class IrisObject extends IrisRegistrant {
                 + "(forcePlace=false, fromBottom=false, mode!=FLOATING). Skipping to protect bedrock.");
     }
 
-    private void vacuumTerrain(IObjectPlacer placer, IrisObjectPlacement config, int centerX, int centerZ, int halfW, int halfD, int baseY) {
+    private void vacuumTerrain(IObjectPlacer placer, IrisObjectPlacement config, int centerX, int centerZ, int lowX, int highX, int lowZ, int highZ, int baseY) {
         ObjectPlaceMode mode = config.getMode();
         IrisVacuumSettings settings = config.getVacuumSettings();
-        int radius;
-        int step;
-        switch (mode) {
-            case VACUUM_HIGH -> {
-                radius = 20;
-                step = 1;
-            }
-            case VACUUM_FAST -> {
-                radius = 8;
-                step = 2;
-            }
-            default -> {
-                radius = 12;
-                step = 1;
-            }
-        }
-        if (settings != null && settings.getRadius() > 0) {
-            radius = settings.getRadius();
-        }
-        double falloff = settings != null ? Math.max(0.25, settings.getFalloff()) : 2.0;
+        int radius = IrisObjectVacuum.resolveRadius(mode, settings);
+        int step = IrisObjectVacuum.resolveStep(mode);
+        double falloff = IrisObjectVacuum.resolveFalloff(settings);
         int jitter = settings != null ? Math.max(0, settings.getOrganicJitter()) : 4;
         boolean organicEdge = mode == ObjectPlaceMode.VACUUM_ORGANIC;
         int meetY = baseY - 1;
@@ -1439,29 +1423,21 @@ public class IrisObject extends IrisRegistrant {
         int worldMin = placer.getEngine().getMinHeight();
         int worldMax = worldMin + placer.getEngine().getHeight() - 1;
 
-        for (int dx = -(halfW + radius); dx <= halfW + radius; dx += step) {
-            for (int dz = -(halfD + radius); dz <= halfD + radius; dz += step) {
+        for (int dx = lowX - radius; dx <= highX + radius; dx += step) {
+            for (int dz = lowZ - radius; dz <= highZ + radius; dz += step) {
                 int cx = centerX + dx;
                 int cz = centerZ + dz;
-                int outX = Math.max(0, Math.abs(dx) - halfW);
-                int outZ = Math.max(0, Math.abs(dz) - halfD);
-                double dist = Math.sqrt((double) (outX * outX) + (double) (outZ * outZ));
                 double effRadius = radius;
                 if (organicEdge && jitter > 0) {
                     long h = ((long) cx * 341873128712L) ^ ((long) cz * 132897987541L);
                     double n = ((Math.abs(h) % 1000) / 1000.0) - 0.5;
                     effRadius = Math.max(1.0, radius + (n * 2.0 * jitter));
                 }
-                if (dist > effRadius) {
-                    continue;
-                }
-                double t = 1.0 - (dist / effRadius);
-                if (t <= 0) {
-                    continue;
-                }
-                double factor = Math.pow(t, falloff);
                 int origY = placer.getHighest(cx, cz, getLoader(), true);
-                int targetY = (int) Math.round(origY + ((meetY - origY) * factor));
+                int targetY = IrisObjectVacuum.columnTargetY(dx, dz, lowX, highX, lowZ, highZ, effRadius, falloff, origY, meetY);
+                if (targetY == origY) {
+                    continue;
+                }
                 targetY = Math.max(worldMin + 1, Math.min(worldMax, targetY));
                 if (targetY > origY) {
                     BlockData fill = complex != null ? complex.getRockStream().get(cx, cz) : null;
