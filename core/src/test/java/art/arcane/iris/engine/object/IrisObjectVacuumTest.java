@@ -126,4 +126,21 @@ public class IrisObjectVacuumTest {
         assertFalse(IrisObjectVacuum.isVacuumMode(ObjectPlaceMode.PAINT));
         assertFalse(IrisObjectVacuum.isVacuumMode(ObjectPlaceMode.FLOATING));
     }
+
+    @Test
+    public void carveFloorPreservesBuriedObjectInsideFootprint() {
+        int surfaceY = 122;
+        int baseY = 110;
+        int topY = 119;
+        int meetY = baseY - 1;
+
+        int insideFloor = IrisObjectVacuum.carveFloorY(meetY, topY, true);
+        assertEquals("inside the footprint the carve must stop one above the object top", topY + 1, insideFloor);
+        assertTrue("inside carve must not reach the object's blocks", insideFloor > topY);
+        assertTrue("inside carve still removes the terrain burying the object", insideFloor <= surfaceY + 1);
+
+        int ringFloor = IrisObjectVacuum.carveFloorY(meetY, topY, false);
+        assertEquals("the ring carves down to the deformation target (the crater floor)", meetY + 1, ringFloor);
+        assertTrue("ring crater is deeper than the object-protected inside floor", ringFloor < insideFloor);
+    }
 }

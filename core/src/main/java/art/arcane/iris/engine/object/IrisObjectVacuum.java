@@ -90,4 +90,12 @@ public final class IrisObjectVacuum {
         double factor = Math.pow(t, Math.max(0.25, falloff));
         return (int) Math.round(originalY + ((meetY - originalY) * factor));
     }
+
+    public static int carveFloorY(int targetY, int objectTopY, boolean insideFootprint) {
+        int floor = targetY + 1;
+        if (insideFootprint) {
+            floor = Math.max(floor, objectTopY + 1);
+        }
+        return floor;
+    }
 }

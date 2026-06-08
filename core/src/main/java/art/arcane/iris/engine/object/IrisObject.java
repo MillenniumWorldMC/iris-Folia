@@ -963,6 +963,7 @@ public class IrisObject extends IrisRegistrant {
         int lowest = Integer.MAX_VALUE;
         int topLayer = Integer.MIN_VALUE;
         int vacuumLowest = Integer.MAX_VALUE;
+        int vacuumHighest = Integer.MIN_VALUE;
         y += yrand;
         readLock.lock();
 
@@ -1131,6 +1132,9 @@ public class IrisObject extends IrisRegistrant {
                     }
                     if (vacuuming && yy < vacuumLowest) {
                         vacuumLowest = yy;
+                    }
+                    if (vacuuming && yy > vacuumHighest) {
+                        vacuumHighest = yy;
                     }
                 }
             }
@@ -1370,7 +1374,7 @@ public class IrisObject extends IrisRegistrant {
             int highZ = IrisObjectVacuum.footprintHigh(rotDim.getBlockZ());
             int centerX = x + config.getTranslate().getX();
             int centerZ = z + config.getTranslate().getZ();
-            vacuumTerrain(placer, config, centerX, centerZ, lowX, highX, lowZ, highZ, vacuumLowest);
+            vacuumTerrain(placer, config, centerX, centerZ, lowX, highX, lowZ, highZ, vacuumLowest, vacuumHighest);
         }
 
         if (heightmap != null) {
@@ -1409,7 +1413,7 @@ public class IrisObject extends IrisRegistrant {
                 + "(forcePlace=false, fromBottom=false, mode!=FLOATING). Skipping to protect bedrock.");
     }
 
-    private void vacuumTerrain(IObjectPlacer placer, IrisObjectPlacement config, int centerX, int centerZ, int lowX, int highX, int lowZ, int highZ, int baseY) {
+    private void vacuumTerrain(IObjectPlacer placer, IrisObjectPlacement config, int centerX, int centerZ, int lowX, int highX, int lowZ, int highZ, int baseY, int topY) {
         ObjectPlaceMode mode = config.getMode();
         IrisVacuumSettings settings = config.getVacuumSettings();
         int radius = IrisObjectVacuum.resolveRadius(mode, settings);
@@ -1448,7 +1452,9 @@ public class IrisObject extends IrisRegistrant {
                         placer.set(cx, yy, cz, fill);
                     }
                 } else if (targetY < origY) {
-                    for (int yy = origY; yy > targetY; yy--) {
+                    boolean inside = IrisObjectVacuum.outset(dx, lowX, highX) == 0 && IrisObjectVacuum.outset(dz, lowZ, highZ) == 0;
+                    int carveFloor = IrisObjectVacuum.carveFloorY(targetY, topY, inside);
+                    for (int yy = origY; yy >= carveFloor; yy--) {
                         placer.set(cx, yy, cz, AIR);
                     }
                 }
