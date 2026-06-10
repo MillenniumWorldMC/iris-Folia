@@ -11,6 +11,7 @@ import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.io.IO;
 import art.arcane.iris.util.common.misc.ServerProperties;
 import org.bukkit.Bukkit;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
@@ -99,6 +100,16 @@ public class IrisWorlds {
             e.printStackTrace();
             Iris.reportError(e);
         }
+    }
+
+    public static Long readBukkitWorldSeed(String world) {
+        YamlConfiguration bukkit = YamlConfiguration.loadConfiguration(ServerProperties.BUKKIT_YML);
+        ConfigurationSection worlds = bukkit.getConfigurationSection("worlds");
+        if (worlds == null || !worlds.contains(world + ".seed")) {
+            return null;
+        }
+
+        return worlds.getLong(world + ".seed");
     }
 
     public static KMap<String, String> readBukkitWorlds() {

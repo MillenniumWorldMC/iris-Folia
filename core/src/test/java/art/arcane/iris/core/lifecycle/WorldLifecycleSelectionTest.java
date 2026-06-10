@@ -55,6 +55,30 @@ public class WorldLifecycleSelectionTest {
     }
 
     @Test
+    public void persistentCreateSelectsPaperLikeBackendOnFolia() {
+        WorldLifecycleService service = new WorldLifecycleService(CapabilitySnapshot.forTesting(ServerFamily.FOLIA, true, false, true));
+        WorldLifecycleRequest request = new WorldLifecycleRequest("persistent", World.Environment.NORMAL, null, null, null, true, false, 1337L, false, false, WorldLifecycleCaller.CREATE);
+
+        assertEquals("paper_like_runtime", service.selectCreateBackend(request).backendName());
+    }
+
+    @Test
+    public void persistentCreateSelectsPaperLikeBackendOnCanvas() {
+        WorldLifecycleService service = new WorldLifecycleService(CapabilitySnapshot.forTesting(ServerFamily.CANVAS, true, false, true));
+        WorldLifecycleRequest request = new WorldLifecycleRequest("persistent", World.Environment.NORMAL, null, null, null, true, false, 1337L, false, false, WorldLifecycleCaller.CREATE);
+
+        assertEquals("paper_like_runtime", service.selectCreateBackend(request).backendName());
+    }
+
+    @Test
+    public void persistentCreateFallsBackToBukkitBackendOnFoliaWithoutRuntime() {
+        WorldLifecycleService service = new WorldLifecycleService(CapabilitySnapshot.forTesting(ServerFamily.FOLIA, true, false, false));
+        WorldLifecycleRequest request = new WorldLifecycleRequest("persistent", World.Environment.NORMAL, null, null, null, true, false, 1337L, false, false, WorldLifecycleCaller.CREATE);
+
+        assertEquals("bukkit_public", service.selectCreateBackend(request).backendName());
+    }
+
+    @Test
     public void unloadUsesRememberedBackendFamily() {
         WorldLifecycleService service = new WorldLifecycleService(CapabilitySnapshot.forTesting(ServerFamily.PURPUR, false, false, true));
 

@@ -19,14 +19,15 @@
 package art.arcane.iris.core.runtime;
 
 import art.arcane.iris.Iris;
+import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.mantle.runtime.Mantle;
 import org.bukkit.Chunk;
+import org.bukkit.ChunkSnapshot;
 import org.bukkit.Material;
 import org.bukkit.World;
-import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
@@ -118,20 +119,24 @@ public final class ChunkClearer {
             }
         }
 
-        int minHeight = world.getMinHeight();
-        int maxHeight = world.getMaxHeight();
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-                for (int y = minHeight; y < maxHeight; y++) {
-                    Block live = chunk.getBlock(x, y, z);
-                    if (live.getType() != Material.AIR) {
-                        live.setType(Material.AIR, false);
-                    }
-                }
-            }
+        if (!INMS.get().clearChunkBlocks(chunk)) {
+            clearBlocks(chunk, chunk.getChunkSnapshot(true, false, false), world.getMinHeight(), world.getMaxHeight());
         }
 
         mantle.deleteChunk(chunkX, chunkZ);
         world.refreshChunk(chunkX, chunkZ);
+    }
+
+    static void clearBlocks(Chunk chunk, ChunkSnapshot snapshot, int minHeight, int maxHeight) {
+        for (int x = 0; x < 16; x++) {
+            for (int z = 0; z < 16; z++) {
+                int top = Math.min(maxHeight - 1, snapshot.getHighestBlockYAt(x, z) + 1);
+                for (int y = minHeight; y <= top; y++) {
+                    if (snapshot.getBlockType(x, y, z) != Material.AIR) {
+                        chunk.getBlock(x, y, z).setType(Material.AIR, false);
+                    }
+                }
+            }
+        }
     }
 }

@@ -113,7 +113,12 @@ public final class StudioOpenCoordinator {
             }
 
             updateStage(request, "apply_world_rules", 0.72D);
-            WorldRuntimeControlService.get().applyStudioWorldRules(world);
+            final World rulesWorld = world;
+            CompletableFuture<Boolean> rulesApplied =
+                    J.sfut(() -> WorldRuntimeControlService.get().applyStudioWorldRules(rulesWorld));
+            if (rulesApplied != null) {
+                rulesApplied.get(15L, TimeUnit.SECONDS);
+            }
             t = logStudioPhase("applyStudioWorldRules", t, openStart);
 
             updateStage(request, "prepare_generator", 0.78D);
@@ -157,7 +162,12 @@ public final class StudioOpenCoordinator {
                     throw new IllegalStateException("Player \"" + request.playerName() + "\" is not online.");
                 }
 
-                Boolean teleported = WorldRuntimeControlService.get().teleport(player, safeEntry).get(10L, TimeUnit.SECONDS);
+                Boolean teleported;
+                try {
+                    teleported = WorldRuntimeControlService.get().teleport(player, safeEntry).get(60L, TimeUnit.SECONDS);
+                } catch (TimeoutException e) {
+                    throw new IllegalStateException("Studio teleport timed out — destination region may still be generating.");
+                }
                 if (!Boolean.TRUE.equals(teleported)) {
                     throw new IllegalStateException("Studio teleport did not complete successfully.");
                 }

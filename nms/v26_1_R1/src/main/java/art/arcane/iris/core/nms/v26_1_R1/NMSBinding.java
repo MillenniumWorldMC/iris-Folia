@@ -8,6 +8,7 @@ import art.arcane.iris.core.nms.container.Pair;
 import art.arcane.iris.core.nms.container.BlockProperty;
 import art.arcane.iris.core.nms.datapack.DataVersion;
 import art.arcane.iris.engine.data.cache.AtomicCache;
+import art.arcane.iris.engine.data.chunk.TerrainChunk;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
 import art.arcane.iris.util.project.agent.Agent;
@@ -40,6 +41,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.commands.data.BlockDataAccessor;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ThreadedLevelLightEngine;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.entity.EntityType;
@@ -54,11 +56,13 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.chunk.status.WorldGenContext;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.FlatLevelSource;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.WorldgenRandom;
 import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
 import net.minecraft.world.level.levelgen.feature.AbstractHugeMushroomFeature;
@@ -78,6 +82,7 @@ import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.craftbukkit.block.CraftBlockState;
 import org.bukkit.craftbukkit.block.CraftBlockStates;
 import org.bukkit.craftbukkit.block.data.CraftBlockData;
+import org.bukkit.craftbukkit.generator.CraftChunkData;
 import org.bukkit.craftbukkit.inventory.CraftItemStack;
 import org.bukkit.craftbukkit.util.CraftMagicNumbers;
 import org.bukkit.craftbukkit.util.CraftNamespacedKey;
@@ -715,6 +720,100 @@ public class NMSBinding implements INMSBinding {
                     r.getAndIncrement();
                 }
             }
+        });
+    }
+
+    @Override
+    public boolean applyChunkBlocks(Chunk bukkitChunk, TerrainChunk data) {
+        if (!(data.getChunkData() instanceof CraftChunkData chunkData)) {
+            return false;
+        }
+
+        try {
+            ServerLevel level = ((CraftWorld) bukkitChunk.getWorld()).getHandle();
+            LevelChunk chunk = level.getChunk(bukkitChunk.getX(), bukkitChunk.getZ());
+            ChunkAccess source = chunkData.getHandle();
+            removeBlockEntities(chunk);
+
+            int minY = level.getMinY();
+            int baseX = chunk.getPos().getMinBlockX();
+            int baseZ = chunk.getPos().getMinBlockZ();
+            for (int i = 0; i < chunk.getSectionsCount(); i++) {
+                LevelChunkSection target = chunk.getSection(i);
+                LevelChunkSection from = source.getSection(i);
+                if (from.hasOnlyAir() && target.hasOnlyAir()) {
+                    continue;
+                }
+
+                int sectionBaseY = minY + (i << 4);
+                for (int y = 0; y < 16; y++) {
+                    for (int z = 0; z < 16; z++) {
+                        for (int x = 0; x < 16; x++) {
+                            BlockState state = from.getBlockState(x, y, z);
+                            target.setBlockState(x, y, z, state, false);
+                            if (state.hasBlockEntity() && state.getBlock() instanceof EntityBlock entityBlock) {
+                                BlockPos pos = new BlockPos(baseX + x, sectionBaseY + y, baseZ + z);
+                                BlockEntity entity = entityBlock.newBlockEntity(pos, state);
+                                if (entity != null) {
+                                    chunk.setBlockEntity(entity);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            finishChunkRewrite(level, chunk);
+            return true;
+        } catch (Throwable e) {
+            Iris.reportError(e);
+            return false;
+        }
+    }
+
+    @Override
+    public boolean clearChunkBlocks(Chunk bukkitChunk) {
+        try {
+            ServerLevel level = ((CraftWorld) bukkitChunk.getWorld()).getHandle();
+            LevelChunk chunk = level.getChunk(bukkitChunk.getX(), bukkitChunk.getZ());
+            removeBlockEntities(chunk);
+
+            BlockState air = ((CraftBlockData) AIR).getState();
+            for (int i = 0; i < chunk.getSectionsCount(); i++) {
+                LevelChunkSection section = chunk.getSection(i);
+                if (section.hasOnlyAir()) {
+                    continue;
+                }
+
+                for (int y = 0; y < 16; y++) {
+                    for (int z = 0; z < 16; z++) {
+                        for (int x = 0; x < 16; x++) {
+                            section.setBlockState(x, y, z, air, false);
+                        }
+                    }
+                }
+            }
+
+            finishChunkRewrite(level, chunk);
+            return true;
+        } catch (Throwable e) {
+            Iris.reportError(e);
+            return false;
+        }
+    }
+
+    private void removeBlockEntities(LevelChunk chunk) {
+        for (BlockPos pos : new ArrayList<>(chunk.getBlockEntities().keySet())) {
+            chunk.removeBlockEntity(pos);
+        }
+    }
+
+    private void finishChunkRewrite(ServerLevel level, LevelChunk chunk) {
+        Heightmap.primeHeightmaps(chunk, ChunkStatus.FULL.heightmapsAfter());
+        chunk.markUnsaved();
+        ThreadedLevelLightEngine lightEngine = (ThreadedLevelLightEngine) level.getChunkSource().getLightEngine();
+        lightEngine.starlight$serverRelightChunks(List.of(chunk.getPos()), p -> {
+        }, c -> {
         });
     }
 

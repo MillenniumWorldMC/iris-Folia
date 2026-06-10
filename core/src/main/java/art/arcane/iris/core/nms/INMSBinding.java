@@ -26,6 +26,7 @@ import art.arcane.iris.core.nms.container.BiomeColor;
 import art.arcane.iris.core.nms.container.BlockProperty;
 import art.arcane.iris.core.nms.datapack.DataVersion;
 import art.arcane.iris.util.common.scheduling.J;
+import art.arcane.iris.engine.data.chunk.TerrainChunk;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
 import art.arcane.volmlib.util.collection.KList;
@@ -166,6 +167,14 @@ public interface INMSBinding {
     }
 
     MCAPaletteAccess createPalette();
+
+    default boolean applyChunkBlocks(Chunk chunk, TerrainChunk data) {
+        return false;
+    }
+
+    default boolean clearChunkBlocks(Chunk chunk) {
+        return false;
+    }
 
     void injectBiomesFromMantle(Chunk e, Mantle<Matter> mantle);
 

@@ -74,7 +74,7 @@ public class StudioSVC implements IrisService {
                     Iris.info("Downloading Default Pack " + pack + " (latest on master)");
                     Iris.service(StudioSVC.class).downloadBranch(Iris.getSender(), "IrisDimensions/overworld", "master", false);
                 } else {
-                    Iris.warn("Default pack '" + pack + "' is not installed. Please download it manually with /iris download");
+                    Iris.warn("Default pack '" + pack + "' is not installed. Please download it manually with /iris download " + pack);
                 }
             }
         });
@@ -216,7 +216,7 @@ public class StudioSVC implements IrisService {
 
             if (url == null) {
                 sender.sendMessage("Pack '" + key + "' was not found in the pack listing.");
-                sender.sendMessage("Use /iris download <user/repo> <branch> to download manually.");
+                sender.sendMessage("Use /iris download <pack> branch=<branch> to download manually.");
                 return;
             }
 
@@ -267,7 +267,7 @@ public class StudioSVC implements IrisService {
         if (zip == null || !zip.exists()) {
             sender.sendMessage("Failed to find pack at " + url);
             sender.sendMessage("Make sure you specified the correct repo and branch!");
-            sender.sendMessage("For example: /iris download IrisDimensions/overworld branch=stable");
+            sender.sendMessage("For example: /iris download overworld branch=stable");
             return;
         }
         sender.sendMessage("Unpacking " + repo);

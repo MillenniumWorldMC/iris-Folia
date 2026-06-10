@@ -14,6 +14,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.generator.ChunkGenerator;
 
 import java.io.File;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -21,6 +22,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -250,6 +252,63 @@ final class WorldLifecycleSupport {
         boolean modified = Boolean.TRUE.equals(shouldReportAsModifiedMethod.invoke(modCheck));
         String modName = (String) getServerModNameMethod.invoke(capabilities.minecraftServer());
         setModdedInfoMethod.invoke(worldData, modName, modified);
+    }
+
+    static boolean hasExistingWorldData(String worldName) {
+        File worldFolder = new File(Bukkit.getWorldContainer(), worldName);
+        return new File(worldFolder, "level.dat").exists()
+                || new File(worldFolder, "region").exists()
+                || new File(worldFolder, "data").exists();
+    }
+
+    static Object applySeedToWorldDataAndGenSettings(Object worldDataAndGenSettings, long seed) throws ReflectiveOperationException {
+        Method genSettingsMethod = CapabilityResolution.resolveMethod(worldDataAndGenSettings.getClass(), "genSettings", method -> method.getParameterCount() == 0);
+        Method dataMethod = CapabilityResolution.resolveMethod(worldDataAndGenSettings.getClass(), "data", method -> method.getParameterCount() == 0);
+        if (genSettingsMethod == null || dataMethod == null) {
+            throw new IllegalStateException("WorldDataAndGenSettings does not expose data()/genSettings().");
+        }
+
+        Object genSettings = genSettingsMethod.invoke(worldDataAndGenSettings);
+        Method optionsMethod = CapabilityResolution.resolveMethod(genSettings.getClass(), "options", method -> method.getParameterCount() == 0);
+        Method dimensionsMethod = CapabilityResolution.resolveMethod(genSettings.getClass(), "dimensions", method -> method.getParameterCount() == 0);
+        if (optionsMethod == null || dimensionsMethod == null) {
+            throw new IllegalStateException("WorldGenSettings does not expose options()/dimensions().");
+        }
+
+        Object options = optionsMethod.invoke(genSettings);
+        Method seedMethod = CapabilityResolution.resolveMethod(options.getClass(), "seed", method -> method.getParameterCount() == 0 && long.class.equals(method.getReturnType()));
+        Method withSeedMethod = CapabilityResolution.resolveMethod(options.getClass(), "withSeed", method -> {
+            Class<?>[] params = method.getParameterTypes();
+            return params.length == 1 && OptionalLong.class.equals(params[0]);
+        });
+        if (seedMethod == null || withSeedMethod == null) {
+            throw new IllegalStateException("WorldOptions does not expose seed()/withSeed(OptionalLong).");
+        }
+
+        long currentSeed = (long) seedMethod.invoke(options);
+        if (currentSeed == seed) {
+            return worldDataAndGenSettings;
+        }
+
+        Object newOptions = withSeedMethod.invoke(options, OptionalLong.of(seed));
+        Object newGenSettings = construct(genSettings.getClass(), newOptions, dimensionsMethod.invoke(genSettings));
+        return construct(worldDataAndGenSettings.getClass(), dataMethod.invoke(worldDataAndGenSettings), newGenSettings);
+    }
+
+    private static Object construct(Class<?> type, Object first, Object second) throws ReflectiveOperationException {
+        for (Constructor<?> constructor : type.getDeclaredConstructors()) {
+            Class<?>[] params = constructor.getParameterTypes();
+            if (params.length != 2) {
+                continue;
+            }
+
+            if ((first == null || params[0].isInstance(first)) && (second == null || params[1].isInstance(second))) {
+                constructor.setAccessible(true);
+                return constructor.newInstance(first, second);
+            }
+        }
+
+        throw new IllegalStateException("No compatible two-argument constructor on " + type.getName());
     }
 
     static Object createCurrentWorldDataAndSettings(CapabilitySnapshot capabilities, String worldName) throws ReflectiveOperationException {

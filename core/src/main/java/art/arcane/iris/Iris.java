@@ -25,6 +25,7 @@ import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.IrisWorlds;
 import art.arcane.iris.core.ServerConfigurator;
 import art.arcane.iris.core.datapack.DatapackIngestService;
+import art.arcane.iris.core.lifecycle.PaperLibBootstrap;
 import art.arcane.iris.core.lifecycle.WorldLifecycleService;
 import art.arcane.iris.core.runtime.TransientWorldCleanupSupport;
 import art.arcane.iris.core.runtime.WorldRuntimeControlService;
@@ -545,6 +546,7 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
     }
 
     private void enable() {
+        PaperLibBootstrap.install();
         services = new KMap<>();
         setupAudience();
         Bindings.setupSentry();
@@ -575,7 +577,7 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
         WorldRuntimeControlService.get();
 
         if (J.isFolia()) {
-            checkForBukkitWorlds(s -> true);
+            J.s(() -> checkForBukkitWorlds(s -> true), 1);
         }
 
         J.s(() -> {
@@ -641,6 +643,10 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
                     WorldCreator c = new WorldCreator(s)
                             .generator(gen)
                             .environment(dim.getEnvironment());
+                    Long stagedSeed = IrisWorlds.readBukkitWorldSeed(s);
+                    if (stagedSeed != null) {
+                        c.seed(stagedSeed);
+                    }
                     INMS.get().createWorld(c);
                     Iris.info(C.LIGHT_PURPLE + "Loaded " + s + "!");
                 } catch (Throwable e) {
@@ -661,8 +667,8 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
                 }
             });
             if (!deferredStartupWorlds.isEmpty()) {
-                Iris.warn("World init delayed on Folia until server world-init phase for staged Iris worlds: %s", String.join(", ", deferredStartupWorlds));
-                Iris.warn("Bukkit.createWorld is intentionally unavailable in this startup phase. Worlds remain staged in bukkit.yml.");
+                Iris.warn("Staged Iris worlds could not load on Folia: %s", String.join(", ", deferredStartupWorlds));
+                Iris.warn("Bukkit.createWorld is unsupported on this server and the Iris runtime world backend is unavailable (%s).", WorldLifecycleService.get().capabilities().paperLikeResolution());
             }
         } catch (Throwable e) {
             reportError("Failed while loading startup Iris worlds.", e);

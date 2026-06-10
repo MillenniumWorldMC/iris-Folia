@@ -17,9 +17,15 @@ final class PaperLikeRuntimeBackend implements WorldLifecycleBackend {
 
     @Override
     public boolean supports(WorldLifecycleRequest request, CapabilitySnapshot capabilities) {
-        return request.studio()
-                && capabilities.serverFamily().isPaperLike()
-                && capabilities.hasPaperLikeRuntime();
+        if (!capabilities.serverFamily().isPaperLike() || !capabilities.hasPaperLikeRuntime()) {
+            return false;
+        }
+
+        if (request.studio()) {
+            return true;
+        }
+
+        return capabilities.serverFamily() == ServerFamily.FOLIA || capabilities.regionizedRuntime();
     }
 
     @Override
@@ -50,6 +56,9 @@ final class PaperLikeRuntimeBackend implements WorldLifecycleBackend {
                 Object worldLoadingInfo = capabilities.worldLoadingInfoConstructor().newInstance(request.environment(), stemKey, dimensionKey, !request.studio());
                 Object worldLoadingInfoAndData = capabilities.worldLoadingInfoAndDataConstructor().newInstance(worldLoadingInfo, loadedWorldData);
                 Object worldDataAndGenSettings = WorldLifecycleSupport.createCurrentWorldDataAndSettings(capabilities, request.worldName());
+                if (!WorldLifecycleSupport.hasExistingWorldData(request.worldName())) {
+                    worldDataAndGenSettings = WorldLifecycleSupport.applySeedToWorldDataAndGenSettings(worldDataAndGenSettings, request.seed());
+                }
                 capabilities.createLevelMethod().invoke(capabilities.minecraftServer(), levelStem, worldLoadingInfoAndData, worldDataAndGenSettings);
             } else {
                 legacyStorageAccess = WorldLifecycleSupport.createLegacyStorageAccess(capabilities, request.worldName());

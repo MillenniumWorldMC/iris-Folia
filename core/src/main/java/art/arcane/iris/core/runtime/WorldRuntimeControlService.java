@@ -80,6 +80,7 @@ public final class WorldRuntimeControlService {
         }
 
         Iris.linkMultiverseCore.removeFromConfig(world);
+        setIntGameRule(world, 0, "SPAWN_CHUNK_RADIUS", "spawnChunkRadius");
         if (!IrisSettings.get().getStudio().isDisableTimeAndWeather()) {
             return true;
         }
@@ -247,26 +248,30 @@ public final class WorldRuntimeControlService {
 
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         boolean scheduled = J.runEntity(player, () -> {
-            CompletableFuture<Boolean> teleportFuture = PaperLib.teleportAsync(player, location);
-            if (teleportFuture == null) {
-                future.complete(false);
-                return;
+            try {
+                CompletableFuture<Boolean> teleportFuture = PaperLib.teleportAsync(player, location);
+                if (teleportFuture == null) {
+                    future.complete(false);
+                    return;
+                }
+
+                teleportFuture.whenComplete((success, throwable) -> {
+                    if (throwable != null) {
+                        future.completeExceptionally(throwable);
+                        return;
+                    }
+
+                    if (Boolean.TRUE.equals(success)) {
+                        J.runEntity(player, () -> Iris.service(BoardSVC.class).updatePlayer(player));
+                        future.complete(true);
+                        return;
+                    }
+
+                    future.complete(false);
+                });
+            } catch (Throwable t) {
+                future.completeExceptionally(t);
             }
-
-            teleportFuture.whenComplete((success, throwable) -> {
-                if (throwable != null) {
-                    future.completeExceptionally(throwable);
-                    return;
-                }
-
-                if (Boolean.TRUE.equals(success)) {
-                    J.runEntity(player, () -> Iris.service(BoardSVC.class).updatePlayer(player));
-                    future.complete(true);
-                    return;
-                }
-
-                future.complete(false);
-            });
         });
         if (!scheduled) {
             return CompletableFuture.failedFuture(new IllegalStateException("Failed to schedule teleport for " + player.getName() + "."));

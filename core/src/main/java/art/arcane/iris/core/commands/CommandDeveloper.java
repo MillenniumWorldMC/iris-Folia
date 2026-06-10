@@ -219,7 +219,12 @@ public class CommandDeveloper implements DirectorExecutor {
     }
 
     @Director(description = "Test")
-    public void mantle(@Param(defaultValue = "false") boolean plate, @Param(defaultValue = "21474836474") String name) throws Throwable {
+    public void mantle(
+            @Param(name = "plate", description = "Dump the whole tectonic plate instead of a single section", defaultValue = "false")
+            boolean plate,
+            @Param(name = "name", description = "The dump file id under plugins/Iris/dump (pv.<id>.*)", defaultValue = "21474836474")
+            String name
+    ) throws Throwable {
         var base = Iris.instance.getDataFile("dump", "pv." + name + ".ttp.lz4b.bin");
         var section = Iris.instance.getDataFile("dump", "pv." + name + ".section.bin");
 
@@ -256,7 +261,7 @@ public class CommandDeveloper implements DirectorExecutor {
 
     @Director(description = "test")
     public void mca (
-            @Param(description = "String") String world) {
+            @Param(description = "The world folder to scan for .mca region files") String world) {
         try {
             File[] McaFiles = new File(world, "region").listFiles((dir, name) -> name.endsWith(".mca"));
             for (File mca : McaFiles) {

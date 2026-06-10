@@ -115,11 +115,7 @@ public class CommandIris implements DirectorExecutor {
             @Param(description = "The seed to generate the world with", defaultValue = "1337")
             long seed,
             @Param(aliases = "main-world", description = "Whether or not to automatically use this world as the main world", defaultValue = "false")
-            boolean main,
-            @Param(aliases = {"remove-others", "removeothers"}, description = "When main-world is true, remove other Iris worlds from bukkit.yml and queue deletion on startup", defaultValue = "false")
-            boolean removeOthers,
-            @Param(aliases = {"remove-worlds", "removeworlds"}, description = "Comma-separated world names to remove from Iris control and delete on next startup (main-world only)", defaultValue = "none")
-            String removeWorlds
+            boolean main
     ) {
         if (name.equalsIgnoreCase("iris")) {
             sender().sendMessage(C.RED + "You cannot use the world name \"iris\" for creating worlds as Iris uses this directory for studio worlds.");
@@ -146,18 +142,12 @@ public class CommandIris implements DirectorExecutor {
         if (dimension == null) {
             sender().sendMessage(C.RED + "Could not find or download dimension \"" + resolvedType + "\".");
             sender().sendMessage(C.YELLOW + "Try one of: overworld, vanilla, flat, theend");
-            sender().sendMessage(C.YELLOW + "Or download manually: /iris download IrisDimensions/" + resolvedType);
+            sender().sendMessage(C.YELLOW + "Or download manually: /iris download " + resolvedType);
             return;
         }
 
-        if (!main && (removeOthers || hasExplicitCleanupWorlds(removeWorlds))) {
-            sender().sendMessage(C.YELLOW + "remove-others/remove-worlds only apply when main-world=true. Ignoring cleanup options.");
-            removeOthers = false;
-            removeWorlds = "none";
-        }
-
         if (J.isFolia()) {
-            if (stageFoliaWorldCreation(name, dimension, seed, main, removeOthers, removeWorlds)) {
+            if (stageFoliaWorldCreation(name, dimension, seed, main)) {
                 sender().sendMessage(C.GREEN + "World staging completed. Restart the server to generate/load \"" + name + "\".");
             }
             return;
@@ -181,11 +171,6 @@ public class CommandIris implements DirectorExecutor {
         } catch (Throwable e) {
             sender().sendMessage(C.RED + "Exception raised during creation. See the console for more details.");
             Iris.reportError("Exception raised during world creation for \"" + name + "\".", e);
-            worldCreation = false;
-            return;
-        }
-
-        if (main && !applyMainWorldCleanup(name, removeOthers, removeWorlds)) {
             worldCreation = false;
             return;
         }
@@ -230,7 +215,7 @@ public class CommandIris implements DirectorExecutor {
         }
     }
 
-    private boolean stageFoliaWorldCreation(String name, IrisDimension dimension, long seed, boolean main, boolean removeOthers, String removeWorlds) {
+    private boolean stageFoliaWorldCreation(String name, IrisDimension dimension, long seed, boolean main) {
         sender().sendMessage(C.YELLOW + "Runtime world creation is disabled on Folia.");
         sender().sendMessage(C.YELLOW + "Preparing world files and bukkit.yml for next startup...");
 
@@ -250,11 +235,6 @@ public class CommandIris implements DirectorExecutor {
                 sender().sendMessage(C.GREEN + "Updated server.properties level-name to \"" + name + "\".");
             } else {
                 sender().sendMessage(C.RED + "World was staged, but failed to update server.properties main world.");
-                return false;
-            }
-
-            if (!applyMainWorldCleanup(name, removeOthers, removeWorlds)) {
-                sender().sendMessage(C.RED + "World was staged, but failed to apply main-world cleanup options.");
                 return false;
             }
         }
@@ -293,126 +273,6 @@ public class CommandIris implements DirectorExecutor {
             Iris.reportError(e);
             return false;
         }
-    }
-
-    private boolean applyMainWorldCleanup(String mainWorld, boolean removeOthers, String removeWorlds) {
-        Set<String> targets = resolveCleanupTargets(mainWorld, removeOthers, removeWorlds);
-        if (targets.isEmpty()) {
-            return true;
-        }
-
-        sender().sendMessage(C.YELLOW + "Applying main-world cleanup for " + targets.size() + " world(s).");
-
-        YamlConfiguration yml = YamlConfiguration.loadConfiguration(BUKKIT_YML);
-        ConfigurationSection worlds = yml.getConfigurationSection("worlds");
-
-        Set<String> removedFromBukkit = new LinkedHashSet<>();
-        Set<String> notRemoved = new LinkedHashSet<>();
-        for (String target : targets) {
-            String key = findWorldKeyIgnoreCase(worlds, target);
-            if (key == null) {
-                notRemoved.add(target);
-                continue;
-            }
-
-            String generator = worlds.getString(key + ".generator");
-            if (generator == null || !(generator.equalsIgnoreCase("iris") || generator.startsWith("Iris:"))) {
-                notRemoved.add(key);
-                continue;
-            }
-
-            worlds.set(key, null);
-            removedFromBukkit.add(key);
-        }
-
-        try {
-            if (worlds != null && worlds.getKeys(false).isEmpty()) {
-                yml.set("worlds", null);
-            }
-
-            if (!removedFromBukkit.isEmpty()) {
-                yml.save(BUKKIT_YML);
-            }
-        } catch (IOException e) {
-            sender().sendMessage(C.RED + "Failed to update bukkit.yml while applying cleanup: " + e.getMessage());
-            Iris.reportError(e);
-            return false;
-        }
-
-        try {
-            int queued = Iris.queueWorldDeletionOnStartup(targets);
-            if (queued > 0) {
-                sender().sendMessage(C.GREEN + "Queued " + queued + " world folder(s) for deletion on next startup.");
-            } else {
-                sender().sendMessage(C.YELLOW + "Cleanup queue already contained the requested world folder(s).");
-            }
-        } catch (IOException e) {
-            sender().sendMessage(C.RED + "Failed to queue startup world deletions: " + e.getMessage());
-            Iris.reportError(e);
-            return false;
-        }
-
-        if (!removedFromBukkit.isEmpty()) {
-            sender().sendMessage(C.GREEN + "Removed from Iris control in bukkit.yml: " + String.join(", ", removedFromBukkit));
-        }
-
-        if (!notRemoved.isEmpty()) {
-            sender().sendMessage(C.YELLOW + "Skipped from bukkit.yml removal (not found or non-Iris generator): " + String.join(", ", notRemoved));
-        }
-
-        return true;
-    }
-
-    private Set<String> resolveCleanupTargets(String mainWorld, boolean removeOthers, String removeWorlds) {
-        Set<String> targets = new LinkedHashSet<>();
-        if (removeOthers) {
-            IrisWorlds.readBukkitWorlds().keySet().stream()
-                    .filter(world -> !world.equalsIgnoreCase(mainWorld))
-                    .forEach(targets::add);
-        }
-
-        if (hasExplicitCleanupWorlds(removeWorlds)) {
-            for (String raw : removeWorlds.split("[,;\\s]+")) {
-                if (raw == null || raw.isBlank()) {
-                    continue;
-                }
-
-                if (raw.equalsIgnoreCase(mainWorld)) {
-                    continue;
-                }
-
-                targets.add(raw.trim());
-            }
-        }
-
-        return targets;
-    }
-
-    private static boolean hasExplicitCleanupWorlds(String removeWorlds) {
-        if (removeWorlds == null) {
-            return false;
-        }
-
-        String trimmed = removeWorlds.trim();
-        return !trimmed.isEmpty() && !trimmed.equalsIgnoreCase("none");
-    }
-
-    private static String findWorldKeyIgnoreCase(ConfigurationSection worlds, String requested) {
-        if (worlds == null || requested == null) {
-            return null;
-        }
-
-        if (worlds.contains(requested)) {
-            return requested;
-        }
-
-        for (String key : worlds.getKeys(false)) {
-            if (key.equalsIgnoreCase(requested)) {
-                return key;
-            }
-        }
-
-        return null;
     }
 
     @Director(description = "Teleport to another world", aliases = {"tp"}, sync = true)
@@ -595,7 +455,7 @@ public class CommandIris implements DirectorExecutor {
 
     @Director(description = "Download a project.", aliases = "dl")
     public void download(
-            @Param(name = "pack", description = "The pack to download", defaultValue = "overworld", aliases = "project")
+            @Param(name = "pack", description = "The pack to download", aliases = "project")
             String pack,
             @Param(name = "branch", description = "The branch to download from", defaultValue = "stable")
             String branch,

@@ -19,20 +19,23 @@
 package art.arcane.iris.core.runtime;
 
 import art.arcane.iris.Iris;
+import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.engine.data.chunk.TerrainChunk;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.mantle.EngineMantle;
+import art.arcane.iris.util.common.parallel.MultiBurst;
 import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.mantle.runtime.Mantle;
 import org.bukkit.Chunk;
+import org.bukkit.ChunkSnapshot;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Biome;
-import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -102,37 +105,40 @@ public final class InPlaceChunkRegenerator {
             int chunkX = target[0];
             int chunkZ = target[1];
 
-            TerrainChunk buffer = TerrainChunk.create(world);
-            try {
-                engine.generate(chunkX << 4, chunkZ << 4, buffer, false);
-            } catch (Throwable e) {
-                Iris.reportError(e);
-                reporter.countApplied(false);
-                allApplied.countDown();
-                continue;
-            }
-
             inFlight.acquire();
-            boolean scheduled = J.runRegion(world, chunkX, chunkZ, () -> {
-                boolean ok = false;
+            MultiBurst.burst.lazy(() -> {
+                TerrainChunk buffer = TerrainChunk.create(world);
                 try {
-                    applyToLiveChunk(chunkX, chunkZ, buffer);
-                    ok = true;
+                    engine.generate(chunkX << 4, chunkZ << 4, buffer, false);
                 } catch (Throwable e) {
                     Iris.reportError(e);
-                } finally {
-                    reporter.countApplied(ok);
+                    reporter.countApplied(false);
+                    inFlight.release();
+                    allApplied.countDown();
+                    return;
+                }
+
+                boolean scheduled = J.runRegion(world, chunkX, chunkZ, () -> {
+                    boolean ok = false;
+                    try {
+                        applyToLiveChunk(chunkX, chunkZ, buffer);
+                        ok = true;
+                    } catch (Throwable e) {
+                        Iris.reportError(e);
+                    } finally {
+                        reporter.countApplied(ok);
+                        inFlight.release();
+                        allApplied.countDown();
+                    }
+                });
+
+                if (!scheduled) {
+                    Iris.warn("Regen could not schedule chunk apply at " + chunkX + "," + chunkZ + " in " + world.getName() + ".");
+                    reporter.countApplied(false);
                     inFlight.release();
                     allApplied.countDown();
                 }
             });
-
-            if (!scheduled) {
-                Iris.warn("Regen could not schedule chunk apply at " + chunkX + "," + chunkZ + " in " + world.getName() + ".");
-                reporter.countApplied(false);
-                inFlight.release();
-                allApplied.countDown();
-            }
         }
 
         allApplied.await();
@@ -148,20 +154,8 @@ public final class InPlaceChunkRegenerator {
 
         int minHeight = world.getMinHeight();
         int maxHeight = world.getMaxHeight();
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-                for (int y = minHeight; y < maxHeight; y++) {
-                    BlockData data = buffer.getBlockData(x, y, z);
-                    if (data == null) {
-                        continue;
-                    }
-                    Block live = chunk.getBlock(x, y, z);
-                    if (data.getMaterial() == Material.AIR && live.getType() == Material.AIR) {
-                        continue;
-                    }
-                    live.setBlockData(data, false);
-                }
-            }
+        if (!INMS.get().applyChunkBlocks(chunk, buffer)) {
+            applyBlockDiffs(chunk, chunk.getChunkSnapshot(false, false, false), buffer.getChunkData(), minHeight, maxHeight);
         }
 
         int baseX = chunkX << 4;
@@ -170,7 +164,7 @@ public final class InPlaceChunkRegenerator {
             for (int z = 0; z < 16; z += BIOME_STEP) {
                 for (int y = minHeight; y < maxHeight; y += BIOME_STEP) {
                     Biome biome = buffer.getBiome(x, y, z);
-                    if (biome != null) {
+                    if (biome != null && world.getBiome(baseX + x, y, baseZ + z) != biome) {
                         world.setBiome(baseX + x, y, baseZ + z, biome);
                     }
                 }
@@ -179,5 +173,28 @@ public final class InPlaceChunkRegenerator {
 
         engine.updateChunk(chunk);
         world.refreshChunk(chunkX, chunkZ);
+    }
+
+    static void applyBlockDiffs(Chunk chunk, ChunkSnapshot snapshot, ChunkData generated, int minHeight, int maxHeight) {
+        for (int x = 0; x < 16; x++) {
+            for (int z = 0; z < 16; z++) {
+                for (int y = minHeight; y < maxHeight; y++) {
+                    Material target = generated.getType(x, y, z);
+                    if (snapshot.getBlockType(x, y, z) != target) {
+                        chunk.getBlock(x, y, z).setBlockData(generated.getBlockData(x, y, z), false);
+                        continue;
+                    }
+
+                    if (target == Material.AIR) {
+                        continue;
+                    }
+
+                    BlockData data = generated.getBlockData(x, y, z);
+                    if (!data.equals(snapshot.getBlockData(x, y, z))) {
+                        chunk.getBlock(x, y, z).setBlockData(data, false);
+                    }
+                }
+            }
+        }
     }
 }
