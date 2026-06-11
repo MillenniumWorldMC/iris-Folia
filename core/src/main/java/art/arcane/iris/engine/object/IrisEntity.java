@@ -22,10 +22,10 @@ import art.arcane.iris.Iris;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.link.Identifier;
 import art.arcane.iris.core.loader.IrisRegistrant;
-import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.service.ExternalDataSVC;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.platform.bukkit.BukkitWorld;
 import art.arcane.iris.spi.PlatformWorld;
 import art.arcane.volmlib.util.collection.KList;
@@ -451,7 +451,7 @@ public class IrisEntity extends IrisRegistrant {
         }
 
 
-        return INMS.get().spawnEntity(at, getType(), getReason());
+        return BukkitPlatform.spawnEntity(at, getType(), getReason());
     }
 
     public boolean isSpecialType() {

@@ -31,13 +31,16 @@ import art.arcane.iris.spi.PlatformScheduler;
 import art.arcane.iris.spi.PlatformStructureHooks;
 import art.arcane.iris.spi.PlatformWorld;
 import art.arcane.iris.util.common.scheduling.J;
+import art.arcane.volmlib.util.math.Vector3d;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Biome;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.util.Vector;
 
 import java.io.File;
@@ -92,6 +95,14 @@ public final class BukkitPlatform implements IrisPlatform {
 
     public static Location toLocation(IrisPosition position, World world) {
         return new Location(world, position.getX(), position.getY(), position.getZ());
+    }
+
+    public static Entity spawnEntity(Location at, EntityType type, CreatureSpawnEvent.SpawnReason reason) {
+        return INMS.get().spawnEntity(at, type, reason);
+    }
+
+    public static Vector3d entityBoundingBox(EntityType type) {
+        return INMS.get().getBoundingbox(type);
     }
 
     @Override

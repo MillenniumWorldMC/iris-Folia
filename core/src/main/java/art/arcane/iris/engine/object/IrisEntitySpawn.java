@@ -20,7 +20,6 @@ package art.arcane.iris.engine.object;
 
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.Iris;
-import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.annotations.*;
@@ -178,7 +177,7 @@ public class IrisEntitySpawn implements IRare {
                 return null;
             }
 
-            Vector3d boundingBox = INMS.get().getBoundingbox(irisEntity.getType());
+            Vector3d boundingBox = BukkitPlatform.entityBoundingBox(irisEntity.getType());
             if (!ignoreSurfaces && boundingBox != null) {
                 boolean isClearForSpawn = isAreaClearForSpawn(at, boundingBox);
                 if (!isClearForSpawn) {
