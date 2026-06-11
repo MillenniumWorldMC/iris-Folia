@@ -22,6 +22,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import art.arcane.iris.Iris;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.ServerConfigurator;
 import art.arcane.iris.core.nms.datapack.DataVersion;
@@ -116,7 +117,7 @@ public class CommandDeveloper implements DirectorExecutor {
             for (int rz = centerZ - radius; rz <= centerZ + radius; rz++) {
                 org.bukkit.ChunkSnapshot snapshot;
                 try {
-                    org.bukkit.Chunk loaded = io.papermc.lib.PaperLib.getChunkAtAsync(world, rx, rz, true).get();
+                    org.bukkit.Chunk loaded = art.arcane.iris.platform.bukkit.BukkitPlatform.chunkAtAsync(world, rx, rz, true).get();
                     snapshot = loaded.getChunkSnapshot(false, false, false);
                 } catch (Throwable e) {
                     Iris.reportError(e);

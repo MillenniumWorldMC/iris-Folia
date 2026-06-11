@@ -1,6 +1,6 @@
 package art.arcane.iris.core.safeguard.task;
 
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.util.common.format.C;
 
 import java.io.ByteArrayOutputStream;
@@ -82,11 +82,11 @@ public class Diagnostic {
     }
 
     public enum Logger {
-        DEBUG(Iris::debug),
-        RAW(Iris::msg),
-        INFO(Iris::info),
-        WARN(Iris::warn),
-        ERROR(Iris::error);
+        DEBUG(IrisLogging::debug),
+        RAW(IrisLogging::msg),
+        INFO(IrisLogging::info),
+        WARN(IrisLogging::warn),
+        ERROR(IrisLogging::error);
 
         private final Consumer<String> logger;
 

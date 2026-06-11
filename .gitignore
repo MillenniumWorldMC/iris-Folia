@@ -16,3 +16,5 @@ DataPackExamples/
 
 TreeGenStuff/
 dist/
+core/plugins/
+adapters/bukkit/plugin/plugins/

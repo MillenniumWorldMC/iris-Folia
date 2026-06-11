@@ -209,6 +209,18 @@ public final class BukkitPlatform implements IrisPlatform {
         return INMS.get().getDataVersion().getPackFormat();
     }
 
+    public static java.util.concurrent.CompletableFuture<Boolean> teleportAsync(Entity entity, Location destination) {
+        return io.papermc.lib.PaperLib.teleportAsync(entity, destination);
+    }
+
+    public static boolean isPaperServer() {
+        return io.papermc.lib.PaperLib.isPaper();
+    }
+
+    public static java.util.concurrent.CompletableFuture<org.bukkit.Chunk> chunkAtAsync(World world, int x, int z, boolean generate) {
+        return io.papermc.lib.PaperLib.getChunkAtAsync(world, x, z, generate);
+    }
+
     @Override
     public String platformName() {
         return "bukkit";

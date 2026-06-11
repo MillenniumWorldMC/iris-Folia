@@ -78,7 +78,6 @@ import art.arcane.iris.util.common.misc.ServerProperties;
 import art.arcane.iris.util.simd.SimdSupport;
 import art.arcane.volmlib.util.scheduling.Queue;
 import art.arcane.volmlib.util.scheduling.ShurikenQueue;
-import io.papermc.lib.PaperLib;
 import lombok.NonNull;
 import org.bukkit.*;
 import org.bukkit.block.data.BlockData;
@@ -593,6 +592,7 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
         tickets = new ChunkTickets();
         linkMultiverseCore = new MultiverseCoreLink();
         IrisServices.register(MultiverseCoreLink.class, linkMultiverseCore);
+        IrisServices.register(art.arcane.iris.core.runtime.WorldDeletionQueue.class, (art.arcane.iris.core.runtime.WorldDeletionQueue) Iris::queueWorldDeletionOnStartup);
         settingsFile = getDataFile("settings.json");
         configHotloadEngine = new ConfigHotloadEngine(
                 Iris::isSettingsFile,
@@ -912,7 +912,7 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
                         for (Player i : getServer().getOnlinePlayers()) {
                             final Runnable playerTask = () -> {
                                 i.setGameMode(GameMode.SPECTATOR);
-                                PaperLib.teleportAsync(i, spawn);
+                                BukkitPlatform.teleportAsync(i, spawn);
                             };
                             if (!J.runEntity(i, playerTask)) {
                                 playerTask.run();

@@ -2,7 +2,7 @@ package art.arcane.iris.core.nms.v1_21_R7;
 
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.MapCodec;
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.IrisImportedStructureControl;
 import art.arcane.iris.util.common.reflect.WrappedField;
@@ -93,7 +93,7 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
                 return Pair.of(best, bestHolder);
             }
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
         }
         if (!importedControl().active()) {
             return null;
@@ -105,8 +105,8 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
         try {
             return delegate.findNearestMapStructure(level, reachable, pos, radius, findUnexplored);
         } catch (Throwable e) {
-            Iris.error("Vanilla structure locate failed near " + pos.getX() + ", " + pos.getZ() + ": " + e);
-            Iris.reportError(e);
+            IrisLogging.error("Vanilla structure locate failed near " + pos.getX() + ", " + pos.getZ() + ": " + e);
+            IrisLogging.reportError(e);
             return null;
         }
     }
@@ -254,7 +254,7 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
                         structureManager.startsForStructure(sectionPos, structure)
                                 .forEach(start -> start.placeInChunk(target, structureManager, this, random, placeArea, chunkPos));
                     } catch (Throwable e) {
-                        Iris.reportError(e);
+                        IrisLogging.reportError(e);
                     }
                 }
                 index++;

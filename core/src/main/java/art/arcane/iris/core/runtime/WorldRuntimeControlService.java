@@ -1,6 +1,8 @@
 package art.arcane.iris.core.runtime;
 
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.lifecycle.CapabilitySnapshot;
 import art.arcane.iris.core.lifecycle.ServerFamily;
@@ -58,7 +60,7 @@ public final class WorldRuntimeControlService {
 
             CapabilitySnapshot capabilities = WorldLifecycleService.get().capabilities();
             instance = new WorldRuntimeControlService(capabilities);
-            Iris.info("WorldRuntimeControl capabilities: %s", instance.capabilityDescription);
+            IrisLogging.info("WorldRuntimeControl capabilities: %s", instance.capabilityDescription);
             return instance;
         }
     }
@@ -80,7 +82,7 @@ public final class WorldRuntimeControlService {
             return false;
         }
 
-        Iris.linkMultiverseCore.removeFromConfig(world);
+        IrisServices.get(art.arcane.iris.core.link.MultiverseCoreLink.class).removeFromConfig(world);
         setIntGameRule(world, 0, "SPAWN_CHUNK_RADIUS", "spawnChunkRadius");
         if (!IrisSettings.get().getStudio().isDisableTimeAndWeather()) {
             return true;
@@ -157,7 +159,7 @@ public final class WorldRuntimeControlService {
             backend.syncTime(world);
             return true;
         } catch (Throwable e) {
-            Iris.reportError("Runtime time control failed for world \"" + world.getName() + "\".", e);
+            IrisLogging.reportError("Runtime time control failed for world \"" + world.getName() + "\".", e);
             return false;
         }
     }
@@ -185,7 +187,7 @@ public final class WorldRuntimeControlService {
             engine.getMantle().getComponents();
             engine.getMantle().getRealRadius();
         } catch (Throwable e) {
-            Iris.reportError("Failed to prepare generator state for world \"" + world.getName() + "\".", e);
+            IrisLogging.reportError("Failed to prepare generator state for world \"" + world.getName() + "\".", e);
         }
     }
 
@@ -263,7 +265,7 @@ public final class WorldRuntimeControlService {
                     }
 
                     if (Boolean.TRUE.equals(success)) {
-                        J.runEntity(player, () -> Iris.service(BoardSVC.class).updatePlayer(player));
+                        J.runEntity(player, () -> IrisServices.get(BoardSVC.class).updatePlayer(player));
                         future.complete(true);
                         return;
                     }

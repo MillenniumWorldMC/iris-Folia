@@ -1,6 +1,8 @@
 package art.arcane.iris.core.lifecycle;
 
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.core.link.Identifier;
 import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.nms.INMSBinding;

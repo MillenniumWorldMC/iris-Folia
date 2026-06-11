@@ -19,6 +19,7 @@
 package art.arcane.iris.core.commands;
 
 import art.arcane.iris.Iris;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.IrisWorlds;
 import art.arcane.iris.core.ServerConfigurator;
@@ -45,7 +46,6 @@ import art.arcane.iris.util.common.parallel.SyncExecutor;
 import art.arcane.iris.util.common.misc.ServerProperties;
 import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
-import io.papermc.lib.PaperLib;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -294,7 +294,7 @@ public class CommandIris implements DirectorExecutor {
 
         final Location spawn = world.getSpawnLocation();
         final Runnable teleportTask = () -> {
-            PaperLib.teleportAsync(target, spawn);
+            BukkitPlatform.teleportAsync(target, spawn);
             new VolmitSender(target).sendMessage(C.GREEN + "You have been teleported to " + world.getName() + ".");
         };
         if (!J.runEntity(target, teleportTask)) {

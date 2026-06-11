@@ -1,6 +1,8 @@
 package art.arcane.iris.core.lifecycle;
 
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.IrisPlatforms;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 
@@ -44,7 +46,7 @@ final class PaperLikeRuntimeBackend implements WorldLifecycleBackend {
             WorldLifecycleStaging.stageGenerator(request.worldName(), request.generator(), request.biomeProvider());
             WorldLifecycleSupport.stageRuntimeConfiguration(request.worldName());
 
-            Iris.debug("WorldLifecycle runtime LevelStem: world=" + request.worldName()
+            IrisLogging.debug("WorldLifecycle runtime LevelStem: world=" + request.worldName()
                     + ", backend=paper_like_runtime, flavor=" + capabilities.paperLikeFlavor().name().toLowerCase(Locale.ROOT)
                     + ", registrySource=" + WorldLifecycleSupport.runtimeLevelStemRegistrySource(request));
             Object levelStem = WorldLifecycleSupport.resolveRuntimeLevelStem(capabilities, request);

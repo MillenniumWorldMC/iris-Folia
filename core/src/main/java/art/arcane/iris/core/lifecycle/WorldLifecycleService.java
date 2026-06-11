@@ -1,6 +1,8 @@
 package art.arcane.iris.core.lifecycle;
 
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.util.common.scheduling.J;
 import org.bukkit.World;
 
@@ -42,7 +44,7 @@ public final class WorldLifecycleService {
 
             CapabilitySnapshot capabilities = CapabilitySnapshot.probe();
             instance = new WorldLifecycleService(capabilities);
-            Iris.info("WorldLifecycle capabilities: %s", capabilities.describe());
+            IrisLogging.info("WorldLifecycle capabilities: %s", capabilities.describe());
             return instance;
         }
     }
@@ -56,18 +58,18 @@ public final class WorldLifecycleService {
         try {
             backend = selectCreateBackend(request);
         } catch (Throwable e) {
-            Iris.reportError("WorldLifecycle create backend selection failed for world=\"" + request.worldName()
+            IrisLogging.reportError("WorldLifecycle create backend selection failed for world=\"" + request.worldName()
                     + "\", caller=" + request.callerKind().name().toLowerCase() + ".", e);
             return CompletableFuture.failedFuture(e);
         }
-        Iris.info("WorldLifecycle create: world=%s, caller=%s, backend=%s",
+        IrisLogging.info("WorldLifecycle create: world=%s, caller=%s, backend=%s",
                 request.worldName(),
                 request.callerKind().name().toLowerCase(),
                 backend.backendName());
         return backend.create(request).whenComplete((world, throwable) -> {
             if (throwable != null) {
                 Throwable cause = WorldLifecycleSupport.unwrap(throwable);
-                Iris.reportError("WorldLifecycle create failed: world=\"" + request.worldName()
+                IrisLogging.reportError("WorldLifecycle create failed: world=\"" + request.worldName()
                         + "\", caller=" + request.callerKind().name().toLowerCase()
                         + ", backend=" + backend.backendName()
                         + ", family=" + capabilities.serverFamily().id() + ".", cause);
@@ -105,14 +107,14 @@ public final class WorldLifecycleService {
 
     private boolean unloadDirect(World world, boolean save) {
         WorldLifecycleBackend backend = selectUnloadBackend(world.getName());
-        Iris.info("WorldLifecycle unload: world=%s, backend=%s",
+        IrisLogging.info("WorldLifecycle unload: world=%s, backend=%s",
                 world.getName(),
                 backend.backendName());
         boolean unloaded;
         try {
             unloaded = backend.unload(world, save);
         } catch (Throwable e) {
-            Iris.reportError("WorldLifecycle unload failed: world=\"" + world.getName()
+            IrisLogging.reportError("WorldLifecycle unload failed: world=\"" + world.getName()
                     + "\", backend=" + backend.backendName()
                     + ", family=" + capabilities.serverFamily().id() + ".", e);
             if (e instanceof RuntimeException runtimeException) {

@@ -1,6 +1,8 @@
 package art.arcane.iris.core.lifecycle;
 
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.IrisPlatforms;
 import io.papermc.lib.PaperLib;
 import io.papermc.lib.environments.PaperEnvironment;
 import org.bukkit.Bukkit;
@@ -30,7 +32,7 @@ public final class PaperLibBootstrap {
         }
 
         PaperLib.setCustomEnvironment(new ModernPaperEnvironment());
-        Iris.info("PaperLib version detection failed for MC " + bukkitVersion + "; forced modern Paper environment");
+        IrisLogging.info("PaperLib version detection failed for MC " + bukkitVersion + "; forced modern Paper environment");
     }
 
     static boolean isModernVersionScheme(String bukkitVersion) {

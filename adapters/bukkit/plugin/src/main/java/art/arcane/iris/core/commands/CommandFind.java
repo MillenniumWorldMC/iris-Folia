@@ -19,6 +19,7 @@
 package art.arcane.iris.core.commands;
 
 import art.arcane.iris.Iris;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.core.service.ObjectStudioSaveService;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.IrisStructureLocator;
@@ -34,7 +35,6 @@ import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.director.DirectorOrigin;
 import art.arcane.volmlib.util.director.annotations.Director;
 import art.arcane.volmlib.util.director.annotations.Param;
-import io.papermc.lib.PaperLib;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
@@ -145,7 +145,7 @@ public class CommandFind implements DirectorExecutor {
                 Location at = result.getLocation();
                 int y = target.getWorld().getHighestBlockYAt(at.getBlockX(), at.getBlockZ()) + 2;
                 Location dest = new Location(target.getWorld(), at.getBlockX() + 0.5, y, at.getBlockZ() + 0.5);
-                PaperLib.teleportAsync(target, dest);
+                BukkitPlatform.teleportAsync(target, dest);
                 sender().sendMessage(C.GREEN + "Teleported to " + structure + " @ " + at.getBlockX() + ", " + at.getBlockZ());
             } catch (Throwable t) {
                 sender().sendMessage(C.RED + "Could not locate " + structure + ": " + t.getClass().getSimpleName());

@@ -19,7 +19,9 @@
 package art.arcane.iris.core.service;
 
 import com.google.gson.JsonSyntaxException;
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.ServerConfigurator;
 import art.arcane.iris.core.lifecycle.WorldLifecycleService;
@@ -71,11 +73,11 @@ public class StudioSVC implements IrisService {
 
             if (!f.exists()) {
                 if (pack.equals("overworld")) {
-                    Iris.info("Downloading Default Pack " + pack + " (latest on master)");
-                    Iris.service(StudioSVC.class).downloadBranch(Iris.getSender(), "IrisDimensions/overworld", "master", false);
+                    IrisLogging.info("Downloading Default Pack " + pack + " (latest on master)");
+                    IrisServices.get(StudioSVC.class).downloadBranch(art.arcane.iris.platform.bukkit.BukkitPlatform.console(), "IrisDimensions/overworld", "master", false);
                     ServerConfigurator.installDataPacksIfChanged(true);
                 } else {
-                    Iris.warn("Default pack '" + pack + "' is not installed. Please download it manually with /iris download " + pack);
+                    IrisLogging.warn("Default pack '" + pack + "' is not installed. Please download it manually with /iris download " + pack);
                 }
             }
         });
@@ -83,7 +85,7 @@ public class StudioSVC implements IrisService {
 
     @Override
     public void onDisable() {
-        Iris.debug("Studio Mode Active: Closing Projects");
+        IrisLogging.debug("Studio Mode Active: Closing Projects");
         boolean stopping = IrisToolbelt.isServerStopping();
         LinkedHashSet<String> worldNamesToDelete = new LinkedHashSet<>(TransientWorldCleanupSupport.collectTransientStudioWorldNames(Bukkit.getWorldContainer()));
 
@@ -113,7 +115,7 @@ public class StudioSVC implements IrisService {
                 try {
                     generator.close();
                 } catch (Throwable e) {
-                    Iris.reportError("Failed to close studio generator for \"" + i.getName() + "\" during shutdown.", e);
+                    IrisLogging.reportError("Failed to close studio generator for \"" + i.getName() + "\" during shutdown.", e);
                 }
             }
         }
@@ -123,7 +125,7 @@ public class StudioSVC implements IrisService {
         try {
             art.arcane.iris.core.tools.IrisCreator.removeTransientStudioWorldsFromBukkitYml();
         } catch (Throwable e) {
-            Iris.reportError("Failed to unregister transient studio worlds from bukkit.yml during shutdown.", e);
+            IrisLogging.reportError("Failed to unregister transient studio worlds from bukkit.yml during shutdown.", e);
         }
 
         queueStudioWorldDeletionOnStartup(worldNamesToDelete);
@@ -155,7 +157,7 @@ public class StudioSVC implements IrisService {
             try {
                 FileUtils.copyDirectory(f, folder);
             } catch (IOException e) {
-                Iris.reportError(e);
+                IrisLogging.reportError(e);
             }
         }
 
@@ -173,14 +175,14 @@ public class StudioSVC implements IrisService {
                             FileUtils.copyFile(i, new File(folder, i.getName()));
                         } catch (IOException e) {
                             e.printStackTrace();
-                            Iris.reportError(e);
+                            IrisLogging.reportError(e);
                         }
                     } else {
                         try {
                             FileUtils.copyDirectory(i, new File(folder, i.getName()));
                         } catch (IOException e) {
                             e.printStackTrace();
-                            Iris.reportError(e);
+                            IrisLogging.reportError(e);
                         }
                     }
                 }
@@ -221,13 +223,13 @@ public class StudioSVC implements IrisService {
                 return;
             }
 
-            Iris.info("Resolved pack '" + key + "' to " + url);
+            IrisLogging.info("Resolved pack '" + key + "' to " + url);
             String[] nodes = url.split("\\Q/\\E");
             String repo = nodes.length == 1 ? "IrisDimensions/" + nodes[0] : nodes[0] + "/" + nodes[1];
             String branch = nodes.length > 2 ? nodes[2] : "stable";
             download(sender, repo, branch, forceOverwrite, false);
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             e.printStackTrace();
             sender.sendMessage("Failed to download '" + key + "'.");
         }
@@ -237,7 +239,7 @@ public class StudioSVC implements IrisService {
         try {
             download(sender, "IrisDimensions", url, forceOverwrite, true);
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             e.printStackTrace();
             sender.sendMessage("Failed to download 'IrisDimensions/overworld' from " + url + ".");
         }
@@ -247,7 +249,7 @@ public class StudioSVC implements IrisService {
         try {
             download(sender, repo, branch, forceOverwrite, false);
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             e.printStackTrace();
             sender.sendMessage("Failed to download '" + repo + "' (branch " + branch + ").");
         }
@@ -260,8 +262,8 @@ public class StudioSVC implements IrisService {
     public void download(VolmitSender sender, String repo, String branch, boolean forceOverwrite, boolean directUrl) throws JsonSyntaxException, IOException {
         String url = directUrl ? branch : "https://codeload.github.com/" + repo + "/zip/refs/heads/" + branch;
         sender.sendMessage("Downloading " + url + " "); //The extra space stops a bug in adventure API from repeating the last letter of the URL
-        File zip = Iris.getNonCachedFile("pack-" + repo, url);
-        File temp = Iris.getTemp();
+        File zip = art.arcane.iris.util.common.misc.WebCache.getNonCachedFile("pack-" + repo, url);
+        File temp = art.arcane.iris.util.common.misc.WebCache.getTemp();
         File work = new File(temp, "dl-" + UUID.randomUUID());
         File packs = getWorkspaceFolder();
 
@@ -275,7 +277,7 @@ public class StudioSVC implements IrisService {
         try {
             ZipUtil.unpack(zip, work);
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             e.printStackTrace();
             sender.sendMessage(
                     """
@@ -298,7 +300,7 @@ public class StudioSVC implements IrisService {
         try {
             dir = zipFiles.length > 1 ? work : zipFiles[0].isDirectory() ? zipFiles[0] : null;
         } catch (NullPointerException e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             sender.sendMessage("Error when finding home directory. Are there any non-text characters in the file name?");
             return;
         }
@@ -358,9 +360,9 @@ public class StudioSVC implements IrisService {
         JSONObject a;
 
         if (cached) {
-            a = new JSONObject(Iris.getCached("cachedlisting", LISTING));
+            a = new JSONObject(art.arcane.iris.util.common.misc.WebCache.getCached("cachedlisting", LISTING));
         } else {
-            a = new JSONObject(Iris.getNonCached(true + "listing", LISTING));
+            a = new JSONObject(art.arcane.iris.util.common.misc.WebCache.getNonCached(true + "listing", LISTING));
         }
 
         KMap<String, String> l = new KMap<>();
@@ -386,7 +388,7 @@ public class StudioSVC implements IrisService {
             open(sender, seed, dimm, (w) -> {
             });
         } catch (Exception e) {
-            Iris.reportError("Failed to open studio world \"" + dimm + "\".", e);
+            IrisLogging.reportError("Failed to open studio world \"" + dimm + "\".", e);
             sender.sendMessage("Failed to open studio world: " + e.getMessage());
         }
     }
@@ -411,14 +413,14 @@ public class StudioSVC implements IrisService {
         CompletableFuture<art.arcane.iris.core.runtime.StudioOpenCoordinator.StudioCloseResult> pendingClose = close();
         pendingClose.whenComplete((closeResult, closeThrowable) -> {
             if (closeThrowable != null) {
-                Iris.reportError("Failed while closing an existing studio project before opening \"" + dimm + "\".", closeThrowable);
+                IrisLogging.reportError("Failed while closing an existing studio project before opening \"" + dimm + "\".", closeThrowable);
                 J.s(() -> sender.sendMessage("Failed to close the existing studio project: " + closeThrowable.getMessage()));
                 return;
             }
 
             if (closeResult != null && closeResult.failureCause() != null) {
                 Throwable failure = closeResult.failureCause();
-                Iris.reportError("Failed while closing an existing studio project before opening \"" + dimm + "\".", failure);
+                IrisLogging.reportError("Failed while closing an existing studio project before opening \"" + dimm + "\".", failure);
                 J.s(() -> sender.sendMessage("Failed to close the existing studio project: " + failure.getMessage()));
                 return;
             }
@@ -449,11 +451,11 @@ public class StudioSVC implements IrisService {
     }
 
     public File getWorkspaceFolder(String... sub) {
-        return Iris.instance.getDataFolderList(WORKSPACE_NAME, sub);
+        return art.arcane.iris.platform.bukkit.BukkitPlatform.volmitPlugin().getDataFolderList(WORKSPACE_NAME, sub);
     }
 
     public File getWorkspaceFile(String... sub) {
-        return Iris.instance.getDataFileList(WORKSPACE_NAME, sub);
+        return art.arcane.iris.platform.bukkit.BukkitPlatform.volmitPlugin().getDataFileList(WORKSPACE_NAME, sub);
     }
 
     public CompletableFuture<art.arcane.iris.core.runtime.StudioOpenCoordinator.StudioCloseResult> close() {
@@ -465,7 +467,7 @@ public class StudioSVC implements IrisService {
             return CompletableFuture.completedFuture(new art.arcane.iris.core.runtime.StudioOpenCoordinator.StudioCloseResult(null, true, true, false, null));
         }
 
-        Iris.debug("Closing Active Project");
+        IrisLogging.debug("Closing Active Project");
         IrisProject project = activeProject;
         activeProject = null;
         activeClose = project.close();
@@ -477,21 +479,21 @@ public class StudioSVC implements IrisService {
         try {
             IrisToolbelt.evacuate(world);
         } catch (Throwable e) {
-            Iris.reportError("Failed to evacuate studio world \"" + world.getName() + "\" during shutdown cleanup.", e);
+            IrisLogging.reportError("Failed to evacuate studio world \"" + world.getName() + "\" during shutdown cleanup.", e);
         }
 
         if (generator != null) {
             try {
                 generator.close();
             } catch (Throwable e) {
-                Iris.reportError("Failed to close studio generator for \"" + world.getName() + "\" during shutdown cleanup.", e);
+                IrisLogging.reportError("Failed to close studio generator for \"" + world.getName() + "\" during shutdown cleanup.", e);
             }
         }
 
         try {
             WorldLifecycleService.get().unload(world, false);
         } catch (Throwable e) {
-            Iris.reportError("Failed to unload studio world \"" + world.getName() + "\" during shutdown cleanup.", e);
+            IrisLogging.reportError("Failed to unload studio world \"" + world.getName() + "\" during shutdown cleanup.", e);
         }
 
         deleteTransientStudioFolders(world.getName());
@@ -536,9 +538,9 @@ public class StudioSVC implements IrisService {
         }
 
         try {
-            Iris.queueWorldDeletionOnStartup(List.copyOf(normalizedNames));
+            IrisServices.get(art.arcane.iris.core.runtime.WorldDeletionQueue.class).queueForStartupDeletion(List.copyOf(normalizedNames));
         } catch (IOException e) {
-            Iris.reportError("Failed to queue studio world deletion on startup.", e);
+            IrisLogging.reportError("Failed to queue studio world deletion on startup.", e);
         }
     }
 
@@ -551,14 +553,14 @@ public class StudioSVC implements IrisService {
         File newPack = getWorkspaceFolder(newName);
 
         if (importPack.listFiles().length == 0) {
-            Iris.warn("Couldn't find the pack to create a new dimension from.");
+            IrisLogging.warn("Couldn't find the pack to create a new dimension from.");
             return;
         }
 
         try {
             FileUtils.copyDirectory(importPack, newPack, pathname -> !pathname.getAbsolutePath().contains(".git"), false);
         } catch (IOException e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             e.printStackTrace();
         }
 
@@ -569,7 +571,7 @@ public class StudioSVC implements IrisService {
         try {
             FileUtils.copyFile(dimFile, newDimFile);
         } catch (IOException e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             e.printStackTrace();
         }
 
@@ -583,7 +585,7 @@ public class StudioSVC implements IrisService {
                 IO.writeAll(newDimFile, json.toString(4));
             }
         } catch (JSONException | IOException e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             e.printStackTrace();
         }
 
@@ -592,7 +594,7 @@ public class StudioSVC implements IrisService {
             JSONObject ws = p.createCodeWorkspaceConfig();
             IO.writeAll(getWorkspaceFile(newName, newName + ".code-workspace"), ws.toString(0));
         } catch (JSONException | IOException e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             e.printStackTrace();
         }
     }

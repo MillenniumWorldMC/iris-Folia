@@ -952,7 +952,6 @@ public class IrisObject extends IrisRegistrant {
                         String key = o.getLoadKey();
                         if (key != null) {
                             if (config.getForbiddenCollisions().contains(key) && !config.getAllowedCollisions().contains(key)) {
-                                // Iris.debug("%s collides with %s (%s / %s / %s)", getLoadKey(), key, i, j, k);
                                 return -1;
                             }
                         }

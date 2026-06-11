@@ -102,6 +102,7 @@ dependencies {
         add('included', project(path: ":adapters:bukkit:nms:${key}", configuration: 'runtimeElements'))
     }
     add('included', project(path: ':core', configuration: 'shadow'))
+    add('included', project(path: ':adapters:bukkit:plugin', configuration: 'runtimeElements'))
     add('jarJar', project(':core:agent'))
 }
 

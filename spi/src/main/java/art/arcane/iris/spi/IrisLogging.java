@@ -71,14 +71,19 @@ public final class IrisLogging {
         }
 
         if (error != null) {
-            System.out.println("[Iris/ERROR] " + error.getClass().getName() + (error.getMessage() == null ? "" : ": " + error.getMessage()));
-            error.printStackTrace(System.out);
+            System.err.println("[Iris/ERROR] " + error.getClass().getName() + (error.getMessage() == null ? "" : ": " + error.getMessage()));
+            error.printStackTrace(System.err);
         }
     }
 
     private static void emit(LogLevel level, String message) {
         if (IrisPlatforms.isBound()) {
             IrisPlatforms.get().log(level, message);
+            return;
+        }
+
+        if (level == LogLevel.WARN || level == LogLevel.ERROR) {
+            System.err.println("[Iris/" + level + "] " + message);
             return;
         }
 

@@ -39,8 +39,6 @@ plugins {
     alias(libs.plugins.kotlin.lombok)
 }
 
-def apiVersion = '26.1'
-def mainClass = 'art.arcane.iris.Iris'
 def lib = 'art.arcane.iris.util'
 String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')
     .orElse('com.github.VolmitSoftware:VolmLib:master-SNAPSHOT')
@@ -225,21 +223,7 @@ tasks.named('test', Test).configure {
     jvmArgs('--add-modules', 'jdk.incubator.vector')
 }
 
-tasks.named('processResources').configure {
-    /**
-     * Expand properties into plugin yml
-     */
-    def pluginProperties = [
-        name      : rootProject.name,
-        version   : rootProject.version,
-        apiVersion: apiVersion,
-        main      : mainClass,
-    ]
-    inputs.properties(pluginProperties)
-    filesMatching('**/plugin.yml') {
-        expand(pluginProperties)
-    }
-}
+configurations.matching { it.name.startsWith('slim') }.all { }
 
 def runningTestTasks = gradle.startParameter.taskNames.any { String taskName -> taskName.toLowerCase().contains('test') }
 if (runningTestTasks) {

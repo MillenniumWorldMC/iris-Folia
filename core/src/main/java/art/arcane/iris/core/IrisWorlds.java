@@ -3,7 +3,8 @@ package art.arcane.iris.core;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.object.IrisDimension;
@@ -36,7 +37,7 @@ public class IrisWorlds {
 
     public static IrisWorlds get() {
         return cache.aquire(() -> {
-            File file = Iris.instance.getDataFile("worlds.json");
+            File file = IrisPlatforms.get().dataFile("worlds.json");
             if (!file.exists()) {
                 return new IrisWorlds(new KMap<>());
             }
@@ -46,9 +47,9 @@ public class IrisWorlds {
                 KMap<String, String> worlds = GSON.fromJson(json, TYPE);
                 return new IrisWorlds(Objects.requireNonNullElseGet(worlds, KMap::new));
             } catch (Throwable e) {
-                Iris.error("Failed to load worlds.json!");
+                IrisLogging.error("Failed to load worlds.json!");
                 e.printStackTrace();
-                Iris.reportError(e);
+                IrisLogging.reportError(e);
             }
 
             return new IrisWorlds(new KMap<>());
@@ -81,7 +82,7 @@ public class IrisWorlds {
         return getWorlds()
                 .entrySet()
                 .stream()
-                .map(entry -> Iris.loadDimension(entry.getKey(), entry.getValue()))
+                .map(entry -> loadDimension(entry.getKey(), entry.getValue()))
                 .filter(Objects::nonNull);
     }
 
@@ -93,12 +94,12 @@ public class IrisWorlds {
         clean();
         if (!dirty) return;
         try {
-            IO.write(Iris.instance.getDataFile("worlds.json"), OutputStreamWriter::new, writer -> GSON.toJson(worlds, TYPE, writer));
+            IO.write(IrisPlatforms.get().dataFile("worlds.json"), OutputStreamWriter::new, writer -> GSON.toJson(worlds, TYPE, writer));
             dirty = false;
         } catch (IOException e) {
-            Iris.error("Failed to save worlds.json!");
+            IrisLogging.error("Failed to save worlds.json!");
             e.printStackTrace();
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
         }
     }
 
@@ -133,5 +134,22 @@ public class IrisWorlds {
         }
 
         return result;
+    }
+
+    private static art.arcane.iris.engine.object.IrisDimension loadDimension(String worldName, String id) {
+        java.io.File pack = new java.io.File(org.bukkit.Bukkit.getWorldContainer(), String.join(java.io.File.separator, worldName, "iris", "pack"));
+        art.arcane.iris.engine.object.IrisDimension dimension = pack.isDirectory() ? art.arcane.iris.core.loader.IrisData.get(pack).getDimensionLoader().load(id) : null;
+        if (dimension == null) {
+            dimension = art.arcane.iris.core.loader.IrisData.loadAnyDimension(id, null);
+        }
+        if (dimension == null) {
+            IrisLogging.warn("Unable to find dimension type " + id + " Looking for online packs...");
+            art.arcane.iris.spi.IrisServices.get(art.arcane.iris.core.service.StudioSVC.class).downloadSearch(new art.arcane.iris.util.common.plugin.VolmitSender(org.bukkit.Bukkit.getConsoleSender()), id, false);
+            dimension = art.arcane.iris.core.loader.IrisData.loadAnyDimension(id, null);
+            if (dimension != null) {
+                IrisLogging.info("Resolved missing dimension, proceeding.");
+            }
+        }
+        return dimension;
     }
 }

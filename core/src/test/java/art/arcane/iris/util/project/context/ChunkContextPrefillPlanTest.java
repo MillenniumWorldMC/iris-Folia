@@ -1,6 +1,5 @@
 package art.arcane.iris.util.project.context;
 
-import art.arcane.iris.Iris;
 import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisRegion;
@@ -167,14 +166,12 @@ public class ChunkContextPrefillPlanTest {
     }
 
     private void assertPrefillAsyncDecision(String threadName, boolean expected) throws InterruptedException, ExecutionException, java.util.concurrent.TimeoutException {
-        Iris previous = Iris.instance;
         ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable);
             thread.setName(threadName);
             return thread;
         });
         try {
-            Iris.instance = mock(Iris.class);
             Future<Boolean> future = executor.submit(() -> ChunkContext.shouldPrefillAsync(2));
             boolean actual = future.get(10, TimeUnit.SECONDS);
             if (expected) {
@@ -183,7 +180,6 @@ public class ChunkContextPrefillPlanTest {
                 assertFalse(actual);
             }
         } finally {
-            Iris.instance = previous;
             executor.shutdownNow();
         }
     }

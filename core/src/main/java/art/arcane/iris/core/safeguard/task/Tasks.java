@@ -1,6 +1,6 @@
 package art.arcane.iris.core.safeguard.task;
 
-import art.arcane.iris.Iris;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.core.IrisWorlds;
 import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.nms.v1X.NMSBinding1X;
@@ -85,7 +85,7 @@ public final class Tasks {
     });
 
     private static final Task VERSION = Task.of("version", () -> {
-        String[] parts = Iris.instance.getDescription().getVersion().split("-");
+        String[] parts = BukkitPlatform.plugin().getDescription().getVersion().split("-");
         String supportedVersions;
         if (parts.length >= 3) {
             String minVersion = parts[1];
@@ -147,7 +147,7 @@ public final class Tasks {
     });
 
     private static final Task JAVA = Task.of("java", () -> {
-        int version = Iris.getJavaVersion();
+        int version = javaVersion();
         if (version == 25) {
             return withDiagnostics(Mode.STABLE);
         }
@@ -207,5 +207,18 @@ public final class Tasks {
 
     private static ValueWithDiagnostics<Mode> withDiagnostics(Mode mode, List<Diagnostic> diagnostics) {
         return new ValueWithDiagnostics<>(mode, diagnostics);
+    }
+
+    private static int javaVersion() {
+        String version = System.getProperty("java.version");
+        if (version.startsWith("1.")) {
+            version = version.substring(2, 3);
+        } else {
+            int dot = version.indexOf(".");
+            if (dot != -1) {
+                version = version.substring(0, dot);
+            }
+        }
+        return Integer.parseInt(version);
     }
 }

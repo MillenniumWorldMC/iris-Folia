@@ -1,7 +1,7 @@
 package art.arcane.iris.core.nms.v26_1_R1;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.core.nms.INMSBinding;
 import art.arcane.iris.core.nms.container.BiomeColor;
 import art.arcane.iris.core.nms.container.Pair;
@@ -132,7 +132,7 @@ public class NMSBinding implements INMSBinding {
             if (i.getReturnType().equals(returns)) {
                 i.setAccessible(true);
                 try {
-                    Iris.debug("[NMS] Found " + returns.getSimpleName() + " in " + in.getClass().getSimpleName() + "." + i.getName() + "()");
+                    IrisLogging.debug("[NMS] Found " + returns.getSimpleName() + " in " + in.getClass().getSimpleName() + "." + i.getName() + "()");
                     return i.invoke(in);
                 } catch (Throwable e) {
                     e.printStackTrace();
@@ -153,7 +153,7 @@ public class NMSBinding implements INMSBinding {
             if (i.getType().equals(returnType)) {
                 i.setAccessible(true);
                 try {
-                    Iris.debug("[NMS] Found " + returnType.getSimpleName() + " in " + sourceType.getSimpleName() + "." + i.getName());
+                    IrisLogging.debug("[NMS] Found " + returnType.getSimpleName() + " in " + sourceType.getSimpleName() + "." + i.getName());
                     return (T) i.get(in);
                 } catch (IllegalAccessException e) {
                     e.printStackTrace();
@@ -235,7 +235,7 @@ public class NMSBinding implements INMSBinding {
         var level = ((CraftWorld) pos.getWorld()).getHandle();
         var blockPos = new BlockPos(pos.getBlockX(), pos.getBlockY(), pos.getBlockZ());
         if (!J.runAt(pos, () -> merge(level, blockPos, tag))) {
-            Iris.warn("[NMS] Failed to schedule tile deserialize at " + blockPos + " in world " + pos.getWorld().getName());
+            IrisLogging.warn("[NMS] Failed to schedule tile deserialize at " + blockPos + " in world " + pos.getWorld().getName());
         }
     }
 
@@ -247,7 +247,7 @@ public class NMSBinding implements INMSBinding {
         try {
             var blockEntity = level.getBlockEntity(blockPos);
             if (blockEntity == null) {
-                Iris.warn("[NMS] BlockEntity not found at " + blockPos);
+                IrisLogging.warn("[NMS] BlockEntity not found at " + blockPos);
                 var state = level.getBlockState(blockPos);
                 if (!state.hasBlockEntity()) {
                     return;
@@ -260,8 +260,8 @@ public class NMSBinding implements INMSBinding {
             var accessor = new BlockDataAccessor(blockEntity, blockPos);
             accessor.setData(accessor.getData().merge(tag));
         } catch (Throwable e) {
-            Iris.warn("[NMS] Failed to merge tile data at " + blockPos + ": " + e.getMessage());
-            Iris.reportError(e);
+            IrisLogging.warn("[NMS] Failed to merge tile data at " + blockPos + ": " + e.getMessage());
+            IrisLogging.reportError(e);
         }
     }
 
@@ -410,7 +410,7 @@ public class NMSBinding implements INMSBinding {
         try {
             registry().lookupOrThrow(Registries.STRUCTURE).keySet().forEach(k -> keys.add(k.toString()));
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
         }
         return keys;
     }
@@ -421,7 +421,7 @@ public class NMSBinding implements INMSBinding {
         try {
             registry().lookupOrThrow(Registries.STRUCTURE_SET).keySet().forEach(k -> keys.add(k.toString()));
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
         }
         return keys;
     }
@@ -434,7 +434,7 @@ public class NMSBinding implements INMSBinding {
             BiomeSource source = level.getChunkSource().getGenerator().getBiomeSource();
             keys.addAll(VanillaStructureBiomes.reachableStructureKeys(level, source));
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
         }
         return keys;
     }
@@ -445,7 +445,7 @@ public class NMSBinding implements INMSBinding {
         try {
             keys.addAll(VanillaStructureBiomes.structureBiomeKeys(registry(), structureKey));
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
         }
         return keys;
     }
@@ -458,7 +458,7 @@ public class NMSBinding implements INMSBinding {
             BiomeSource source = level.getChunkSource().getGenerator().getBiomeSource();
             keys.addAll(VanillaStructureBiomes.possibleBiomeKeys(source));
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
         }
         return keys;
     }
@@ -480,7 +480,7 @@ public class NMSBinding implements INMSBinding {
                 keys.add(group + "|" + id);
             }
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
         }
         return keys;
     }
@@ -511,7 +511,7 @@ public class NMSBinding implements INMSBinding {
             WorldgenRandom random = new WorldgenRandom(new XoroshiroRandomSource(seed));
             return cf.place(level, generator, random, new BlockPos(x, y, z));
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             return false;
         }
     }
@@ -576,7 +576,7 @@ public class NMSBinding implements INMSBinding {
             }
             return new int[]{box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ()};
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             return null;
         }
     }
@@ -665,7 +665,7 @@ public class NMSBinding implements INMSBinding {
             }
 
             a.incrementAndGet();
-            Iris.debug("Custom Biome: " + i);
+            IrisLogging.debug("Custom Biome: " + i);
         });
 
         return a.get();
@@ -767,7 +767,7 @@ public class NMSBinding implements INMSBinding {
             finishChunkRewrite(level, chunk);
             return true;
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             return false;
         }
     }
@@ -798,7 +798,7 @@ public class NMSBinding implements INMSBinding {
             finishChunkRewrite(level, chunk);
             return true;
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             return false;
         }
     }
@@ -846,12 +846,12 @@ public class NMSBinding implements INMSBinding {
         if (dimensionType != null) {
             String actualDimensionType = dimensionType.identifier().toString();
             if (!dimensionType.identifier().getNamespace().equals("iris")) {
-                Iris.error("Loaded world %s with invalid dimension type! expected=%s actual=%s", world.getName(), expectedDimensionType, actualDimensionType);
+                IrisLogging.error("Loaded world %s with invalid dimension type! expected=%s actual=%s", world.getName(), expectedDimensionType, actualDimensionType);
             } else {
-                Iris.debug("Loaded world " + world.getName() + " with Iris dimension type " + actualDimensionType);
+                IrisLogging.debug("Loaded world " + world.getName() + " with Iris dimension type " + actualDimensionType);
             }
         } else {
-            Iris.error("Loaded world %s with unknown dimension type! expected=%s", world.getName(), expectedDimensionType);
+            IrisLogging.error("Loaded world %s with unknown dimension type! expected=%s", world.getName(), expectedDimensionType);
         }
 
         IrisChunkGenerator irisGenerator = new IrisChunkGenerator(worldGenContext.generator(), seed, engine, world);
@@ -902,8 +902,8 @@ public class NMSBinding implements INMSBinding {
             }
             return null;
         } catch (Throwable e) {
-            Iris.error("Unable to get entity dimensions for " + entity + "!");
-            Iris.reportError(e);
+            IrisLogging.error("Unable to get entity dimensions for " + entity + "!");
+            IrisLogging.reportError(e);
             return null;
         }
     }
@@ -1029,7 +1029,7 @@ public class NMSBinding implements INMSBinding {
         if (injected.getAndSet(true))
             return true;
         try {
-            Iris.info("Injecting Bukkit");
+            IrisLogging.info("Injecting Bukkit");
             var buddy = new ByteBuddy();
             buddy.redefine(ServerLevel.class)
                     .visit(Advice.to(ServerLevelAdvice.class).on(ElementMatchers.isConstructor()
@@ -1046,7 +1046,7 @@ public class NMSBinding implements INMSBinding {
 
             return true;
         } catch (Throwable e) {
-            Iris.error(C.RED + "Failed to inject Bukkit");
+            IrisLogging.error(C.RED + "Failed to inject Bukkit");
             e.printStackTrace();
         }
         return false;

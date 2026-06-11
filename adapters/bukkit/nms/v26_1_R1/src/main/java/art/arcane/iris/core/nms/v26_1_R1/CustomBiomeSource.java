@@ -1,7 +1,7 @@
 package art.arcane.iris.core.nms.v26_1_R1;
 
 import com.mojang.serialization.MapCodec;
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.IrisBiome;
@@ -101,7 +101,7 @@ public class CustomBiomeSource extends BiomeSource {
             if (i.getReturnType().equals(returns)) {
                 i.setAccessible(true);
                 try {
-                    Iris.debug("[NMS] Found " + returns.getSimpleName() + " in " + in.getClass().getSimpleName() + "." + i.getName() + "()");
+                    IrisLogging.debug("[NMS] Found " + returns.getSimpleName() + " in " + in.getClass().getSimpleName() + "." + i.getName() + "()");
                     return i.invoke(in);
                 } catch (Throwable e) {
                     e.printStackTrace();
@@ -118,7 +118,7 @@ public class CustomBiomeSource extends BiomeSource {
             if (i.getType().equals(returnType)) {
                 i.setAccessible(true);
                 try {
-                    Iris.debug("[NMS] Found " + returnType.getSimpleName() + " in " + sourceType.getSimpleName() + "." + i.getName());
+                    IrisLogging.debug("[NMS] Found " + returnType.getSimpleName() + " in " + sourceType.getSimpleName() + "." + i.getName());
                     return (T) i.get(in);
                 } catch (IllegalAccessException e) {
                     e.printStackTrace();
@@ -152,7 +152,7 @@ public class CustomBiomeSource extends BiomeSource {
                         if (fallback != null) {
                             m.put(j.getId(), fallback);
                         }
-                        Iris.error("Cannot find biome for IrisBiomeCustom " + j.getId() + " from engine " + engine.getName());
+                        IrisLogging.error("Cannot find biome for IrisBiomeCustom " + j.getId() + " from engine " + engine.getName());
                         continue;
                     }
                     m.put(j.getId(), holder);

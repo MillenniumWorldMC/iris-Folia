@@ -1,0 +1,43 @@
+def apiVersion = '26.1'
+def mainClass = 'art.arcane.iris.Iris'
+
+String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')
+    .orElse('com.github.VolmitSoftware:VolmLib:master-SNAPSHOT')
+    .get()
+
+dependencies {
+    compileOnly(project(':core'))
+    compileOnly(volmLibCoordinate) {
+        changing = true
+        transitive = false
+    }
+    compileOnly(libs.spigot)
+    testImplementation('junit:junit:4.13.2')
+    testImplementation(libs.spigot)
+    testImplementation(libs.bstats)
+    testImplementation(libs.sentry)
+    testImplementation(project(':core'))
+    testImplementation(volmLibCoordinate) {
+        changing = true
+        transitive = false
+    }
+    compileOnly(libs.placeholderApi)
+    compileOnly(libs.multiverseCore)
+}
+
+tasks.named('processResources').configure {
+    def pluginProperties = [
+        name      : rootProject.name,
+        version   : rootProject.version,
+        apiVersion: apiVersion,
+        main      : mainClass,
+    ]
+    inputs.properties(pluginProperties)
+    filesMatching('**/plugin.yml') {
+        expand(pluginProperties)
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    archiveBaseName.set('iris-bukkit-plugin')
+}

@@ -18,7 +18,9 @@
 
 package art.arcane.iris.core.service;
 
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.tools.IrisToolbelt;
@@ -65,7 +67,7 @@ public class BoardSVC implements IrisService, BoardProvider {
 
         cleanupLeakedMainScoreboard();
 
-        for (Player player : Iris.instance.getServer().getOnlinePlayers()) {
+        for (Player player : art.arcane.iris.platform.bukkit.BukkitPlatform.volmitPlugin().getServer().getOnlinePlayers()) {
             J.runEntity(player, () -> updatePlayer(player));
         }
     }
@@ -95,7 +97,7 @@ public class BoardSVC implements IrisService, BoardProvider {
                 team.unregister();
             }
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
         }
     }
 

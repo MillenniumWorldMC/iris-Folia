@@ -18,7 +18,9 @@
 
 package art.arcane.iris.core.gui;
 
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.pregenerator.IrisPregenerator;
 import art.arcane.iris.core.pregenerator.PregenListener;
@@ -183,8 +185,8 @@ public class PregeneratorJob implements PregenListener {
         try {
             return Color.decode(v);
         } catch (Throwable e) {
-            Iris.reportError(e);
-            Iris.error("Error Parsing 'color', (" + c + ")");
+            IrisLogging.reportError(e);
+            IrisLogging.error("Error Parsing 'color', (" + c + ")");
         }
 
         return Color.RED;
@@ -217,7 +219,7 @@ public class PregeneratorJob implements PregenListener {
                 renderer.func.accept(new Position2(x, z), color);
             }
         } catch (Throwable ignored) {
-            Iris.error("Failed to draw pregen");
+            IrisLogging.error("Failed to draw pregen");
         }
     }
 
@@ -236,7 +238,7 @@ public class PregeneratorJob implements PregenListener {
                 J.sleep(3000);
                 frame.setVisible(false);
             } catch (Throwable ignored) {
-                Iris.error("Error closing pregen gui");
+                IrisLogging.error("Error closing pregen gui");
             }
         });
     }
@@ -259,7 +261,7 @@ public class PregeneratorJob implements PregenListener {
                 frame.setSize(1000, 1000);
                 frame.setVisible(true);
             } catch (Throwable ignored) {
-                Iris.error("Error opening pregen gui");
+                IrisLogging.error("Error opening pregen gui");
             }
         });
     }
@@ -421,7 +423,7 @@ public class PregeneratorJob implements PregenListener {
                 try {
                     order.pop().run();
                 } catch (Throwable e) {
-                    Iris.reportError(e);
+                    IrisLogging.reportError(e);
 
                 }
             }

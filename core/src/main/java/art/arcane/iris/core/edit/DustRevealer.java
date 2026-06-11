@@ -18,7 +18,8 @@
 
 package art.arcane.iris.core.edit;
 
-import art.arcane.iris.Iris;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
+import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.framework.Engine;
@@ -101,7 +102,7 @@ public class DustRevealer {
                     is(new BlockPosition(block.getX() + 1, block.getY() - 1, block.getZ() - 1));
                     is(new BlockPosition(block.getX() + 1, block.getY() - 1, block.getZ() + 1));
                 } catch (Throwable e) {
-                    Iris.reportError(e);
+                    IrisLogging.reportError(e);
                     e.printStackTrace();
                 }
             });
@@ -195,7 +196,7 @@ public class DustRevealer {
             lines.add("Server biome: " + INMS.get().getTrueBiomeBaseKey(block.getLocation())
                     + " (ID: " + INMS.get().getTrueBiomeBaseId(INMS.get().getTrueBiomeBase(block.getLocation())) + ")");
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
         }
 
         if (region != null) {
@@ -255,7 +256,7 @@ public class DustRevealer {
         try {
             return supplier.get();
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
             return null;
         }
     }
@@ -269,9 +270,9 @@ public class DustRevealer {
                     .color(NamedTextColor.GREEN)
                     .clickEvent(ClickEvent.copyToClipboard(payload))
                     .hoverEvent(HoverEvent.showText(Component.text("Copy block stats to clipboard")));
-            Iris.audiences.player(sender.player()).sendMessage(button);
+            BukkitPlatform.audiences().player(sender.player()).sendMessage(button);
         } catch (Throwable e) {
-            Iris.reportError(e);
+            IrisLogging.reportError(e);
         }
     }
 

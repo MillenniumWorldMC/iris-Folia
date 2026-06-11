@@ -19,6 +19,7 @@
 package art.arcane.iris.core.commands;
 
 import art.arcane.iris.Iris;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.core.link.WorldEditLink;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.loader.ResourceLoader;
@@ -49,7 +50,6 @@ import art.arcane.iris.util.common.director.specialhandlers.ObjectTargetHandler;
 import art.arcane.iris.util.common.format.C;
 import art.arcane.iris.util.common.math.Direction;
 import art.arcane.volmlib.util.math.RNG;
-import io.papermc.lib.PaperLib;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
@@ -148,7 +148,7 @@ public class CommandObject implements DirectorExecutor {
                     if (p != null) {
                         Location target = new Location(world, 0.5D, 66D, 0.5D);
                         J.runEntity(p, () -> {
-                            PaperLib.teleportAsync(p, target).thenRun(() -> p.setGameMode(GameMode.CREATIVE));
+                            BukkitPlatform.teleportAsync(p, target).thenRun(() -> p.setGameMode(GameMode.CREATIVE));
                         });
                     }
                 }

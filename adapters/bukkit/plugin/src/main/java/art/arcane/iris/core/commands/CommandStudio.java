@@ -19,6 +19,7 @@
 package art.arcane.iris.core.commands;
 
 import art.arcane.iris.Iris;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.gui.NoiseExplorerGUI;
 import art.arcane.iris.core.gui.VisionGUI;
@@ -63,7 +64,6 @@ import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.scheduling.O;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
 import art.arcane.iris.util.common.scheduling.jobs.ParallelRadiusJob;
-import io.papermc.lib.PaperLib;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryType;
@@ -615,7 +615,7 @@ public class CommandStudio implements DirectorExecutor {
 
         sender().sendMessage(C.GREEN + "Sending you to the studio world!");
         var player = player();
-        PaperLib.teleportAsync(player(), Iris.service(StudioSVC.class)
+        BukkitPlatform.teleportAsync(player(), Iris.service(StudioSVC.class)
                 .getActiveProject()
                 .getActiveProvider()
                 .getTarget()
@@ -674,7 +674,7 @@ public class CommandStudio implements DirectorExecutor {
             pw.println("Iris Version: " + Iris.instance.getDescription().getVersion());
             pw.println("Bukkit Version: " + Bukkit.getBukkitVersion());
             pw.println("MC Version: " + Bukkit.getVersion());
-            pw.println("PaperSpigot: " + (PaperLib.isPaper() ? "Yup!" : "Nope!"));
+            pw.println("PaperSpigot: " + (BukkitPlatform.isPaperServer() ? "Yup!" : "Nope!"));
             pw.println("Report Captured At: " + new Date());
             pw.println("Chunks: (" + chunks.size() + "): ");
 

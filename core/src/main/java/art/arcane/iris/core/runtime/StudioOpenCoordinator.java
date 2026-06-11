@@ -1,6 +1,8 @@
 package art.arcane.iris.core.runtime;
 
-import art.arcane.iris.Iris;
+import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.core.lifecycle.WorldLifecycleService;
 import art.arcane.iris.core.project.IrisProject;
 import art.arcane.iris.core.tools.IrisCreator;
@@ -87,7 +89,7 @@ public final class StudioOpenCoordinator {
         try {
             long openStart = System.currentTimeMillis();
             long t = openStart;
-            Iris.debug("[Studio timing] ===== studio open START: " + request.worldName() + " =====");
+            IrisLogging.debug("[Studio timing] ===== studio open START: " + request.worldName() + " =====");
             updateStage(request, "resolve_dimension", 0.04D);
             if (IrisToolbelt.getDimension(request.dimensionKey()) == null) {
                 throw new IrisException("Dimension cannot be found for id " + request.dimensionKey() + ".");
@@ -186,16 +188,16 @@ public final class StudioOpenCoordinator {
             }
             t = logStudioPhase("finalize + openVSCode", t, openStart);
 
-            Iris.info("Studio open: " + world.getName() + " ready in " + (System.currentTimeMillis() - openStart) + "ms");
+            IrisLogging.info("Studio open: " + world.getName() + " ready in " + (System.currentTimeMillis() - openStart) + "ms");
             future.complete(new StudioOpenResult(world, safeEntry));
         } catch (Throwable e) {
-            Iris.reportError("Studio open failed for world \"" + request.worldName() + "\".", e);
+            IrisLogging.reportError("Studio open failed for world \"" + request.worldName() + "\".", e);
             if (!request.retainOnFailure()) {
                 try {
                     updateStage(request, "cleanup", 1.00D);
                     closeWorld(provider, request.worldName(), world, true, request.project());
                 } catch (Throwable cleanupError) {
-                    Iris.reportError("Studio cleanup failed for world \"" + request.worldName() + "\".", cleanupError);
+                    IrisLogging.reportError("Studio cleanup failed for world \"" + request.worldName() + "\".", cleanupError);
                 }
             }
             future.completeExceptionally(e);
@@ -204,7 +206,7 @@ public final class StudioOpenCoordinator {
 
     private long logStudioPhase(String phase, long t, long openStart) {
         long now = System.currentTimeMillis();
-        Iris.debug("[Studio timing] " + phase + " = " + (now - t) + "ms  (cumulative " + (now - openStart) + "ms)");
+        IrisLogging.debug("[Studio timing] " + phase + " = " + (now - t) + "ms  (cumulative " + (now - openStart) + "ms)");
         return now;
     }
 
@@ -219,7 +221,7 @@ public final class StudioOpenCoordinator {
         CompletableFuture<Void> loaded = new CompletableFuture<>();
         J.s(() -> {
             try {
-                world.addPluginChunkTicket(chunkX, chunkZ, Iris.instance);
+                world.addPluginChunkTicket(chunkX, chunkZ, art.arcane.iris.platform.bukkit.BukkitPlatform.plugin());
             } catch (Throwable t) {
                 loaded.completeExceptionally(t);
                 return;
@@ -331,7 +333,7 @@ public final class StudioOpenCoordinator {
                 continue;
             }
 
-            Iris.linkMultiverseCore.removeFromConfig(familyWorld);
+            IrisServices.get(art.arcane.iris.core.link.MultiverseCoreLink.class).removeFromConfig(familyWorld);
             WorldLifecycleService.get().unload(familyWorld, false);
         }
     }
@@ -353,7 +355,7 @@ public final class StudioOpenCoordinator {
                 deleteWorldFolderAsync(folder, 40).get(15L, TimeUnit.SECONDS);
             } catch (Throwable e) {
                 liveDeleted = false;
-                Iris.reportError("Studio folder deletion retries failed for \"" + folder.getAbsolutePath() + "\".", unwrapFailure(e));
+                IrisLogging.reportError("Studio folder deletion retries failed for \"" + folder.getAbsolutePath() + "\".", unwrapFailure(e));
             }
 
             if (folder.exists()) {
@@ -366,11 +368,11 @@ public final class StudioOpenCoordinator {
         }
 
         try {
-            Iris.queueWorldDeletionOnStartup(Collections.singleton(worldName));
+            IrisServices.get(WorldDeletionQueue.class).queueForStartupDeletion(Collections.singleton(worldName));
             return new WorldFamilyDeleteResult(false, true);
         } catch (IOException e) {
             if (unloadCompletedLive) {
-                Iris.reportError("Failed to queue deferred deletion for world \"" + worldName + "\".", e);
+                IrisLogging.reportError("Failed to queue deferred deletion for world \"" + worldName + "\".", e);
             }
             return new WorldFamilyDeleteResult(false, false);
         }
