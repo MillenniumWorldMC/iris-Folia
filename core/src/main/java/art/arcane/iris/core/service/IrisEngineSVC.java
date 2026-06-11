@@ -4,6 +4,7 @@ import com.google.common.util.concurrent.AtomicDouble;
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.loader.ResourceLoader;
+import art.arcane.iris.core.runtime.GoldenHashScanner;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
@@ -310,6 +311,9 @@ public class IrisEngineSVC implements IrisService {
                     if (shouldSkipForMaintenance(engineWorld)) {
                         return;
                     }
+                    if (GoldenHashScanner.isScanActive()) {
+                        return;
+                    }
 
                     try {
                         engine.getMantle().trim(activeIdleDuration(engine), activeTectonicLimit(engine));
@@ -335,6 +339,10 @@ public class IrisEngineSVC implements IrisService {
                         return;
                     World engineWorld = engine.getWorld().realWorld();
                     if (shouldSkipForMaintenance(engineWorld)) {
+                        return;
+                    }
+
+                    if (GoldenHashScanner.isScanActive()) {
                         return;
                     }
 

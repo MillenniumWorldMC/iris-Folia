@@ -698,13 +698,19 @@ public class IrisObject extends IrisRegistrant {
                 }
 
                 double newRotation = config.getRotation().getYAxis().getMin() + slopeRotationY;
+                IrisObjectRotation originalRotation = config.getRotation();
+                IrisObjectRotation slopeRotation = new IrisObjectRotation();
+                slopeRotation.setXAxis(originalRotation.getXAxis());
+                slopeRotation.setZAxis(originalRotation.getZAxis());
                 if (newRotation == 0) {
-                    config.getRotation().setYAxis(new IrisAxisRotationClamp(false, false, 0, 0, 90));
-                    config.getRotation().setEnabled(config.getRotation().canRotateX() || config.getRotation().canRotateZ());
+                    slopeRotation.setYAxis(new IrisAxisRotationClamp(false, false, 0, 0, 90));
+                    slopeRotation.setEnabled(originalRotation.canRotateX() || originalRotation.canRotateZ());
                 } else {
-                    config.getRotation().setYAxis(new IrisAxisRotationClamp(true, false, newRotation, newRotation, 90));
-                    config.getRotation().setEnabled(true);
+                    slopeRotation.setYAxis(new IrisAxisRotationClamp(true, false, newRotation, newRotation, 90));
+                    slopeRotation.setEnabled(true);
                 }
+                config = config.toPlacement(config.getPlace().toArray(new String[0]));
+                config.setRotation(slopeRotation);
             }
         }
 
@@ -1048,7 +1054,9 @@ public class IrisObject extends IrisRegistrant {
                 }
 
                 if (placer.isPreventingDecay() && (data) instanceof Leaves && !((Leaves) (data)).isPersistent()) {
-                    ((Leaves) data).setPersistent(true);
+                    Leaves leaves = (Leaves) data.clone();
+                    leaves.setPersistent(true);
+                    data = leaves;
                 }
 
                 for (IrisObjectReplace j : config.getEdit()) {
@@ -1103,16 +1111,23 @@ public class IrisObject extends IrisRegistrant {
                 }
 
                 if (data instanceof Waterlogged && shouldAutoWaterlogBlock(placer, config, yv, xx, yy, zz)) {
-                    ((Waterlogged) data).setWaterlogged(true);
+                    Waterlogged waterlogged = (Waterlogged) data.clone();
+                    waterlogged.setWaterlogged(true);
+                    data = waterlogged;
                 }
 
                 if (B.isVineBlock(data)) {
-                    MultipleFacing f = (MultipleFacing) data;
+                    MultipleFacing f = (MultipleFacing) data.clone();
+                    boolean facesChanged = false;
                     for (BlockFace face : f.getAllowedFaces()) {
                         BlockData facingBlock = placer.get(xx + face.getModX(), yy + face.getModY(), zz + face.getModZ());
                         if (B.isSolid(facingBlock) && !B.isVineBlock(facingBlock)) {
                             f.setFace(face, true);
+                            facesChanged = true;
                         }
+                    }
+                    if (facesChanged) {
+                        data = f;
                     }
                 }
 
@@ -1314,8 +1329,11 @@ public class IrisObject extends IrisRegistrant {
 
                 int highest = placer.getHighest(xx, zz, getLoader(), true);
 
-                if (d instanceof Waterlogged && shouldAutoWaterlogBlock(placer, config, yv, xx, highest, zz))
-                    ((Waterlogged) d).setWaterlogged(true);
+                if (d instanceof Waterlogged && shouldAutoWaterlogBlock(placer, config, yv, xx, highest, zz)) {
+                    Waterlogged waterlogged = (Waterlogged) d.clone();
+                    waterlogged.setWaterlogged(true);
+                    d = waterlogged;
+                }
 
                 int lowerBound = highest - 1;
                 if (settings != null) {
@@ -1352,12 +1370,17 @@ public class IrisObject extends IrisRegistrant {
                     }
 
                     if (B.isVineBlock(d)) {
-                        MultipleFacing f = (MultipleFacing) d;
+                        MultipleFacing f = (MultipleFacing) d.clone();
+                        boolean facesChanged = false;
                         for (BlockFace face : f.getAllowedFaces()) {
                             BlockData facingBlock = placer.get(xx + face.getModX(), j + face.getModY(), zz + face.getModZ());
                             if (B.isSolid(facingBlock) && !B.isVineBlock(facingBlock)) {
                                 f.setFace(face, true);
+                                facesChanged = true;
                             }
+                        }
+                        if (facesChanged) {
+                            d = f;
                         }
                     }
                     placer.set(xx, j, zz, d);

@@ -225,14 +225,17 @@ public class IrisPostModifier extends EngineAssignedModifier<BlockData> {
         // Foliage
         b = getPostBlock(x, h + 1, z, currentPostX, currentPostZ, currentData);
 
-        if (B.isVineBlock(b) && b instanceof MultipleFacing f) {
+        if (B.isVineBlock(b) && b instanceof MultipleFacing) {
+            MultipleFacing f = (MultipleFacing) b.clone();
             int finalH = h + 1;
 
             f.getAllowedFaces().forEach(face -> {
                 BlockData d = getPostBlock(x + face.getModX(), finalH + face.getModY(), z + face.getModZ(), currentPostX, currentPostZ, currentData);
                 f.setFace(face, !B.isAir(d) && !B.isVineBlock(d));
             });
-            setPostBlock(x, h + 1, z, b, currentPostX, currentPostZ, currentData);
+            if (!f.equals(b)) {
+                setPostBlock(x, h + 1, z, f, currentPostX, currentPostZ, currentData);
+            }
         }
 
         if (B.isFoliage(b) || b.getMaterial().equals(Material.DEAD_BUSH)) {

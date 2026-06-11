@@ -21,6 +21,7 @@ package art.arcane.iris.engine.object;
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.data.cache.AtomicCache;
+import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.annotations.*;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
@@ -202,8 +203,11 @@ public class IrisObjectPlacement {
     }
 
     public CNG getSurfaceWarp(RNG rng, IrisData data) {
-        return surfaceWarp.aquire(() ->
-                getWarp().create(rng, data));
+        return surfaceWarp.aquire(() -> {
+            Engine engine = data.getEngine();
+            RNG warpRng = engine != null ? new RNG(engine.getSeedManager().getComponent() + 1024) : new RNG(8675309L);
+            return getWarp().create(warpRng, data);
+        });
     }
 
     public double warp(RNG rng, double x, double y, double z, IrisData data) {

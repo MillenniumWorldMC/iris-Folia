@@ -48,6 +48,11 @@ public class IrisOreGenerator {
 
     private transient AtomicCache<CNG> chanceCache = new AtomicCache<>();
 
+    public void warm(RNG rng, IrisData data) {
+        chanceCache.aquire(() -> chanceStyle.create(rng, data));
+        palette.getLayerGenerator(rng, data);
+    }
+
     public BlockData generate(int x, int y, int z, RNG rng, IrisData data) {
         if (palette.getPalette().isEmpty()) {
             return null;

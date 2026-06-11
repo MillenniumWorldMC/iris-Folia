@@ -1381,8 +1381,10 @@ public class MantleObjectComponent extends IrisMantleComponent {
                     vacuumPlacements.add(j);
                 }
             }
+            updateProceduralRadiusBounds(region.getProceduralObjects(), xg, zg);
         }
         for (IrisBiome biome : dimension.getAllBiomes(this::getData)) {
+            updateProceduralRadiusBounds(biome.getProceduralObjects(), xg, zg);
             for (IrisObjectPlacement j : biome.getObjects()) {
                 if (j.getScale().canScaleBeyond()) {
                     scalars.put(j.getScale(), j.getPlace());
@@ -1412,6 +1414,24 @@ public class MantleObjectComponent extends IrisMantleComponent {
         }
 
         return Math.max(xg.get(), zg.get());
+    }
+
+    private void updateProceduralRadiusBounds(IrisProceduralObjects procedural, AtomicInteger xg, AtomicInteger zg) {
+        if (procedural == null || procedural.isEmpty()) {
+            return;
+        }
+        for (IrisProceduralPlacement placement : procedural.getAllPlacements()) {
+            if (placement == null) {
+                continue;
+            }
+            for (IrisObject variant : placement.getVariantObjects(getData())) {
+                if (variant == null) {
+                    continue;
+                }
+                xg.getAndSet(Math.max(variant.getW(), xg.get()));
+                zg.getAndSet(Math.max(variant.getD(), zg.get()));
+            }
+        }
     }
 
     private void updateRadiusBounds(

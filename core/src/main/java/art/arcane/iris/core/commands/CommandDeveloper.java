@@ -26,6 +26,7 @@ import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.ServerConfigurator;
 import art.arcane.iris.core.nms.datapack.DataVersion;
 import art.arcane.iris.core.runtime.ChunkClearer;
+import art.arcane.iris.core.runtime.GoldenHashScanner;
 import art.arcane.iris.core.runtime.InPlaceChunkRegenerator;
 import art.arcane.iris.core.service.IrisEngineSVC;
 import art.arcane.iris.core.service.StudioSVC;
@@ -359,6 +360,51 @@ public class CommandDeveloper implements DirectorExecutor {
                 + " chunks=" + chunks);
 
         new InPlaceChunkRegenerator(world, engine, sender(), centerX, centerZ, radius).start();
+    }
+
+    @Director(name = "goldenhash", aliases = {"gold"}, description = "Generate chunks into buffers (no world writes) and hash blocks+biomes; captures a golden file or verifies against an existing one. Resets mantle in the scanned area - use on disposable test worlds.", origin = DirectorOrigin.BOTH)
+    public void goldenhash(
+            @Param(description = "The world to scan", contextual = true)
+            World world,
+            @Param(name = "radius", description = "Radius in chunks around the center", defaultValue = "8")
+            int radius,
+            @Param(name = "center-x", description = "Center chunk X", defaultValue = "0")
+            int centerX,
+            @Param(name = "center-z", description = "Center chunk Z", defaultValue = "0")
+            int centerZ,
+            @Param(name = "reset-mantle", description = "Delete mantle data in the scan area first for full regeneration from scratch", defaultValue = "true")
+            boolean resetMantle,
+            @Param(name = "threads", description = "Concurrent chunk generations; 1 = strictly serial for order-dependence testing", defaultValue = "8")
+            int threads,
+            @Param(name = "deep", description = "Also dump full per-chunk non-air blockstates for offline diffing", defaultValue = "false")
+            boolean deep
+    ) {
+        if (radius < 0) {
+            sender().sendMessage(C.RED + "Radius must be 0 or greater.");
+            return;
+        }
+
+        if (world == null || !IrisToolbelt.isIrisWorld(world)) {
+            sender().sendMessage(C.RED + "Target must be an Iris world.");
+            return;
+        }
+
+        PlatformChunkGenerator access = IrisToolbelt.access(world);
+        if (access == null || access.getEngine() == null) {
+            sender().sendMessage(C.RED + "The engine access for this world is null.");
+            return;
+        }
+
+        int chunks = (radius * 2 + 1) * (radius * 2 + 1);
+        sender().sendMessage(C.GREEN + "GoldenHash started: " + C.GOLD + chunks + C.GREEN
+                + " chunk(s) around " + C.GOLD + centerX + "," + centerZ + C.GREEN
+                + " in buffers (world untouched).");
+        Iris.info("goldenhash start: world=" + world.getName()
+                + " center=" + centerX + "," + centerZ
+                + " radius=" + radius
+                + " chunks=" + chunks);
+
+        new GoldenHashScanner(world, access.getEngine(), sender(), centerX, centerZ, radius, resetMantle, threads, deep).start();
     }
 
 }

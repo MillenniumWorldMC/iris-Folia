@@ -161,6 +161,9 @@ public class IrisEngine implements Engine {
         _t0 = M.ms();
         setupEngine();
         Iris.debug("[IrisEngine timing] setupEngine total=" + (M.ms() - _t0) + "ms");
+        _t0 = M.ms();
+        GenerationCacheWarmer.warm(this);
+        Iris.debug("[IrisEngine timing] cache warm total=" + (M.ms() - _t0) + "ms");
         Iris.debug("Engine Initialized " + getCacheID());
     }
 

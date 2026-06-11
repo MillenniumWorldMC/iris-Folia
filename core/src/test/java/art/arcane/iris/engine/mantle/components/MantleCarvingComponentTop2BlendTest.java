@@ -23,7 +23,7 @@ public class MantleCarvingComponentTop2BlendTest {
     @BeforeClass
     public static void setup() throws Exception {
         Class<?> weightedProfileClass = Class.forName("art.arcane.iris.engine.mantle.components.MantleCarvingComponent$WeightedProfile");
-        weightedProfileConstructor = weightedProfileClass.getDeclaredConstructor(IrisCaveProfile.class, double[].class, double.class, Class.forName("art.arcane.iris.engine.object.IrisRange"));
+        weightedProfileConstructor = weightedProfileClass.getDeclaredConstructor(IrisCaveProfile.class, double[].class, double.class, Class.forName("art.arcane.iris.engine.object.IrisRange"), int.class);
         weightedProfileConstructor.setAccessible(true);
         limitMethod = MantleCarvingComponent.class.getDeclaredMethod("limitAndMergeBlendedProfiles", List.class, int.class, int.class);
         limitMethod.setAccessible(true);
@@ -76,6 +76,33 @@ public class MantleCarvingComponentTop2BlendTest {
         assertEquals(1.0D, byProfile.get(second)[254], 0D);
     }
 
+    @Test
+    public void topTwoTieBreaksBySequenceNotIdentity() throws Exception {
+        IrisCaveProfile first = new IrisCaveProfile().setEnabled(true).setBaseWeight(1.0D);
+        IrisCaveProfile second = new IrisCaveProfile().setEnabled(true).setBaseWeight(1.0D);
+        IrisCaveProfile third = new IrisCaveProfile().setEnabled(true).setBaseWeight(1.0D);
+
+        double[] weightsA = new double[256];
+        double[] weightsB = new double[256];
+        double[] weightsC = new double[256];
+        weightsA[0] = 0.5D;
+        weightsB[0] = 0.5D;
+        weightsC[0] = 0.5D;
+
+        List<Object> weighted = new ArrayList<>();
+        weighted.add(weightedProfileConstructor.newInstance(first, weightsA, average(weightsA), null, 0));
+        weighted.add(weightedProfileConstructor.newInstance(second, weightsB, average(weightsB), null, 1));
+        weighted.add(weightedProfileConstructor.newInstance(third, weightsC, average(weightsC), null, 2));
+
+        List<?> limited = invokeLimit(weighted, 2);
+        assertEquals(2, limited.size());
+
+        Map<IrisCaveProfile, double[]> byProfile = extractWeightsByProfile(limited);
+        assertEquals(true, byProfile.containsKey(first));
+        assertEquals(true, byProfile.containsKey(second));
+        assertEquals(false, byProfile.containsKey(third));
+    }
+
     private WeightedInput createWeightedProfiles() throws Exception {
         IrisCaveProfile first = new IrisCaveProfile().setEnabled(true).setBaseWeight(1.31D);
         IrisCaveProfile second = new IrisCaveProfile().setEnabled(true).setBaseWeight(1.17D);
@@ -99,9 +126,9 @@ public class MantleCarvingComponentTop2BlendTest {
         thirdWeights[255] = 0.4D;
 
         List<Object> weighted = new ArrayList<>();
-        weighted.add(weightedProfileConstructor.newInstance(first, firstWeights, average(firstWeights), null));
-        weighted.add(weightedProfileConstructor.newInstance(second, secondWeights, average(secondWeights), null));
-        weighted.add(weightedProfileConstructor.newInstance(third, thirdWeights, average(thirdWeights), null));
+        weighted.add(weightedProfileConstructor.newInstance(first, firstWeights, average(firstWeights), null, 0));
+        weighted.add(weightedProfileConstructor.newInstance(second, secondWeights, average(secondWeights), null, 1));
+        weighted.add(weightedProfileConstructor.newInstance(third, thirdWeights, average(thirdWeights), null, 2));
         return new WeightedInput(weighted, profiles);
     }
 

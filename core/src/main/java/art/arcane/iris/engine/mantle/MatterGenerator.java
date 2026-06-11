@@ -92,7 +92,7 @@ public interface MatterGenerator {
                             int finalPassZ = passZ;
                             MantleChunk<Matter> finalChunk = chunk;
                             MantleComponent finalComponent = component;
-                            Runnable task = () -> finalChunk.raiseFlagUnchecked(finalComponent.getFlag(),
+                            Runnable task = () -> finalChunk.raiseFlagSuspend(finalComponent.getFlag(),
                                     () -> finalComponent.generateLayer(writer, finalPassX, finalPassZ, context));
 
                             if (multicore) {

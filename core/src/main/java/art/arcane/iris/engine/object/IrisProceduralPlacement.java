@@ -19,6 +19,7 @@
 package art.arcane.iris.engine.object;
 
 import art.arcane.iris.core.loader.IrisData;
+import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.math.RNG;
 
 /**
@@ -40,4 +41,6 @@ public interface IrisProceduralPlacement {
     IrisObjectPlacement asPlacement();
 
     IrisObject getVariantObject(IrisData data, RNG rng);
+
+    KList<IrisObject> getVariantObjects(IrisData data);
 }

@@ -34,6 +34,8 @@ import art.arcane.iris.engine.object.IrisRange;
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.iris.util.project.stream.ProceduralStream;
 import art.arcane.iris.util.project.stream.utility.ChunkFillableDoubleStream2D;
+import art.arcane.iris.util.simd.SimdKernels;
+import art.arcane.iris.util.simd.SimdSupport;
 import art.arcane.volmlib.util.documentation.ChunkCoordinates;
 import art.arcane.volmlib.util.mantle.flag.ReservedFlag;
 import art.arcane.volmlib.util.math.PowerOfTwoCoordinates;
@@ -162,9 +164,11 @@ public class MantleCarvingComponent extends IrisMantleComponent {
         IrisCaveProfile[] profileField = blendScratch.profileField;
         Map<IrisCaveProfile, double[]> columnProfileWeights = blendScratch.columnProfileWeights;
         IdentityHashMap<IrisCaveProfile, Boolean> activeProfiles = blendScratch.activeProfiles;
+        List<IrisCaveProfile> profileOrder = blendScratch.profileOrder;
         IrisCaveProfile[] kernelProfiles = blendScratch.kernelProfiles;
         double[] kernelProfileWeights = blendScratch.kernelProfileWeights;
         activeProfiles.clear();
+        profileOrder.clear();
         fillProfileField(profileField, chunkX, chunkZ, complex, resolverState, blendScratch);
 
         for (int localX = 0; localX < CHUNK_SIZE; localX++) {
@@ -217,34 +221,31 @@ public class MantleCarvingComponent extends IrisMantleComponent {
                     } else if (!activeProfiles.containsKey(profile)) {
                         Arrays.fill(weights, 0D);
                     }
-                    activeProfiles.put(profile, Boolean.TRUE);
+                    if (activeProfiles.put(profile, Boolean.TRUE) == null) {
+                        profileOrder.add(profile);
+                    }
                     weights[columnIndex] = columnWeight;
                 }
             }
         }
 
         List<WeightedProfile> columnWeightedProfiles = new ArrayList<>();
-        for (IrisCaveProfile profile : activeProfiles.keySet()) {
+        for (IrisCaveProfile profile : profileOrder) {
             double[] weights = columnProfileWeights.get(profile);
             if (weights == null) {
                 continue;
             }
 
-            double totalWeight = 0D;
-            double maxWeight = 0D;
-            for (double weight : weights) {
-                totalWeight += weight;
-                if (weight > maxWeight) {
-                    maxWeight = weight;
-                }
-            }
+            SimdKernels kernels = SimdSupport.kernels();
+            double totalWeight = kernels.sum(weights, weights.length);
+            double maxWeight = kernels.max(weights, weights.length);
 
             if (maxWeight < MIN_WEIGHT) {
                 continue;
             }
 
             double averageWeight = totalWeight / CHUNK_AREA;
-            columnWeightedProfiles.add(new WeightedProfile(profile, weights, averageWeight, null));
+            columnWeightedProfiles.add(new WeightedProfile(profile, weights, averageWeight, null, columnWeightedProfiles.size()));
         }
 
         List<WeightedProfile> blendedProfiles = limitAndMergeBlendedProfiles(columnWeightedProfiles, MAX_BLENDED_PROFILE_PASSES, CHUNK_AREA);
@@ -277,6 +278,7 @@ public class MantleCarvingComponent extends IrisMantleComponent {
             buildDimensionColumnPlan(columnPlan, chunkX, chunkZ, entry, resolverState);
 
             Map<IrisCaveProfile, double[]> rootProfileColumnWeights = new IdentityHashMap<>();
+            List<IrisCaveProfile> rootProfileOrder = new ArrayList<>();
             IrisRange worldYRange = entry.getWorldYRange();
             for (int columnIndex = 0; columnIndex < CHUNK_AREA; columnIndex++) {
                 IrisDimensionCarvingEntry resolvedEntry = columnPlan[columnIndex];
@@ -290,14 +292,17 @@ public class MantleCarvingComponent extends IrisMantleComponent {
                     continue;
                 }
 
-                double[] columnWeights = rootProfileColumnWeights.computeIfAbsent(profile, key -> new double[CHUNK_AREA]);
+                double[] columnWeights = rootProfileColumnWeights.get(profile);
+                if (columnWeights == null) {
+                    columnWeights = new double[CHUNK_AREA];
+                    rootProfileColumnWeights.put(profile, columnWeights);
+                    rootProfileOrder.add(profile);
+                }
                 columnWeights[columnIndex] = 1D;
             }
 
-            List<Map.Entry<IrisCaveProfile, double[]>> profileEntries = new ArrayList<>(rootProfileColumnWeights.entrySet());
-            profileEntries.sort((a, b) -> Integer.compare(a.getKey().hashCode(), b.getKey().hashCode()));
-            for (Map.Entry<IrisCaveProfile, double[]> profileEntry : profileEntries) {
-                weightedProfiles.add(new WeightedProfile(profileEntry.getKey(), profileEntry.getValue(), -1D, worldYRange));
+            for (IrisCaveProfile profile : rootProfileOrder) {
+                weightedProfiles.add(new WeightedProfile(profile, rootProfileColumnWeights.get(profile), -1D, worldYRange, weightedProfiles.size()));
             }
         }
 
@@ -545,7 +550,7 @@ public class MantleCarvingComponent extends IrisMantleComponent {
         List<WeightedProfile> mergedProfiles = new ArrayList<>();
         for (WeightedProfile keptProfile : keptProfiles) {
             double averageWeight = computeAverageWeight(keptProfile.columnWeights, areaSize);
-            mergedProfiles.add(new WeightedProfile(keptProfile.profile, keptProfile.columnWeights, averageWeight, keptProfile.worldYRange));
+            mergedProfiles.add(new WeightedProfile(keptProfile.profile, keptProfile.columnWeights, averageWeight, keptProfile.worldYRange, keptProfile.sequence));
         }
         mergedProfiles.sort(MantleCarvingComponent::compareByCarveOrder);
         return mergedProfiles;
@@ -556,7 +561,7 @@ public class MantleCarvingComponent extends IrisMantleComponent {
         if (weightOrder != 0) {
             return weightOrder;
         }
-        return Integer.compare(profileSortKey(a.profile), profileSortKey(b.profile));
+        return Integer.compare(a.sequence, b.sequence);
     }
 
     private static int compareByCarveOrder(WeightedProfile a, WeightedProfile b) {
@@ -564,14 +569,7 @@ public class MantleCarvingComponent extends IrisMantleComponent {
         if (weightOrder != 0) {
             return weightOrder;
         }
-        return Integer.compare(profileSortKey(a.profile), profileSortKey(b.profile));
-    }
-
-    private static int profileSortKey(IrisCaveProfile profile) {
-        if (profile == null) {
-            return 0;
-        }
-        return profile.hashCode();
+        return Integer.compare(a.sequence, b.sequence);
     }
 
     private static double computeAverageWeight(double[] weights) {
@@ -607,12 +605,14 @@ public class MantleCarvingComponent extends IrisMantleComponent {
         private final double[] columnWeights;
         private final double averageWeight;
         private final IrisRange worldYRange;
+        private final int sequence;
 
-        private WeightedProfile(IrisCaveProfile profile, double[] columnWeights, double averageWeight, IrisRange worldYRange) {
+        private WeightedProfile(IrisCaveProfile profile, double[] columnWeights, double averageWeight, IrisRange worldYRange, int sequence) {
             this.profile = profile;
             this.columnWeights = columnWeights;
             this.averageWeight = averageWeight;
             this.worldYRange = worldYRange;
+            this.sequence = sequence;
         }
 
         private double averageWeight() {
@@ -627,6 +627,7 @@ public class MantleCarvingComponent extends IrisMantleComponent {
         private final IdentityHashMap<IrisCaveProfile, double[]> columnProfileWeights = new IdentityHashMap<>();
         private final IdentityHashMap<IrisDimensionCarvingEntry, IrisDimensionCarvingEntry[]> dimensionColumnPlans = new IdentityHashMap<>();
         private final IdentityHashMap<IrisCaveProfile, Boolean> activeProfiles = new IdentityHashMap<>();
+        private final List<IrisCaveProfile> profileOrder = new ArrayList<>();
         private final double[] fieldSurfaceHeights = new double[FIELD_SIZE * FIELD_SIZE];
         private final IrisRegion[] fieldRegions = new IrisRegion[FIELD_SIZE * FIELD_SIZE];
         private final IrisBiome[] fieldSurfaceBiomes = new IrisBiome[FIELD_SIZE * FIELD_SIZE];
