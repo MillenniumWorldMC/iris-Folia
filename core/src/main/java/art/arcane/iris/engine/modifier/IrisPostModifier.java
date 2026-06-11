@@ -27,6 +27,8 @@ import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.volmlib.util.math.RNG;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Levelled;
@@ -36,9 +38,9 @@ import org.bukkit.block.data.type.Slab;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class IrisPostModifier extends EngineAssignedModifier<BlockData> {
-    private static final BlockData AIR = B.get("AIR");
-    private static final BlockData WATER = B.get("WATER");
+public class IrisPostModifier extends EngineAssignedModifier<PlatformBlockState> {
+    private static final PlatformBlockState AIR = B.getState("AIR");
+    private static final PlatformBlockState WATER = B.getState("WATER");
     private final RNG rng;
 
     public IrisPostModifier(Engine engine) {
@@ -47,11 +49,11 @@ public class IrisPostModifier extends EngineAssignedModifier<BlockData> {
     }
 
     @Override
-    public void onModify(int x, int z, Hunk<BlockData> output, boolean multicore, ChunkContext context) {
+    public void onModify(int x, int z, Hunk<PlatformBlockState> output, boolean multicore, ChunkContext context) {
         PrecisionStopwatch p = PrecisionStopwatch.start();
         AtomicInteger i = new AtomicInteger();
         AtomicInteger j = new AtomicInteger();
-        Hunk<BlockData> sync = output.synchronize();
+        Hunk<PlatformBlockState> sync = output.synchronize();
         for (i.set(0); i.get() < output.getWidth(); i.getAndIncrement()) {
             for (j.set(0); j.get() < output.getDepth(); j.getAndIncrement()) {
                 int ii = i.get();
@@ -63,7 +65,7 @@ public class IrisPostModifier extends EngineAssignedModifier<BlockData> {
         getEngine().getMetrics().getPost().put(p.getMilliseconds());
     }
 
-    private void post(int currentPostX, int currentPostZ, Hunk<BlockData> currentData, int x, int z, ChunkContext context) {
+    private void post(int currentPostX, int currentPostZ, Hunk<PlatformBlockState> currentData, int x, int z, ChunkContext context) {
         int h = getEngine().getMantle().trueHeight(x, z);
         int ha = getEngine().getMantle().trueHeight(x + 1, z);
         int hb = getEngine().getMantle().trueHeight(x, z + 1);
@@ -101,13 +103,14 @@ public class IrisPostModifier extends EngineAssignedModifier<BlockData> {
         g += hd == h - 1 ? 1 : 0;
 
         if (g >= 4) {
-            BlockData bc = getPostBlock(x, h, z, currentPostX, currentPostZ, currentData);
-            BlockData b = getPostBlock(x, h + 1, z, currentPostX, currentPostZ, currentData);
-            Material m = bc.getMaterial();
+            PlatformBlockState bcState = getPostBlock(x, h, z, currentPostX, currentPostZ, currentData);
+            PlatformBlockState bState = getPostBlock(x, h + 1, z, currentPostX, currentPostZ, currentData);
+            BlockData b = (BlockData) bState.nativeHandle();
+            Material m = ((BlockData) bcState.nativeHandle()).getMaterial();
 
             if ((b.getMaterial().isOccluding() && b.getMaterial().isSolid())) {
                 if (m.isSolid()) {
-                    setPostBlock(x, h, z, b, currentPostX, currentPostZ, currentData);
+                    setPostBlock(x, h, z, bState, currentPostX, currentPostZ, currentData);
                     h--;
                 }
             }
@@ -120,10 +123,10 @@ public class IrisPostModifier extends EngineAssignedModifier<BlockData> {
             g += hd == h + 1 ? 1 : 0;
 
             if (g >= 4) {
-                BlockData ba = getPostBlock(x, ha, z, currentPostX, currentPostZ, currentData);
-                BlockData bb = getPostBlock(x, hb, z, currentPostX, currentPostZ, currentData);
-                BlockData bc = getPostBlock(x, hc, z, currentPostX, currentPostZ, currentData);
-                BlockData bd = getPostBlock(x, hd, z, currentPostX, currentPostZ, currentData);
+                BlockData ba = (BlockData) getPostBlock(x, ha, z, currentPostX, currentPostZ, currentData).nativeHandle();
+                BlockData bb = (BlockData) getPostBlock(x, hb, z, currentPostX, currentPostZ, currentData).nativeHandle();
+                BlockData bc = (BlockData) getPostBlock(x, hc, z, currentPostX, currentPostZ, currentData).nativeHandle();
+                BlockData bd = (BlockData) getPostBlock(x, hd, z, currentPostX, currentPostZ, currentData).nativeHandle();
                 g = 0;
                 g = B.isSolid(ba) ? g + 1 : g;
                 g = B.isSolid(bb) ? g + 1 : g;
@@ -147,7 +150,7 @@ public class IrisPostModifier extends EngineAssignedModifier<BlockData> {
                     int max = Math.abs(Math.max(h - ha, Math.max(h - hb, Math.max(h - hc, h - hd))));
 
                     for (int i = h; i > h - max; i--) {
-                        BlockData d = biome.getWall().get(rng, x + i, i + h, z + i, getData());
+                        PlatformBlockState d = biome.getWall().get(rng, x + i, i + h, z + i, getData());
 
                         if (d != null) {
                             if (isAirOrWater(x, i, z, currentPostX, currentPostZ, currentData)) {
@@ -176,12 +179,13 @@ public class IrisPostModifier extends EngineAssignedModifier<BlockData> {
             //@done
             {
                 IrisSlopeClip sc = biome.getSlab().getSlopeCondition();
-                BlockData d = sc.isValid(getComplex().getSlopeStream().get(x, z)) ? biome.getSlab().get(rng, x, h, z, getData()) : null;
+                PlatformBlockState d = sc.isValid(getComplex().getSlopeStream().get(x, z)) ? biome.getSlab().get(rng, x, h, z, getData()) : null;
 
                 if (d != null) {
-                    boolean cancel = B.isAir(d);
+                    BlockData rawD = (BlockData) d.nativeHandle();
+                    boolean cancel = B.isAir(rawD);
 
-                    if (d.getMaterial().equals(Material.SNOW) && h + 1 <= getDimension().getFluidHeight()) {
+                    if (rawD.getMaterial().equals(Material.SNOW) && h + 1 <= getDimension().getFluidHeight()) {
                         cancel = true;
                     }
 
@@ -198,7 +202,7 @@ public class IrisPostModifier extends EngineAssignedModifier<BlockData> {
         }
 
         // Waterlogging
-        BlockData b = getPostBlock(x, h, z, currentPostX, currentPostZ, currentData);
+        BlockData b = (BlockData) getPostBlock(x, h, z, currentPostX, currentPostZ, currentData).nativeHandle();
 
         if (b instanceof Waterlogged) {
             Waterlogged ww = (Waterlogged) b.clone();
@@ -214,7 +218,7 @@ public class IrisPostModifier extends EngineAssignedModifier<BlockData> {
 
             if (w != ww.isWaterlogged()) {
                 ww.setWaterlogged(w);
-                setPostBlock(x, h, z, ww, currentPostX, currentPostZ, currentData);
+                setPostBlock(x, h, z, BukkitBlockState.of(ww), currentPostX, currentPostZ, currentData);
             }
         } else if (b.getMaterial().equals(Material.AIR) && h <= getDimension().getFluidHeight()) {
             if ((isWaterOrWaterlogged(x + 1, h, z, currentPostX, currentPostZ, currentData) || isWaterOrWaterlogged(x - 1, h, z, currentPostX, currentPostZ, currentData) || isWaterOrWaterlogged(x, h, z + 1, currentPostX, currentPostZ, currentData) || isWaterOrWaterlogged(x, h, z - 1, currentPostX, currentPostZ, currentData))) {
@@ -223,23 +227,23 @@ public class IrisPostModifier extends EngineAssignedModifier<BlockData> {
         }
 
         // Foliage
-        b = getPostBlock(x, h + 1, z, currentPostX, currentPostZ, currentData);
+        b = (BlockData) getPostBlock(x, h + 1, z, currentPostX, currentPostZ, currentData).nativeHandle();
 
         if (B.isVineBlock(b) && b instanceof MultipleFacing) {
             MultipleFacing f = (MultipleFacing) b.clone();
             int finalH = h + 1;
 
             f.getAllowedFaces().forEach(face -> {
-                BlockData d = getPostBlock(x + face.getModX(), finalH + face.getModY(), z + face.getModZ(), currentPostX, currentPostZ, currentData);
+                BlockData d = (BlockData) getPostBlock(x + face.getModX(), finalH + face.getModY(), z + face.getModZ(), currentPostX, currentPostZ, currentData).nativeHandle();
                 f.setFace(face, !B.isAir(d) && !B.isVineBlock(d));
             });
             if (!f.equals(b)) {
-                setPostBlock(x, h + 1, z, f, currentPostX, currentPostZ, currentData);
+                setPostBlock(x, h + 1, z, BukkitBlockState.of(f), currentPostX, currentPostZ, currentData);
             }
         }
 
         if (B.isFoliage(b) || b.getMaterial().equals(Material.DEAD_BUSH)) {
-            Material onto = getPostBlock(x, h, z, currentPostX, currentPostZ, currentData).getMaterial();
+            Material onto = ((BlockData) getPostBlock(x, h, z, currentPostX, currentPostZ, currentData).nativeHandle()).getMaterial();
 
             if (!B.canPlaceOnto(b.getMaterial(), onto) && !B.isDecorant(b)) {
                 setPostBlock(x, h + 1, z, AIR, currentPostX, currentPostZ, currentData);
@@ -247,64 +251,64 @@ public class IrisPostModifier extends EngineAssignedModifier<BlockData> {
         }
     }
 
-    public boolean isAir(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<BlockData> currentData) {
-        BlockData d = getPostBlock(x, y, z, currentPostX, currentPostZ, currentData);
+    public boolean isAir(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<PlatformBlockState> currentData) {
+        BlockData d = (BlockData) getPostBlock(x, y, z, currentPostX, currentPostZ, currentData).nativeHandle();
         return d.getMaterial().equals(Material.AIR) || d.getMaterial().equals(Material.CAVE_AIR);
     }
 
-    public boolean hasGravity(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<BlockData> currentData) {
-        BlockData d = getPostBlock(x, y, z, currentPostX, currentPostZ, currentData);
+    public boolean hasGravity(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<PlatformBlockState> currentData) {
+        BlockData d = (BlockData) getPostBlock(x, y, z, currentPostX, currentPostZ, currentData).nativeHandle();
         return d.getMaterial().equals(Material.SAND) || d.getMaterial().equals(Material.RED_SAND) || d.getMaterial().equals(Material.BLACK_CONCRETE_POWDER) || d.getMaterial().equals(Material.BLUE_CONCRETE_POWDER) || d.getMaterial().equals(Material.BROWN_CONCRETE_POWDER) || d.getMaterial().equals(Material.CYAN_CONCRETE_POWDER) || d.getMaterial().equals(Material.GRAY_CONCRETE_POWDER) || d.getMaterial().equals(Material.GREEN_CONCRETE_POWDER) || d.getMaterial().equals(Material.LIGHT_BLUE_CONCRETE_POWDER) || d.getMaterial().equals(Material.LIGHT_GRAY_CONCRETE_POWDER) || d.getMaterial().equals(Material.LIME_CONCRETE_POWDER) || d.getMaterial().equals(Material.MAGENTA_CONCRETE_POWDER) || d.getMaterial().equals(Material.ORANGE_CONCRETE_POWDER) || d.getMaterial().equals(Material.PINK_CONCRETE_POWDER) || d.getMaterial().equals(Material.PURPLE_CONCRETE_POWDER) || d.getMaterial().equals(Material.RED_CONCRETE_POWDER) || d.getMaterial().equals(Material.WHITE_CONCRETE_POWDER) || d.getMaterial().equals(Material.YELLOW_CONCRETE_POWDER);
     }
 
-    public boolean isSolid(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<BlockData> currentData) {
-        BlockData d = getPostBlock(x, y, z, currentPostX, currentPostZ, currentData);
+    public boolean isSolid(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<PlatformBlockState> currentData) {
+        BlockData d = (BlockData) getPostBlock(x, y, z, currentPostX, currentPostZ, currentData).nativeHandle();
         return d.getMaterial().isSolid() && !B.isVineBlock(d);
     }
 
-    public boolean isSolidNonSlab(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<BlockData> currentData) {
-        BlockData d = getPostBlock(x, y, z, currentPostX, currentPostZ, currentData);
+    public boolean isSolidNonSlab(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<PlatformBlockState> currentData) {
+        BlockData d = (BlockData) getPostBlock(x, y, z, currentPostX, currentPostZ, currentData).nativeHandle();
         return d.getMaterial().isSolid() && !(d instanceof Slab);
     }
 
-    public boolean isAirOrWater(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<BlockData> currentData) {
-        BlockData d = getPostBlock(x, y, z, currentPostX, currentPostZ, currentData);
+    public boolean isAirOrWater(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<PlatformBlockState> currentData) {
+        BlockData d = (BlockData) getPostBlock(x, y, z, currentPostX, currentPostZ, currentData).nativeHandle();
         return d.getMaterial().equals(Material.WATER) || d.getMaterial().equals(Material.AIR) || d.getMaterial().equals(Material.CAVE_AIR);
     }
 
-    public boolean isSlab(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<BlockData> currentData) {
-        BlockData d = getPostBlock(x, y, z, currentPostX, currentPostZ, currentData);
+    public boolean isSlab(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<PlatformBlockState> currentData) {
+        BlockData d = (BlockData) getPostBlock(x, y, z, currentPostX, currentPostZ, currentData).nativeHandle();
         return d instanceof Slab;
     }
 
-    public boolean isSnowLayer(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<BlockData> currentData) {
-        BlockData d = getPostBlock(x, y, z, currentPostX, currentPostZ, currentData);
+    public boolean isSnowLayer(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<PlatformBlockState> currentData) {
+        BlockData d = (BlockData) getPostBlock(x, y, z, currentPostX, currentPostZ, currentData).nativeHandle();
         return d.getMaterial().equals(Material.SNOW);
     }
 
-    public boolean isWater(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<BlockData> currentData) {
-        BlockData d = getPostBlock(x, y, z, currentPostX, currentPostZ, currentData);
+    public boolean isWater(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<PlatformBlockState> currentData) {
+        BlockData d = (BlockData) getPostBlock(x, y, z, currentPostX, currentPostZ, currentData).nativeHandle();
         return d.getMaterial().equals(Material.WATER);
     }
 
-    public boolean isWaterOrWaterlogged(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<BlockData> currentData) {
-        BlockData d = getPostBlock(x, y, z, currentPostX, currentPostZ, currentData);
+    public boolean isWaterOrWaterlogged(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<PlatformBlockState> currentData) {
+        BlockData d = (BlockData) getPostBlock(x, y, z, currentPostX, currentPostZ, currentData).nativeHandle();
         return d.getMaterial().equals(Material.WATER) || (d instanceof Waterlogged && ((Waterlogged) d).isWaterlogged());
     }
 
-    public boolean isLiquid(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<BlockData> currentData) {
-        BlockData d = getPostBlock(x, y, z, currentPostX, currentPostZ, currentData);
+    public boolean isLiquid(int x, int y, int z, int currentPostX, int currentPostZ, Hunk<PlatformBlockState> currentData) {
+        BlockData d = (BlockData) getPostBlock(x, y, z, currentPostX, currentPostZ, currentData).nativeHandle();
         return d instanceof Levelled;
     }
 
-    public void setPostBlock(int x, int y, int z, BlockData d, int currentPostX, int currentPostZ, Hunk<BlockData> currentData) {
+    public void setPostBlock(int x, int y, int z, PlatformBlockState d, int currentPostX, int currentPostZ, Hunk<PlatformBlockState> currentData) {
         if (y < currentData.getHeight()) {
             currentData.set(x & 15, y, z & 15, d);
         }
     }
 
-    public BlockData getPostBlock(int x, int y, int z, int cpx, int cpz, Hunk<BlockData> h) {
-        BlockData b = h.getClosest(x & 15, y, z & 15);
+    public PlatformBlockState getPostBlock(int x, int y, int z, int cpx, int cpz, Hunk<PlatformBlockState> h) {
+        PlatformBlockState b = h.getClosest(x & 15, y, z & 15);
 
         return b == null ? AIR : b;
     }

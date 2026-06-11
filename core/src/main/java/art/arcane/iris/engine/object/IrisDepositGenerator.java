@@ -29,8 +29,8 @@ import art.arcane.volmlib.util.math.RNG;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import art.arcane.iris.spi.PlatformBlockState;
 import lombok.experimental.Accessors;
-import org.bukkit.block.data.BlockData;
 
 @Snippet("deposit")
 @Accessors(chain = true)
@@ -40,7 +40,7 @@ import org.bukkit.block.data.BlockData;
 @Data
 public class IrisDepositGenerator {
     private final transient AtomicCache<KList<IrisObject>> objects = new AtomicCache<>();
-    private final transient AtomicCache<KList<BlockData>> blockData = new AtomicCache<>();
+    private final transient AtomicCache<KList<PlatformBlockState>> blockData = new AtomicCache<>();
     @Required
     @MinNumber(0)
     @MaxNumber(8192) // TODO: WARNING HEIGHT
@@ -156,17 +156,17 @@ public class IrisDepositGenerator {
         return o;
     }
 
-    private BlockData nextBlock(RNG rngv, IrisData rdata) {
+    private PlatformBlockState nextBlock(RNG rngv, IrisData rdata) {
         return getBlockData(rdata).get(rngv.i(0, getBlockData(rdata).size()));
     }
 
-    public KList<BlockData> getBlockData(IrisData rdata) {
+    public KList<PlatformBlockState> getBlockData(IrisData rdata) {
         return blockData.aquire(() ->
         {
-            KList<BlockData> blockData = new KList<>();
+            KList<PlatformBlockState> blockData = new KList<>();
 
             for (IrisBlockData ix : palette) {
-                BlockData bx = ix.getBlockData(rdata);
+                PlatformBlockState bx = ix.getBlockData(rdata);
 
                 if (bx != null) {
                     blockData.add(bx);

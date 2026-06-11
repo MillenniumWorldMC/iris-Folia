@@ -45,6 +45,8 @@ import art.arcane.iris.util.project.noise.CNG;
 import art.arcane.iris.util.common.scheduling.J;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import lombok.Data;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.util.Vector;
 
@@ -266,7 +268,11 @@ public class MantleWriter implements IObjectPlacer, AutoCloseable {
     }
 
     @Override
-    public void set(int x, int y, int z, BlockData d) {
+    public void set(int x, int y, int z, PlatformBlockState s) {
+        if (s == null) {
+            return;
+        }
+        BlockData d = (BlockData) s.nativeHandle();
         if (d instanceof IrisCustomData data) {
             setData(x, y, z, data.getBase());
             setData(x, y, z, data.getCustom());
@@ -274,11 +280,11 @@ public class MantleWriter implements IObjectPlacer, AutoCloseable {
     }
 
     @Override
-    public BlockData get(int x, int y, int z) {
+    public PlatformBlockState get(int x, int y, int z) {
         BlockData block = getData(x, y, z, BlockData.class);
         if (block == null)
             return AIR;
-        return block;
+        return BukkitBlockState.of(block);
     }
 
     @Override
@@ -293,7 +299,7 @@ public class MantleWriter implements IObjectPlacer, AutoCloseable {
 
     @Override
     public boolean isSolid(int x, int y, int z) {
-        return B.isSolid(get(x, y, z));
+        return B.isSolid((BlockData) get(x, y, z).nativeHandle());
     }
 
     @Override

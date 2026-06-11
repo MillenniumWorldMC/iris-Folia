@@ -29,6 +29,11 @@ public class IrisObjectBlockDataMergeTest {
         doThrow(new IllegalArgumentException("Block data not created via string parsing")).when(base).merge(update);
         doReturn("minecraft:oak_log[axis=x]").when(base).getAsString(false);
         doReturn("minecraft:oak_log[axis=y]").when(update).getAsString(false);
+        doReturn("minecraft:oak_log[axis=x]").when(base).getAsString();
+        doReturn("minecraft:oak_log[axis=y]").when(update).getAsString();
+        doReturn("minecraft:oak_log[axis=x]").when(parsedBase).getAsString();
+        doReturn("minecraft:oak_log[axis=y]").when(parsedUpdate).getAsString();
+        doReturn("minecraft:oak_log[axis=y]").when(merged).getAsString();
         doReturn(merged).when(parsedBase).merge(parsedUpdate);
 
         BlockData result = BlockDataMergeSupport.merge(base, update, resolver);
@@ -50,6 +55,10 @@ public class IrisObjectBlockDataMergeTest {
         doThrow(new IllegalArgumentException("Block data not created via string parsing")).when(base).merge(update);
         doReturn("minecraft:stone").when(base).getAsString(false);
         doReturn("minecraft:stone[waterlogged=true]").when(update).getAsString(false);
+        doReturn("minecraft:stone").when(base).getAsString();
+        doReturn("minecraft:stone[waterlogged=true]").when(update).getAsString();
+        doReturn("minecraft:stone").when(parsedBase).getAsString();
+        doReturn("minecraft:stone[waterlogged=true]").when(parsedUpdate).getAsString();
         doThrow(new IllegalArgumentException("normalized merge failed")).when(parsedBase).merge(parsedUpdate);
 
         BlockData result = BlockDataMergeSupport.merge(base, update, resolver);
@@ -65,6 +74,9 @@ public class IrisObjectBlockDataMergeTest {
 
         doReturn(Material.STONE).when(base).getMaterial();
         doReturn(Material.STONE).when(update).getMaterial();
+        doReturn("minecraft:stone").when(base).getAsString();
+        doReturn("minecraft:stone[waterlogged=true]").when(update).getAsString();
+        doReturn("minecraft:stone[waterlogged=true]").when(merged).getAsString();
         doReturn(merged).when(base).merge(update);
 
         BlockData result = BlockDataMergeSupport.merge(base, update, key -> null);

@@ -29,6 +29,7 @@ import art.arcane.volmlib.util.math.RNG;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import art.arcane.iris.spi.PlatformBlockState;
 import lombok.experimental.Accessors;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.inventory.ItemStack;
@@ -60,10 +61,10 @@ public class IrisBlockDrops {
             KList<BlockData> b = new KList<>();
 
             for (IrisBlockData i : getBlocks()) {
-                BlockData dd = i.getBlockData(rdata);
+                PlatformBlockState state = i.getBlockData(rdata);
 
-                if (dd != null) {
-                    b.add(dd);
+                if (state != null) {
+                    b.add((BlockData) state.nativeHandle());
                 }
             }
 

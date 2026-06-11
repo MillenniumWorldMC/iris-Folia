@@ -19,6 +19,8 @@
 package art.arcane.iris.engine.object;
 
 import art.arcane.iris.core.loader.IrisData;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.common.math.Vector3i;
 import art.arcane.volmlib.util.math.RNG;
@@ -42,8 +44,8 @@ public final class IrisProceduralBlocks {
 
     public static BlockData resolve(String block, IrisMaterialPalette palette, IrisData data, int x, int y, int z, RNG paletteRng) {
         if (paletteSet(palette)) {
-            BlockData bd = palette.get(paletteRng, x, y, z, data);
-            return bd == null ? null : bd.clone();
+            PlatformBlockState state = palette.get(paletteRng, x, y, z, data);
+            return state == null ? null : ((BlockData) state.nativeHandle()).clone();
         }
         if (block != null && !block.isEmpty()) {
             BlockData bd = B.getOrNull(block, false);
@@ -85,7 +87,7 @@ public final class IrisProceduralBlocks {
             int nx = v.getBlockX() - minX - cx;
             int ny = v.getBlockY() - cy + 1;
             int nz = v.getBlockZ() - minZ - cz;
-            object.getBlocks().put(new Vector3i(nx, ny, nz), entry.getValue());
+            object.getBlocks().put(new Vector3i(nx, ny, nz), BukkitBlockState.of(entry.getValue()));
         }
 
         return object;

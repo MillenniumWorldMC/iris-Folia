@@ -47,6 +47,7 @@ import art.arcane.iris.util.project.noise.CNG;
 import art.arcane.iris.util.project.noise.NoiseType;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.util.BlockVector;
 import org.bukkit.block.data.BlockData;
 
@@ -484,7 +485,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
                             if (marker != null) {
                                 writer.setData(b.getX(), b.getY(), b.getZ(), marker);
                             }
-                            if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && B.isStorageChest(data)) {
+                            if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && B.isStorageChest(unwrap(data))) {
                                 writer.setData(b.getX(), b.getY(), b.getZ(), MatterStructurePOI.BURIED_TREASURE);
                             }
                         }, null, getData());
@@ -499,7 +500,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
                             if (marker != null) {
                                 writer.setData(b.getX(), b.getY(), b.getZ(), marker);
                             }
-                            if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && B.isStorageChest(data)) {
+                            if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && B.isStorageChest(unwrap(data))) {
                                 writer.setData(b.getX(), b.getY(), b.getZ(), MatterStructurePOI.BURIED_TREASURE);
                             }
                         }, null, getData());
@@ -511,7 +512,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
                         if (marker != null) {
                             writer.setData(b.getX(), b.getY(), b.getZ(), marker);
                         }
-                        if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && B.isStorageChest(data)) {
+                        if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && B.isStorageChest(unwrap(data))) {
                             writer.setData(b.getX(), b.getY(), b.getZ(), MatterStructurePOI.BURIED_TREASURE);
                         }
                     }, null, getData());
@@ -700,7 +701,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
                     if (marker != null) {
                         writer.setData(b.getX(), b.getY(), b.getZ(), marker);
                     }
-                    if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && B.isStorageChest(data)) {
+                    if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && B.isStorageChest(unwrap(data))) {
                         writer.setData(b.getX(), b.getY(), b.getZ(), MatterStructurePOI.BURIED_TREASURE);
                     }
                 }, null, getData());
@@ -880,7 +881,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
                 if (marker != null) {
                     writer.setData(b.getX(), b.getY(), b.getZ(), marker);
                 }
-                if (placement.isDolphinTarget() && placement.isUnderwater() && B.isStorageChest(data)) {
+                if (placement.isDolphinTarget() && placement.isUnderwater() && B.isStorageChest(unwrap(data))) {
                     writer.setData(b.getX(), b.getY(), b.getZ(), MatterStructurePOI.BURIED_TREASURE);
                 }
             }, null, getData());
@@ -1037,7 +1038,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
         }
 
         @Override
-        public void set(int x, int y, int z, BlockData d) {
+        public void set(int x, int y, int z, PlatformBlockState d) {
             if (y >= maxY) {
                 return;
             }
@@ -1045,7 +1046,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
         }
 
         @Override
-        public BlockData get(int x, int y, int z) {
+        public PlatformBlockState get(int x, int y, int z) {
             return delegate.get(x, y, z);
         }
 
@@ -1298,6 +1299,10 @@ public class MantleObjectComponent extends IrisMantleComponent {
     private boolean isRegenTraceThread() {
         return Thread.currentThread().getName().startsWith("Iris-Regen-")
                 && IrisSettings.get().getGeneral().isDebug();
+    }
+
+    private static BlockData unwrap(PlatformBlockState state) {
+        return state == null ? null : (BlockData) state.nativeHandle();
     }
 
     private record ObjectPlacementSummary(

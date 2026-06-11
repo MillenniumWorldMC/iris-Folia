@@ -27,6 +27,7 @@ import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.volmlib.util.math.RNG;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.block.data.BlockData;
 
 public class IrisCeilingDecorator extends IrisEngineDecorator {
@@ -40,7 +41,7 @@ public class IrisCeilingDecorator extends IrisEngineDecorator {
     @BlockCoordinates
     @Override
     public void decorate(int x, int z, int realX, int realX1, int realX_1, int realZ, int realZ1, int realZ_1,
-                         Hunk<BlockData> data, IrisBiome biome, int height, int max) {
+                         Hunk<PlatformBlockState> data, IrisBiome biome, int height, int max) {
         boolean caveSkipFluid = biome.getInferredType() == InferredType.CAVE;
         RNG rng = getRNG(realX, realZ);
         IrisDecorator decorator = DecoratorCore.pickDecorator(biome, getPart(), partRNG, rng, getData(), realX, realZ);
@@ -50,8 +51,11 @@ public class IrisCeilingDecorator extends IrisEngineDecorator {
         }
 
         if (!decorator.isStacking()) {
-            if (caveSkipFluid && B.isFluid(data.get(x, height, z))) {
-                return;
+            if (caveSkipFluid) {
+                PlatformBlockState state = data.get(x, height, z);
+                if (B.isFluid(state == null ? null : (BlockData) state.nativeHandle())) {
+                    return;
+                }
             }
             DecoratorCore.placeSingleAt(decorator, x, z, realX, height, realZ, data, rng, getData(), true, getEngine().getMantle());
             return;

@@ -24,6 +24,8 @@ import art.arcane.iris.engine.mantle.EngineMantle;
 import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisDecorationPart;
 import art.arcane.iris.engine.object.IrisDecorator;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.volmlib.util.math.RNG;
@@ -89,38 +91,40 @@ final class DecoratorCore {
     }
 
     static void placeSingleUp(IrisDecorator decorator, int x, int z,
-                              int realX, int height, int realZ, Hunk<BlockData> data,
+                              int realX, int height, int realZ, Hunk<PlatformBlockState> data,
                               RNG rng, IrisData irisData, boolean caveSkipFluid, EngineMantle mantle) {
-        BlockData bd = decorator.pickBlockData(rng, irisData, realX, realZ);
+        PlatformBlockState bd = decorator.pickBlockData(rng, irisData, realX, realZ);
         if (bd == null) {
             return;
         }
 
-        if (bd instanceof Bisected) {
-            BlockData top = bd.clone();
+        BlockData rawBd = (BlockData) bd.nativeHandle();
+        if (rawBd instanceof Bisected) {
+            BlockData top = rawBd.clone();
             ((Bisected) top).setHalf(Bisected.Half.TOP);
             try {
-                if (!caveSkipFluid || !B.isFluid(data.get(x, height + 2, z))) {
-                    data.set(x, height + 2, z, top);
+                if (!caveSkipFluid || !B.isFluid(unwrap(data.get(x, height + 2, z)))) {
+                    data.set(x, height + 2, z, BukkitBlockState.of(top));
                 }
             } catch (Throwable e) {
                 Iris.reportError(e);
             }
-            bd = bd.clone();
-            ((Bisected) bd).setHalf(Bisected.Half.BOTTOM);
+            BlockData bottom = rawBd.clone();
+            ((Bisected) bottom).setHalf(Bisected.Half.BOTTOM);
+            bd = BukkitBlockState.of(bottom);
         }
 
-        if (B.isAir(data.get(x, height + 1, z))) {
+        if (B.isAir(unwrap(data.get(x, height + 1, z)))) {
             data.set(x, height + 1, z, fixFacesForHunk(bd, data, x, z, realX, height + 1, realZ, mantle));
         }
     }
 
     static void placeSurfaceSingle(IrisDecorator decorator,
                                    int x, int z, int realX, int height, int realZ,
-                                   Hunk<BlockData> data, RNG rng, IrisData irisData,
+                                   Hunk<PlatformBlockState> data, RNG rng, IrisData irisData,
                                    boolean underwater, boolean caveSkipFluid, EngineMantle mantle) {
-        BlockData bdx = data.get(x, height, z);
-        BlockData bd = decorator.pickBlockData(rng, irisData, realX, realZ);
+        PlatformBlockState bdx = data.get(x, height, z);
+        PlatformBlockState bd = decorator.pickBlockData(rng, irisData, realX, realZ);
 
         if (!underwater && !canGoOn(bd, bdx)
                 && !decorator.isForcePlace() && decorator.getForceBlock() == null) {
@@ -128,7 +132,7 @@ final class DecoratorCore {
         }
 
         if (decorator.getForceBlock() != null) {
-            if (caveSkipFluid && B.isFluid(bdx)) {
+            if (caveSkipFluid && B.isFluid(unwrap(bdx))) {
                 return;
             }
             data.set(x, height, z, fixFacesForHunk(
@@ -147,29 +151,31 @@ final class DecoratorCore {
             }
         }
 
-        if (bd instanceof Bisected) {
-            BlockData top = bd.clone();
+        BlockData rawBd = bd == null ? null : (BlockData) bd.nativeHandle();
+        if (rawBd instanceof Bisected) {
+            BlockData top = rawBd.clone();
             ((Bisected) top).setHalf(Bisected.Half.TOP);
             try {
-                if (!caveSkipFluid || !B.isFluid(data.get(x, height + 2, z))) {
-                    data.set(x, height + 2, z, top);
+                if (!caveSkipFluid || !B.isFluid(unwrap(data.get(x, height + 2, z)))) {
+                    data.set(x, height + 2, z, BukkitBlockState.of(top));
                 }
             } catch (Throwable e) {
                 Iris.reportError(e);
             }
-            bd = bd.clone();
-            ((Bisected) bd).setHalf(Bisected.Half.BOTTOM);
+            BlockData bottom = rawBd.clone();
+            ((Bisected) bottom).setHalf(Bisected.Half.BOTTOM);
+            bd = BukkitBlockState.of(bottom);
         }
 
-        if (B.isAir(data.get(x, height + 1, z))) {
+        if (B.isAir(unwrap(data.get(x, height + 1, z)))) {
             data.set(x, height + 1, z, fixFacesForHunk(bd, data, x, z, realX, height + 1, realZ, mantle));
         }
     }
 
     static void placeSingleAt(IrisDecorator decorator, int x, int z,
-                              int realX, int height, int realZ, Hunk<BlockData> data,
+                              int realX, int height, int realZ, Hunk<PlatformBlockState> data,
                               RNG rng, IrisData irisData, boolean applyFixFaces, EngineMantle mantle) {
-        BlockData bd = decorator.pickBlockData(rng, irisData, realX, realZ);
+        PlatformBlockState bd = decorator.pickBlockData(rng, irisData, realX, realZ);
         if (bd == null) {
             return;
         }
@@ -180,7 +186,7 @@ final class DecoratorCore {
     }
 
     static void placeStackUp(IrisDecorator decorator, int x, int z, int realX, int realZ,
-                             int height, int max, Hunk<BlockData> data,
+                             int height, int max, Hunk<PlatformBlockState> data,
                              RNG rng, IrisData irisData, PlaceOpts opts) {
         int effectiveMax = max;
         if (opts.underwater && height < opts.fluidHeight) {
@@ -190,19 +196,19 @@ final class DecoratorCore {
         int stack = computeStack(decorator, rng, realX, realZ, irisData, effectiveMax);
 
         if (stack == 1) {
-            if (opts.caveSkipFluid && B.isFluid(data.get(x, height, z))) {
+            if (opts.caveSkipFluid && B.isFluid(unwrap(data.get(x, height, z)))) {
                 return;
             }
             data.set(x, height, z, decorator.pickBlockDataTop(rng, irisData, realX, realZ));
             return;
         }
 
-        BlockData bdx = data.get(x, height, z);
+        PlatformBlockState bdx = data.get(x, height, z);
 
         for (int i = 0; i < stack; i++) {
             int h = height + i;
             double threshold = ((double) i) / (stack - 1);
-            BlockData bd = threshold >= decorator.getTopThreshold()
+            PlatformBlockState bd = threshold >= decorator.getTopThreshold()
                     ? decorator.pickBlockDataTop(rng, irisData, realX, realZ)
                     : decorator.pickBlockData(rng, irisData, realX, realZ);
 
@@ -218,12 +224,12 @@ final class DecoratorCore {
                 break;
             }
 
-            if (opts.caveSkipFluid && B.isFluid(data.get(x, height + 1 + i, z))) {
+            if (opts.caveSkipFluid && B.isFluid(unwrap(data.get(x, height + 1 + i, z)))) {
                 break;
             }
 
-            if (bd instanceof PointedDripstone) {
-                bd = dripstoneBlock(stack, i, BlockFace.UP);
+            if (bd.nativeHandle() instanceof PointedDripstone) {
+                bd = BukkitBlockState.of(dripstoneBlock(stack, i, BlockFace.UP));
             }
 
             data.set(x, height + 1 + i, z, bd);
@@ -231,12 +237,12 @@ final class DecoratorCore {
     }
 
     static void placeStackDown(IrisDecorator decorator, int x, int z, int realX, int realZ,
-                               int height, int minHeight, Hunk<BlockData> data,
+                               int height, int minHeight, Hunk<PlatformBlockState> data,
                                RNG rng, IrisData irisData, int max, PlaceOpts opts, EngineMantle mantle) {
         int stack = computeStack(decorator, rng, realX, realZ, irisData, max);
 
         if (stack == 1) {
-            if (opts.caveSkipFluid && B.isFluid(data.get(x, height, z))) {
+            if (opts.caveSkipFluid && B.isFluid(unwrap(data.get(x, height, z)))) {
                 return;
             }
             data.set(x, height, z, fixFacesForHunk(
@@ -252,15 +258,15 @@ final class DecoratorCore {
             }
 
             double threshold = ((double) i) / (double) (stack - 1);
-            BlockData bd = threshold >= decorator.getTopThreshold()
+            PlatformBlockState bd = threshold >= decorator.getTopThreshold()
                     ? decorator.pickBlockDataTop(rng, irisData, realX, realZ)
                     : decorator.pickBlockData(rng, irisData, realX, realZ);
 
-            if (bd instanceof PointedDripstone) {
-                bd = dripstoneBlock(stack, i, BlockFace.DOWN);
+            if (bd != null && bd.nativeHandle() instanceof PointedDripstone) {
+                bd = BukkitBlockState.of(dripstoneBlock(stack, i, BlockFace.DOWN));
             }
 
-            if (opts.caveSkipFluid && B.isFluid(data.get(x, h, z))) {
+            if (opts.caveSkipFluid && B.isFluid(unwrap(data.get(x, h, z)))) {
                 break;
             }
             data.set(x, h, z, fixFacesForHunk(bd, data, x, z, realX, h, realZ, mantle));
@@ -269,25 +275,27 @@ final class DecoratorCore {
 
     static void placeFloatingSimple(IrisDecorator decorator,
                                     int xf, int zf, int realX, int realZ,
-                                    int height, int max, Hunk<BlockData> data,
+                                    int height, int max, Hunk<PlatformBlockState> data,
                                     RNG rng, IrisData irisData) {
-        BlockData bd = decorator.pickBlockData(rng, irisData, realX, realZ);
+        PlatformBlockState bd = decorator.pickBlockData(rng, irisData, realX, realZ);
         if (bd == null) {
             return;
         }
 
-        if (bd instanceof Bisected) {
-            BlockData top = bd.clone();
+        BlockData rawBd = (BlockData) bd.nativeHandle();
+        if (rawBd instanceof Bisected) {
+            BlockData top = rawBd.clone();
             ((Bisected) top).setHalf(Bisected.Half.TOP);
             try {
                 if (max > 2) {
-                    data.set(xf, height + 2, zf, top);
+                    data.set(xf, height + 2, zf, BukkitBlockState.of(top));
                 }
             } catch (Throwable e) {
                 Iris.reportError(e);
             }
-            bd = bd.clone();
-            ((Bisected) bd).setHalf(Bisected.Half.BOTTOM);
+            BlockData bottom = rawBd.clone();
+            ((Bisected) bottom).setHalf(Bisected.Half.BOTTOM);
+            bd = BukkitBlockState.of(bottom);
         }
 
         if (max > 1) {
@@ -297,7 +305,7 @@ final class DecoratorCore {
 
     static int placeFloatingStacked(IrisDecorator decorator,
                                     int xf, int zf, int realX, int realZ,
-                                    int height, int max, Hunk<BlockData> data,
+                                    int height, int max, Hunk<PlatformBlockState> data,
                                     RNG rng, IrisData irisData) {
         int stack = decorator.getHeight(rng, realX, realZ, irisData);
         if (decorator.isScaleStack()) {
@@ -313,7 +321,7 @@ final class DecoratorCore {
                 break;
             }
             double threshold = stack == 1 ? 0.0 : ((double) i) / (stack - 1);
-            BlockData bd = threshold >= decorator.getTopThreshold()
+            PlatformBlockState bd = threshold >= decorator.getTopThreshold()
                     ? decorator.pickBlockDataTop(rng, irisData, realX, realZ)
                     : decorator.pickBlockData(rng, irisData, realX, realZ);
             if (bd == null) {
@@ -325,12 +333,13 @@ final class DecoratorCore {
         return placed;
     }
 
-    static BlockData fixFacesForHunk(BlockData b, Hunk<BlockData> hunk, int rX, int rZ,
-                                     int x, int y, int z, EngineMantle mantle) {
-        if (!B.isVineBlock(b)) {
+    static PlatformBlockState fixFacesForHunk(PlatformBlockState b, Hunk<PlatformBlockState> hunk, int rX, int rZ,
+                                              int x, int y, int z, EngineMantle mantle) {
+        BlockData rawB = unwrap(b);
+        if (!B.isVineBlock(rawB)) {
             return b;
         }
-        MultipleFacing data = (MultipleFacing) b.clone();
+        MultipleFacing data = (MultipleFacing) rawB.clone();
         data.getFaces().forEach(f -> data.setFace(f, false));
 
         boolean found = false;
@@ -345,7 +354,7 @@ final class DecoratorCore {
                 r = mantle.getMantle().get(x + f.getModX(), yy, z + f.getModZ(), BlockData.class);
             }
             if (r == null) {
-                r = EngineMantle.AIR;
+                r = (BlockData) EngineMantle.AIR.nativeHandle();
             }
             if (r.isFaceSturdy(f.getOppositeFace(), BlockSupport.FULL)) {
                 if (data.getAllowedFaces().contains(f)) {
@@ -361,7 +370,7 @@ final class DecoratorCore {
                 continue;
             }
 
-            r = hunk.get(xx, yy, zz);
+            r = unwrap(hunk.get(xx, yy, zz));
             if (r.isFaceSturdy(f.getOppositeFace(), BlockSupport.FULL)) {
                 if (data.getAllowedFaces().contains(f)) {
                     found = true;
@@ -375,11 +384,15 @@ final class DecoratorCore {
                 data.setFace(fallback, true);
             }
         }
-        return data;
+        return BukkitBlockState.of(data);
     }
 
-    static boolean canGoOn(BlockData decorator, BlockData surface) {
-        return surface.isFaceSturdy(BlockFace.UP, BlockSupport.FULL);
+    static boolean canGoOn(PlatformBlockState decorator, PlatformBlockState surface) {
+        return ((BlockData) surface.nativeHandle()).isFaceSturdy(BlockFace.UP, BlockSupport.FULL);
+    }
+
+    private static BlockData unwrap(PlatformBlockState state) {
+        return state == null ? null : (BlockData) state.nativeHandle();
     }
 
     private static int computeStack(IrisDecorator decorator, RNG rng, double realX, double realZ,

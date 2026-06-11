@@ -38,6 +38,9 @@ import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.framework.*;
 import art.arcane.iris.engine.mantle.EngineMantle;
 import art.arcane.iris.engine.object.*;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBiome;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.atomics.AtomicRollingSequence;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.iris.util.project.context.ChunkContext;
@@ -59,8 +62,6 @@ import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import org.bukkit.Material;
 import org.bukkit.World;
-import org.bukkit.block.Biome;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.command.CommandSender;
 
 import java.io.File;
@@ -651,7 +652,7 @@ public class IrisEngine implements Engine {
 
     @BlockCoordinates
     @Override
-    public void generate(int x, int z, Hunk<BlockData> vblocks, Hunk<Biome> vbiomes, boolean multicore) throws WrongEngineBroException {
+    public void generate(int x, int z, Hunk<PlatformBlockState> vblocks, Hunk<PlatformBiome> vbiomes, boolean multicore) throws WrongEngineBroException {
         if (closing.get() || closed) {
             throw new GenerationSessionException("Generation session is closed for world \"" + getWorld().name() + "\".", true);
         }
@@ -661,12 +662,12 @@ public class IrisEngine implements Engine {
             context.setGenerationSessionId(lease.sessionId());
             getEngineData().getStatistics().generatedChunk();
             PrecisionStopwatch p = PrecisionStopwatch.start();
-            Hunk<BlockData> blocks = vblocks.listen((xx, y, zz, t) -> catchBlockUpdates(x + xx, y, z + zz, t));
+            Hunk<PlatformBlockState> blocks = vblocks.listen((xx, y, zz, t) -> catchBlockUpdates(x + xx, y, z + zz, t));
 
             if (getDimension().isDebugChunkCrossSections() && ((x >> 4) % getDimension().getDebugCrossSectionsMod() == 0 || (z >> 4) % getDimension().getDebugCrossSectionsMod() == 0)) {
                 for (int i = 0; i < 16; i++) {
                     for (int j = 0; j < 16; j++) {
-                        blocks.set(i, 0, j, Material.CRYING_OBSIDIAN.createBlockData());
+                        blocks.set(i, 0, j, BukkitBlockState.of(Material.CRYING_OBSIDIAN.createBlockData()));
                     }
                 }
             } else {

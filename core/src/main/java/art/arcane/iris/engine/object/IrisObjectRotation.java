@@ -21,6 +21,8 @@ package art.arcane.iris.engine.object;
 import art.arcane.iris.Iris;
 import art.arcane.iris.engine.object.annotations.Desc;
 import art.arcane.iris.engine.object.annotations.Snippet;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import lombok.AllArgsConstructor;
@@ -243,6 +245,16 @@ public class IrisObjectRotation {
             default -> Axis.Z;
         };
 
+    }
+
+    public PlatformBlockState rotate(PlatformBlockState state, int spinx, int spiny, int spinz) {
+        if (state == null) {
+            return null;
+        }
+
+        BlockData raw = ((BlockData) state.nativeHandle()).clone();
+        BlockData rotated = rotate(raw, spinx, spiny, spinz);
+        return rotated == null ? null : BukkitBlockState.of(rotated);
     }
 
     public BlockData rotate(BlockData dd, int spinxx, int spinyy, int spinzz) {

@@ -23,6 +23,7 @@ public class InPlaceChunkRegeneratorDiffTest {
     @Test
     public void applyBlockDiffsSkipsAllWritesWhenChunkMatchesBuffer() {
         BlockData stone = mock(BlockData.class);
+        when(stone.getAsString()).thenReturn("minecraft:stone");
         ChunkSnapshot snapshot = mock(ChunkSnapshot.class);
         when(snapshot.getBlockType(anyInt(), anyInt(), anyInt())).thenReturn(Material.STONE);
         when(snapshot.getBlockData(anyInt(), anyInt(), anyInt())).thenReturn(stone);
@@ -43,7 +44,9 @@ public class InPlaceChunkRegeneratorDiffTest {
     @Test
     public void applyBlockDiffsWritesOnlyMaterialChanges() {
         BlockData stone = mock(BlockData.class);
+        when(stone.getAsString()).thenReturn("minecraft:stone");
         BlockData dirt = mock(BlockData.class);
+        when(dirt.getAsString()).thenReturn("minecraft:dirt");
         ChunkSnapshot snapshot = mock(ChunkSnapshot.class);
         when(snapshot.getBlockType(anyInt(), anyInt(), anyInt())).thenReturn(Material.STONE);
         when(snapshot.getBlockData(anyInt(), anyInt(), anyInt())).thenReturn(stone);
@@ -68,7 +71,9 @@ public class InPlaceChunkRegeneratorDiffTest {
     @Test
     public void applyBlockDiffsWritesWhenMaterialMatchesButStateDiffers() {
         BlockData liveStairs = mock(BlockData.class);
+        when(liveStairs.getAsString()).thenReturn("minecraft:oak_stairs[facing=north]");
         BlockData rotatedStairs = mock(BlockData.class);
+        when(rotatedStairs.getAsString()).thenReturn("minecraft:oak_stairs[facing=east]");
         ChunkSnapshot snapshot = mock(ChunkSnapshot.class);
         when(snapshot.getBlockType(anyInt(), anyInt(), anyInt())).thenReturn(Material.OAK_STAIRS);
         when(snapshot.getBlockData(anyInt(), anyInt(), anyInt())).thenReturn(liveStairs);

@@ -24,13 +24,14 @@ import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.WrongEngineBroException;
 import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.platform.studio.EnginedStudioGenerator;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.Material;
-import org.bukkit.block.data.BlockData;
 
 import java.util.Objects;
 
 public class BiomeBuffetGenerator extends EnginedStudioGenerator {
-    private static final BlockData FLOOR = Material.BARRIER.createBlockData();
+    private static final PlatformBlockState FLOOR = BukkitBlockState.of(Material.BARRIER.createBlockData());
     private final IrisBiome[] biomes;
     private final int width;
     private final int biomeSize;

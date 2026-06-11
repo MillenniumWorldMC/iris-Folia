@@ -24,8 +24,7 @@ import art.arcane.iris.engine.mantle.MantleWriter;
 import art.arcane.iris.engine.object.FloatingIslandSample;
 import art.arcane.iris.engine.object.IObjectPlacer;
 import art.arcane.iris.engine.object.TileData;
-import art.arcane.iris.util.common.data.B;
-import org.bukkit.block.data.BlockData;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.jetbrains.annotations.Nullable;
 
 public class IslandObjectPlacer implements IObjectPlacer {
@@ -205,7 +204,7 @@ public class IslandObjectPlacer implements IObjectPlacer {
     }
 
     @Override
-    public void set(int x, int y, int z, BlockData d) {
+    public void set(int x, int y, int z, PlatformBlockState d) {
         if (shouldSkipAirColumn(x, y, z)) {
             return;
         }
@@ -213,7 +212,7 @@ public class IslandObjectPlacer implements IObjectPlacer {
     }
 
     @Override
-    public BlockData get(int x, int y, int z) {
+    public PlatformBlockState get(int x, int y, int z) {
         return wrapped.get(x, y, z);
     }
 

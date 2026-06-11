@@ -20,16 +20,18 @@ package art.arcane.iris.util.project.hunk.view;
 
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.service.EditSVC;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.project.hunk.Hunk;
 import org.bukkit.Chunk;
 import org.bukkit.block.data.BlockData;
 
 @SuppressWarnings("ClassCanBeRecord")
-public class ChunkHunkView extends art.arcane.volmlib.util.hunk.view.ChunkWorldHunkView<BlockData> implements Hunk<BlockData> {
+public class ChunkHunkView extends art.arcane.volmlib.util.hunk.view.ChunkWorldHunkView<PlatformBlockState> implements Hunk<PlatformBlockState> {
     public ChunkHunkView(Chunk chunk) {
         super(chunk,
                 chunk.getWorld().getMaxHeight(),
-                (wx, y, wz, t) -> Iris.service(EditSVC.class).set(chunk.getWorld(), wx, y, wz, t),
-                (wx, y, wz) -> Iris.service(EditSVC.class).get(chunk.getWorld(), wx, y, wz));
+                (wx, y, wz, t) -> Iris.service(EditSVC.class).set(chunk.getWorld(), wx, y, wz, (BlockData) t.nativeHandle()),
+                (wx, y, wz) -> BukkitBlockState.of(Iris.service(EditSVC.class).get(chunk.getWorld(), wx, y, wz)));
     }
 }

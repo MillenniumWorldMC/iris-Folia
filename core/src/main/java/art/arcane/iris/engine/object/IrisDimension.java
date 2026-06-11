@@ -22,6 +22,8 @@ import art.arcane.iris.Iris;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.ServerConfigurator.DimensionHeight;
 import art.arcane.iris.core.loader.IrisData;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.core.loader.IrisRegistrant;
 import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.nms.datapack.IDataFixer;
@@ -51,7 +53,6 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World.Environment;
 import org.bukkit.block.Biome;
-import org.bukkit.block.data.BlockData;
 
 import java.io.*;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -69,8 +70,8 @@ import java.util.Map;
 @Data
 @EqualsAndHashCode(callSuper = false)
 public class IrisDimension extends IrisRegistrant {
-    public static final BlockData STONE = Material.STONE.createBlockData();
-    public static final BlockData WATER = Material.WATER.createBlockData();
+    public static final PlatformBlockState STONE = BukkitBlockState.of(Material.STONE.createBlockData());
+    public static final PlatformBlockState WATER = BukkitBlockState.of(Material.WATER.createBlockData());
     private final transient AtomicCache<Position2> parallaxSize = new AtomicCache<>();
     private final transient AtomicCache<CNG> rockLayerGenerator = new AtomicCache<>();
     private final transient AtomicCache<CNG> fluidLayerGenerator = new AtomicCache<>();
@@ -312,16 +313,16 @@ public class IrisDimension extends IrisRegistrant {
         carvingEntryIndex.reset();
     }
 
-    public BlockData generateOres(int x, int y, int z, RNG rng, IrisData data, boolean surface) {
+    public PlatformBlockState generateOres(int x, int y, int z, RNG rng, IrisData data, boolean surface) {
         KList<IrisOreGenerator> localOres = surface ? getSurfaceOres() : getUndergroundOres();
         return generateOres(localOres, x, y, z, rng, data);
     }
 
-    public BlockData generateSurfaceOres(int x, int y, int z, RNG rng, IrisData data) {
+    public PlatformBlockState generateSurfaceOres(int x, int y, int z, RNG rng, IrisData data) {
         return generateOres(getSurfaceOres(), x, y, z, rng, data);
     }
 
-    public BlockData generateUndergroundOres(int x, int y, int z, RNG rng, IrisData data) {
+    public PlatformBlockState generateUndergroundOres(int x, int y, int z, RNG rng, IrisData data) {
         return generateOres(getUndergroundOres(), x, y, z, rng, data);
     }
 
@@ -333,7 +334,7 @@ public class IrisDimension extends IrisRegistrant {
         return !getUndergroundOres().isEmpty();
     }
 
-    private BlockData generateOres(KList<IrisOreGenerator> localOres, int x, int y, int z, RNG rng, IrisData data) {
+    private PlatformBlockState generateOres(KList<IrisOreGenerator> localOres, int x, int y, int z, RNG rng, IrisData data) {
         if (localOres.isEmpty()) {
             return null;
         }
@@ -341,7 +342,7 @@ public class IrisDimension extends IrisRegistrant {
         int oreCount = localOres.size();
         for (int oreIndex = 0; oreIndex < oreCount; oreIndex++) {
             IrisOreGenerator oreGenerator = localOres.get(oreIndex);
-            BlockData ore = oreGenerator.generate(x, y, z, rng, data);
+            PlatformBlockState ore = oreGenerator.generate(x, y, z, rng, data);
             if (ore != null) {
                 return ore;
             }

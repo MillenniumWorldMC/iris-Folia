@@ -27,8 +27,8 @@ import art.arcane.iris.util.project.noise.CNG;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import art.arcane.iris.spi.PlatformBlockState;
 import lombok.experimental.Accessors;
-import org.bukkit.block.data.BlockData;
 
 @Snippet("object-block-replacer")
 @Accessors(chain = true)
@@ -38,8 +38,8 @@ import org.bukkit.block.data.BlockData;
 @Data
 public class IrisObjectReplace {
     private final transient AtomicCache<CNG> replaceGen = new AtomicCache<>();
-    private final transient AtomicCache<KList<BlockData>> findData = new AtomicCache<>();
-    private final transient AtomicCache<KList<BlockData>> replaceData = new AtomicCache<>();
+    private final transient AtomicCache<KList<PlatformBlockState>> findData = new AtomicCache<>();
+    private final transient AtomicCache<KList<PlatformBlockState>> replaceData = new AtomicCache<>();
     @ArrayType(min = 1, type = IrisBlockData.class)
     @Required
     @Desc("Find this block")
@@ -54,13 +54,13 @@ public class IrisObjectReplace {
     @Desc("Modifies the chance the block is replaced")
     private float chance = 1;
 
-    public KList<BlockData> getFind(IrisData rdata) {
+    public KList<PlatformBlockState> getFind(IrisData rdata) {
         return findData.aquire(() ->
         {
-            KList<BlockData> b = new KList<>();
+            KList<PlatformBlockState> b = new KList<>();
 
             for (IrisBlockData i : find) {
-                BlockData bx = i.getBlockData(rdata);
+                PlatformBlockState bx = i.getBlockData(rdata);
 
                 if (bx != null) {
                     b.add(bx);
@@ -71,7 +71,7 @@ public class IrisObjectReplace {
         });
     }
 
-    public BlockData getReplace(RNG seed, double x, double y, double z, IrisData rdata) {
+    public PlatformBlockState getReplace(RNG seed, double x, double y, double z, IrisData rdata) {
         return getReplace().get(seed, x, y, z, rdata);
     }
 }

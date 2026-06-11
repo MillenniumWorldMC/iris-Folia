@@ -20,16 +20,18 @@ package art.arcane.iris.util.project.hunk.view;
 
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.service.EditSVC;
+import art.arcane.iris.platform.bukkit.BukkitBiome;
+import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.iris.util.project.hunk.Hunk;
 import org.bukkit.Chunk;
 import org.bukkit.block.Biome;
 
 @SuppressWarnings("ClassCanBeRecord")
-public class ChunkBiomeHunkView extends art.arcane.volmlib.util.hunk.view.ChunkWorldHunkView<Biome> implements Hunk<Biome> {
+public class ChunkBiomeHunkView extends art.arcane.volmlib.util.hunk.view.ChunkWorldHunkView<PlatformBiome> implements Hunk<PlatformBiome> {
     public ChunkBiomeHunkView(Chunk chunk) {
         super(chunk,
                 chunk.getWorld().getMaxHeight(),
-                (wx, y, wz, t) -> Iris.service(EditSVC.class).setBiome(chunk.getWorld(), wx, y, wz, t),
-                (wx, y, wz) -> Iris.service(EditSVC.class).getBiome(chunk.getWorld(), wx, y, wz));
+                (wx, y, wz, t) -> Iris.service(EditSVC.class).setBiome(chunk.getWorld(), wx, y, wz, (Biome) t.nativeHandle()),
+                (wx, y, wz) -> BukkitBiome.of(Iris.service(EditSVC.class).getBiome(chunk.getWorld(), wx, y, wz)));
     }
 }

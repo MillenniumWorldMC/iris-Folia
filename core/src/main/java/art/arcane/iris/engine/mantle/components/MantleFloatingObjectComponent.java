@@ -44,6 +44,7 @@ import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.documentation.ChunkCoordinates;
 import art.arcane.volmlib.util.mantle.flag.ReservedFlag;
 import art.arcane.volmlib.util.math.RNG;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.util.BlockVector;
@@ -445,11 +446,13 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
         return rotation.rotate(new BlockVector(fp.getTallestKx(), fp.getLowestSolidKeyY(), fp.getTallestKz()), 0, 0, 0);
     }
 
-    private static boolean shouldWritePlacementMarker(IObjectPlacer placer, BlockData data, int x, int y, int z) {
-        if (data == null) {
+    private static boolean shouldWritePlacementMarker(IObjectPlacer placer, PlatformBlockState state, int x, int y, int z) {
+        if (state == null) {
             return false;
         }
-        BlockData existing = placer.get(x, y, z);
+        BlockData data = (BlockData) state.nativeHandle();
+        PlatformBlockState existingState = placer.get(x, y, z);
+        BlockData existing = existingState == null ? null : (BlockData) existingState.nativeHandle();
         boolean wouldReplace = existing != null && B.isSolid(existing) && B.isVineBlock(data);
         boolean placesBlock = !data.getMaterial().equals(Material.AIR) && !data.getMaterial().equals(Material.CAVE_AIR) && !wouldReplace;
         return data instanceof IrisCustomData || placesBlock;

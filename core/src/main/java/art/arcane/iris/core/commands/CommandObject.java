@@ -32,6 +32,8 @@ import art.arcane.iris.core.tools.PlausibilizeMode;
 import art.arcane.iris.core.tools.TreePlausibilizer;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.*;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.data.Cuboid;
 import art.arcane.iris.util.common.data.IrisCustomData;
 import art.arcane.iris.util.common.data.registry.Materials;
@@ -174,7 +176,8 @@ public class CommandObject implements DirectorExecutor {
             }
 
             @Override
-            public void set(int x, int y, int z, BlockData d) {
+            public void set(int x, int y, int z, PlatformBlockState s) {
+                BlockData d = (BlockData) s.nativeHandle();
                 Block block = world.getBlockAt(x, y, z);
 
                 //Prevent blocks being set in or bellow bedrock
@@ -189,8 +192,8 @@ public class CommandObject implements DirectorExecutor {
             }
 
             @Override
-            public BlockData get(int x, int y, int z) {
-                return world.getBlockAt(x, y, z).getBlockData();
+            public PlatformBlockState get(int x, int y, int z) {
+                return BukkitBlockState.of(world.getBlockAt(x, y, z).getBlockData());
             }
 
             @Override
@@ -259,7 +262,7 @@ public class CommandObject implements DirectorExecutor {
         Map<BlockData, Integer> amounts = new HashMap<>();
         Map<Material, Integer> materials = new HashMap<>();
         while (queue.hasNext()) {
-            BlockData block = queue.next();
+            BlockData block = (BlockData) queue.next().nativeHandle();
 
             //unsorted.put(block.getMaterial(), block);
 

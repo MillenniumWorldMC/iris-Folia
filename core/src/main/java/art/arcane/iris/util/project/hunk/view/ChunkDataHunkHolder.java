@@ -18,14 +18,16 @@
 
 package art.arcane.iris.util.project.hunk.view;
 
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.project.hunk.storage.AtomicHunk;
 import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 @SuppressWarnings("ClassCanBeRecord")
-public class ChunkDataHunkHolder extends AtomicHunk<BlockData> {
-    private static final BlockData AIR = Material.AIR.createBlockData();
+public class ChunkDataHunkHolder extends AtomicHunk<PlatformBlockState> {
+    private static final PlatformBlockState AIR = BukkitBlockState.of(Material.AIR.createBlockData());
     private final ChunkData chunk;
 
     public ChunkDataHunkHolder(ChunkData chunk) {
@@ -49,8 +51,8 @@ public class ChunkDataHunkHolder extends AtomicHunk<BlockData> {
     }
 
     @Override
-    public BlockData getRaw(int x, int y, int z) {
-        BlockData b = super.getRaw(x, y, z);
+    public PlatformBlockState getRaw(int x, int y, int z) {
+        PlatformBlockState b = super.getRaw(x, y, z);
 
         return b != null ? b : AIR;
     }
@@ -59,10 +61,10 @@ public class ChunkDataHunkHolder extends AtomicHunk<BlockData> {
         for (int i = 0; i < getHeight(); i++) {
             for (int j = 0; j < getWidth(); j++) {
                 for (int k = 0; k < getDepth(); k++) {
-                    BlockData b = super.getRaw(j, i, k);
+                    PlatformBlockState b = super.getRaw(j, i, k);
 
                     if (b != null) {
-                        chunk.setBlock(j, i + chunk.getMinHeight(), k, b);
+                        chunk.setBlock(j, i + chunk.getMinHeight(), k, (BlockData) b.nativeHandle());
                     }
                 }
             }

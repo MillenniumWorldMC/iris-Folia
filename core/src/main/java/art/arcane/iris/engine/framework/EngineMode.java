@@ -29,9 +29,9 @@ import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.volmlib.util.math.RollingSequence;
 import art.arcane.iris.util.common.parallel.BurstExecutor;
 import art.arcane.iris.util.common.parallel.MultiBurst;
+import art.arcane.iris.spi.PlatformBiome;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.scheduling.J;
-import org.bukkit.block.Biome;
-import org.bukkit.block.data.BlockData;
 
 public interface EngineMode extends Staged {
     RollingSequence r = new RollingSequence(64);
@@ -71,7 +71,7 @@ public interface EngineMode extends Staged {
     }
 
     @BlockCoordinates
-    default void generate(int x, int z, Hunk<BlockData> blocks, Hunk<Biome> biomes, boolean multicore) {
+    default void generate(int x, int z, Hunk<PlatformBlockState> blocks, Hunk<PlatformBiome> biomes, boolean multicore) {
         IrisContext context = IrisContext.getOr(getEngine());
         boolean cacheContext = true;
         if (J.isFolia()) {

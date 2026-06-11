@@ -46,6 +46,8 @@ import art.arcane.volmlib.util.math.RNG;
 import art.arcane.volmlib.util.matter.MatterBiomeInject;
 import art.arcane.volmlib.util.matter.slices.BiomeInjectMatter;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.block.Biome;
 import org.bukkit.block.data.BlockData;
 
@@ -53,22 +55,22 @@ import java.util.IdentityHashMap;
 
 import static art.arcane.iris.engine.mantle.EngineMantle.AIR;
 
-public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<BlockData> {
+public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<PlatformBlockState> {
     public static final long FLOATING_BASE_SEED_SALT = 0x5EED_F107_00F1B10CL;
     private static final Runnable NOOP_DECORATION_MISS = () -> {
     };
     private final RNG rng;
     private final EngineDecorator seaSurfaceDecorator;
 
-    private static KList<BlockData> generateBottomPaletteLayers(IrisFloatingChildBiomes entry, IrisDimension dimension, double wx, double wz, RNG random, int paletteDepth, IrisData data, IrisComplex complex) {
+    private static KList<PlatformBlockState> generateBottomPaletteLayers(IrisFloatingChildBiomes entry, IrisDimension dimension, double wx, double wz, RNG random, int paletteDepth, IrisData data, IrisComplex complex) {
         if (entry == null || entry.getBottomPaletteMode() != FloatingBottomPaletteMode.CUSTOM || entry.getBottomPalette() == null || entry.getBottomPalette().isEmpty()) {
             return null;
         }
         return generatePaletteLayers(dimension, entry.getBottomPalette(), wx, wz, random.nextParallelRNG(0xB0770B), paletteDepth, data, complex);
     }
 
-    private static KList<BlockData> generatePaletteLayers(IrisDimension dimension, KList<IrisBiomePaletteLayer> layers, double wx, double wz, RNG random, int maxDepth, IrisData data, IrisComplex complex) {
-        KList<BlockData> generated = new KList<>();
+    private static KList<PlatformBlockState> generatePaletteLayers(IrisDimension dimension, KList<IrisBiomePaletteLayer> layers, double wx, double wz, RNG random, int maxDepth, IrisData data, IrisComplex complex) {
+        KList<PlatformBlockState> generated = new KList<>();
         if (layers == null || layers.isEmpty() || maxDepth <= 0) {
             return generated;
         }
@@ -109,7 +111,7 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
             }
 
             if (dimension != null && dimension.isExplodeBiomePalettes()) {
-                BlockData barrier = B.get("minecraft:barrier");
+                PlatformBlockState barrier = B.getState("minecraft:barrier");
                 for (int j = 0; j < dimension.getExplodeBiomePaletteSize(); j++) {
                     generated.add(barrier);
 
@@ -153,7 +155,7 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
         return bottomDepths;
     }
 
-    private static BlockData selectPaletteBlock(IrisFloatingChildBiomes entry, KList<BlockData> topBlocks, KList<BlockData> bottomBlocks, int topDepth, int bottomDepth, BlockData fallbackSolid) {
+    private static PlatformBlockState selectPaletteBlock(IrisFloatingChildBiomes entry, KList<PlatformBlockState> topBlocks, KList<PlatformBlockState> bottomBlocks, int topDepth, int bottomDepth, PlatformBlockState fallbackSolid) {
         FloatingBottomPaletteMode mode = entry == null || entry.getBottomPaletteMode() == null ? FloatingBottomPaletteMode.DEPTH : entry.getBottomPaletteMode();
         if (mode == FloatingBottomPaletteMode.MIRROR_TOP) {
             return paletteBlock(topBlocks, Math.min(topDepth, bottomDepth), fallbackSolid);
@@ -167,11 +169,11 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
         return paletteBlock(topBlocks, topDepth, fallbackSolid);
     }
 
-    private static BlockData paletteBlock(KList<BlockData> blocks, int depth, BlockData fallbackSolid) {
+    private static PlatformBlockState paletteBlock(KList<PlatformBlockState> blocks, int depth, PlatformBlockState fallbackSolid) {
         if (blocks == null || blocks.isEmpty()) {
             return fallbackSolid;
         }
-        BlockData block = blocks.hasIndex(depth) ? blocks.get(depth) : blocks.getLast();
+        PlatformBlockState block = blocks.hasIndex(depth) ? blocks.get(depth) : blocks.getLast();
         return block == null ? fallbackSolid : block;
     }
 
@@ -179,20 +181,20 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
         IrisBiome target = entry == null ? parent : entry.getRealBiome(parent, data);
         int entrySeed = entry == null || entry.getBiome() == null ? 0 : entry.getBiome().hashCode();
         RNG layerRng = rng.nextParallelRNG((int) (colSeed ^ 0x7A4E ^ entrySeed));
-        KList<BlockData> topBlocks = target == null ? null : target.generateLayers(dimension, wx, wz, layerRng, paletteDepth, paletteDepth, data, complex);
+        KList<PlatformBlockState> topBlocks = target == null ? null : target.generateLayers(dimension, wx, wz, layerRng, paletteDepth, paletteDepth, data, complex);
         if (topBlocks == null || topBlocks.isEmpty()) {
             topBlocks = parent.generateLayers(dimension, wx, wz, layerRng, paletteDepth, paletteDepth, data, complex);
         }
-        KList<BlockData> bottomBlocks = generateBottomPaletteLayers(entry, dimension, wx, wz, layerRng, paletteDepth, data, complex);
-        return new PaletteContext(topBlocks, bottomBlocks, B.get("minecraft:stone"));
+        KList<PlatformBlockState> bottomBlocks = generateBottomPaletteLayers(entry, dimension, wx, wz, layerRng, paletteDepth, data, complex);
+        return new PaletteContext(topBlocks, bottomBlocks, B.getState("minecraft:stone"));
     }
 
     private static final class PaletteContext {
-        private final KList<BlockData> topBlocks;
-        private final KList<BlockData> bottomBlocks;
-        private final BlockData fallbackSolid;
+        private final KList<PlatformBlockState> topBlocks;
+        private final KList<PlatformBlockState> bottomBlocks;
+        private final PlatformBlockState fallbackSolid;
 
-        private PaletteContext(KList<BlockData> topBlocks, KList<BlockData> bottomBlocks, BlockData fallbackSolid) {
+        private PaletteContext(KList<PlatformBlockState> topBlocks, KList<PlatformBlockState> bottomBlocks, PlatformBlockState fallbackSolid) {
             this.topBlocks = topBlocks;
             this.bottomBlocks = bottomBlocks;
             this.fallbackSolid = fallbackSolid;
@@ -206,7 +208,7 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
     }
 
     @Override
-    public void onModify(int x, int z, Hunk<BlockData> output, boolean multicore, ChunkContext context) {
+    public void onModify(int x, int z, Hunk<PlatformBlockState> output, boolean multicore, ChunkContext context) {
         PrecisionStopwatch p = PrecisionStopwatch.start();
         int chunkHeight = output.getHeight();
         IrisData data = getData();
@@ -248,7 +250,7 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
                     }
                     int depth = topDepthByEntry.getOrDefault(entry, 0);
                     int bottomDepth = bottomDepths == null || bottomDepths[k] < 0 ? depth : bottomDepths[k];
-                    BlockData block = selectPaletteBlock(entry, paletteContext.topBlocks, paletteContext.bottomBlocks, depth, bottomDepth, paletteContext.fallbackSolid);
+                    PlatformBlockState block = selectPaletteBlock(entry, paletteContext.topBlocks, paletteContext.bottomBlocks, depth, bottomDepth, paletteContext.fallbackSolid);
                     if (block != null) {
                         output.set(xf, y, zf, block);
                     }
@@ -258,10 +260,11 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
                 IrisFloatingChildBiomes entry = sample.entry;
                 Integer localFluidHeight = entry.getLocalFluidHeight();
                 if (localFluidHeight != null && localFluidHeight > 0) {
-                    BlockData fluid = B.get(entry.getFluidBlock());
-                    if (fluid == null) {
-                        fluid = B.get("minecraft:water");
+                    BlockData rawFluid = B.get(entry.getFluidBlock());
+                    if (rawFluid == null) {
+                        rawFluid = B.get("minecraft:water");
                     }
+                    PlatformBlockState fluid = BukkitBlockState.of(rawFluid);
                     int fluidCap = Math.min(sample.thickness - 1, localFluidHeight);
                     for (int k = 1; k <= fluidCap; k++) {
                         if (sample.solidMask[k]) {
@@ -291,7 +294,7 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
         getEngine().getMetrics().getDeposit().put(p.getMilliseconds());
     }
 
-    public void decorateColumns(int x, int z, Hunk<BlockData> output, boolean multicore, ChunkContext context) {
+    public void decorateColumns(int x, int z, Hunk<PlatformBlockState> output, boolean multicore, ChunkContext context) {
         int chunkHeight = output.getHeight();
         IrisData data = getData();
         IrisComplex complex = getComplex();
@@ -319,8 +322,8 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
                 int topY = sample.topY();
                 int max = Math.max(1, chunkHeight - topY);
                 if (topY + 1 < chunkHeight) {
-                    BlockData above = output.get(xf, topY + 1, zf);
-                    if (above == null || B.isAir(above)) {
+                    PlatformBlockState above = output.get(xf, topY + 1, zf);
+                    if (above == null || B.isAir((BlockData) above.nativeHandle())) {
                         try {
                             RNG colRng = rng.nextParallelRNG((int) FloatingIslandSample.columnSeed(baseSeed, wx, wz));
                             FloatingDecorator.decorateColumn(getEngine(), target, IrisDecorationPart.NONE, xf, zf, wx, wz, topY, max, output, colRng, NOOP_DECORATION_MISS);
@@ -353,7 +356,7 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
                             fluidTopY = y;
                         }
                     }
-                    if (fluidTopY > 0 && fluidTopY + 1 < chunkHeight && B.isAir(output.get(xf, fluidTopY + 1, zf))) {
+                    if (fluidTopY > 0 && fluidTopY + 1 < chunkHeight && B.isAir(unwrap(output.get(xf, fluidTopY + 1, zf)))) {
                         try {
                             seaSurfaceDecorator.decorate(xf, zf, wx, wx + 1, wx - 1, wz, wz + 1, wz - 1, output, target, fluidTopY, chunkHeight);
                         } catch (Throwable e) {
@@ -391,6 +394,10 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Block
         } catch (Throwable e) {
             art.arcane.iris.Iris.reportError(e);
         }
+    }
+
+    private static BlockData unwrap(PlatformBlockState state) {
+        return state == null ? null : (BlockData) state.nativeHandle();
     }
 
     private MatterBiomeInject createSkyBiomeMatter(IrisBiome target, int wx, int wz) {

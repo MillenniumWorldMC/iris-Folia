@@ -5,8 +5,8 @@ import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.framework.EngineMetrics;
 import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisRegion;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.parallel.MultiBurst;
-import org.bukkit.block.data.BlockData;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,8 +21,8 @@ public class ChunkContext {
     private final int[] roundedHeight;
     private final ChunkedDataCache<IrisBiome> biome;
     private final ChunkedDataCache<IrisBiome> cave;
-    private final ChunkedDataCache<BlockData> rock;
-    private final ChunkedDataCache<BlockData> fluid;
+    private final ChunkedDataCache<PlatformBlockState> rock;
+    private final ChunkedDataCache<PlatformBlockState> fluid;
     private final ChunkedDataCache<IrisRegion> region;
 
     public ChunkContext(int x, int z, IrisComplex complex) {
@@ -138,11 +138,11 @@ public class ChunkContext {
         return cave;
     }
 
-    public ChunkedDataCache<BlockData> getRock() {
+    public ChunkedDataCache<PlatformBlockState> getRock() {
         return rock;
     }
 
-    public ChunkedDataCache<BlockData> getFluid() {
+    public ChunkedDataCache<PlatformBlockState> getFluid() {
         return fluid;
     }
 

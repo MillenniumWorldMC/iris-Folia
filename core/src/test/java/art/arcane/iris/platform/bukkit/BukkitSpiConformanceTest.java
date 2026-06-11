@@ -29,6 +29,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.mockito.invocation.InvocationOnMock;
 
+import java.util.Locale;
 import java.util.logging.Logger;
 
 import static org.junit.Assert.assertEquals;
@@ -52,7 +53,7 @@ public class BukkitSpiConformanceTest {
             doReturn("IrisTestServer").when(server).getName();
             doReturn("1.0").when(server).getVersion();
             doReturn("1.0").when(server).getBukkitVersion();
-            doReturn(mock(BlockData.class)).when(server).createBlockData(any(Material.class));
+            doAnswer((InvocationOnMock invocation) -> blockData("minecraft:" + invocation.getArgument(0, Material.class).name().toLowerCase(Locale.ROOT))).when(server).createBlockData(any(Material.class));
             Bukkit.setServer(server);
         }
         doAnswer((InvocationOnMock invocation) -> blockData(invocation.getArgument(0))).when(server).createBlockData(anyString());

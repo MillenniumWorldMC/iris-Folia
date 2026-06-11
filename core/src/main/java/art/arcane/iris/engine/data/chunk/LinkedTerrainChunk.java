@@ -18,6 +18,10 @@
 
 package art.arcane.iris.engine.data.chunk;
 
+import art.arcane.iris.platform.bukkit.BukkitBiome;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBiome;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.data.IrisCustomData;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
@@ -46,15 +50,15 @@ public class LinkedTerrainChunk implements TerrainChunk {
     }
 
     @Override
-    public Biome getBiome(int x, int y, int z) {
+    public PlatformBiome getBiome(int x, int y, int z) {
         int index = biomeIndex(x, y, z);
         Biome biome = biomes[index];
-        return biome == null ? Biome.PLAINS : biome;
+        return BukkitBiome.of(biome == null ? Biome.PLAINS : biome);
     }
 
     @Override
-    public void setBiome(int x, int y, int z, Biome bio) {
-        biomes[biomeIndex(x, y, z)] = bio;
+    public void setBiome(int x, int y, int z, PlatformBiome bio) {
+        biomes[biomeIndex(x, y, z)] = (Biome) bio.nativeHandle();
     }
 
     @Override
@@ -68,7 +72,8 @@ public class LinkedTerrainChunk implements TerrainChunk {
     }
 
     @Override
-    public synchronized void setBlock(int x, int y, int z, BlockData blockData) {
+    public synchronized void setBlock(int x, int y, int z, PlatformBlockState state) {
+        BlockData blockData = (BlockData) state.nativeHandle();
         if (blockData instanceof IrisCustomData data) {
             blockData = data.getBase();
         }
@@ -76,13 +81,13 @@ public class LinkedTerrainChunk implements TerrainChunk {
     }
 
     @Override
-    public synchronized void setRegion(int xMin, int yMin, int zMin, int xMax, int yMax, int zMax, BlockData blockData) {
-        rawChunkData.setRegion(xMin, yMin, zMin, xMax, yMax, zMax, blockData);
+    public synchronized void setRegion(int xMin, int yMin, int zMin, int xMax, int yMax, int zMax, PlatformBlockState state) {
+        rawChunkData.setRegion(xMin, yMin, zMin, xMax, yMax, zMax, (BlockData) state.nativeHandle());
     }
 
     @Override
-    public BlockData getBlockData(int x, int y, int z) {
-        return rawChunkData.getBlockData(x, y, z);
+    public PlatformBlockState getBlockData(int x, int y, int z) {
+        return BukkitBlockState.of(rawChunkData.getBlockData(x, y, z));
     }
 
     @Override

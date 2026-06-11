@@ -23,6 +23,8 @@ import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.common.data.VectorMap;
 import org.bukkit.Axis;
 import org.bukkit.Tag;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Orientable;
 import org.bukkit.block.data.type.Leaves;
@@ -79,7 +81,7 @@ public final class TreePlausibilizer {
         boolean normalize = mode == PlausibilizeMode.NORMALIZE;
         boolean smoke = mode == PlausibilizeMode.SMOKE;
         boolean foliageOverature = mode == PlausibilizeMode.FOLIAGE_OVERATURE;
-        VectorMap<BlockData> blocks = obj.getBlocks();
+        VectorMap<PlatformBlockState> blocks = obj.getBlocks();
         Map<Long, BlockData> positions = new HashMap<>(blocks.size() * 2);
         Set<Long> logPositions = new HashSet<>();
         Set<Long> originalLeafPositions = new HashSet<>();
@@ -89,9 +91,9 @@ public final class TreePlausibilizer {
         int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
 
-        for (Map.Entry<BlockVector, BlockData> entry : blocks) {
+        for (Map.Entry<BlockVector, PlatformBlockState> entry : blocks) {
             BlockVector pos = entry.getKey();
-            BlockData data = entry.getValue();
+            BlockData data = (BlockData) entry.getValue().nativeHandle();
             long key = packKey(pos);
             positions.put(key, data);
             int x = pos.getBlockX();
@@ -235,13 +237,13 @@ public final class TreePlausibilizer {
                 blocks.remove(unpackKey(key));
             }
             for (LeafAddition addition : leafAdds) {
-                blocks.put(unpackKey(addition.key()), addition.data());
+                blocks.put(unpackKey(addition.key()), BukkitBlockState.of(addition.data()));
             }
             for (LogInsertion insertion : inserts) {
-                blocks.put(unpackKey(insertion.key()), insertion.data());
+                blocks.put(unpackKey(insertion.key()), BukkitBlockState.of(insertion.data()));
             }
             for (LeafRewrite rewrite : normalizeRewrites) {
-                blocks.put(unpackKey(rewrite.key()), rewrite.data());
+                blocks.put(unpackKey(rewrite.key()), BukkitBlockState.of(rewrite.data()));
             }
         }
 

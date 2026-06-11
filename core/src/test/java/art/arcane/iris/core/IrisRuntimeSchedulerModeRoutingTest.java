@@ -5,13 +5,16 @@ import org.bukkit.Material;
 import org.bukkit.Server;
 import org.bukkit.block.data.BlockData;
 import org.junit.Test;
+import org.mockito.invocation.InvocationOnMock;
 
+import java.util.Locale;
 import java.util.logging.Logger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assume.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockingDetails;
@@ -74,12 +77,18 @@ public class IrisRuntimeSchedulerModeRoutingTest {
 
         assumeTrue(server != null && mockingDetails(server).isMock());
 
-        BlockData emptyBlockData = mock(BlockData.class);
         doReturn(Logger.getLogger("IrisTest")).when(server).getLogger();
         doReturn(name).when(server).getName();
         doReturn(version).when(server).getVersion();
         doReturn(version).when(server).getBukkitVersion();
-        doReturn(emptyBlockData).when(server).createBlockData(any(Material.class));
-        doReturn(emptyBlockData).when(server).createBlockData(anyString());
+        doAnswer((InvocationOnMock invocation) -> namedBlockData(invocation.getArgument(0, Material.class).name().toLowerCase(Locale.ROOT))).when(server).createBlockData(any(Material.class));
+        doAnswer((InvocationOnMock invocation) -> namedBlockData(invocation.getArgument(0, String.class))).when(server).createBlockData(anyString());
+    }
+
+    private static BlockData namedBlockData(String key) {
+        String canonical = key.indexOf(':') >= 0 ? key : "minecraft:" + key;
+        BlockData data = mock(BlockData.class);
+        doReturn(canonical).when(data).getAsString();
+        return data;
     }
 }

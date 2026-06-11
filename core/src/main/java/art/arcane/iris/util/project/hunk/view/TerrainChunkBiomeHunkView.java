@@ -19,11 +19,11 @@
 package art.arcane.iris.util.project.hunk.view;
 
 import art.arcane.iris.engine.data.chunk.TerrainChunk;
+import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.iris.util.project.hunk.storage.StorageHunk;
-import org.bukkit.block.Biome;
 
-public class TerrainChunkBiomeHunkView extends StorageHunk<Biome> implements Hunk<Biome> {
+public class TerrainChunkBiomeHunkView extends StorageHunk<PlatformBiome> implements Hunk<PlatformBiome> {
     private final TerrainChunk chunk;
 
     public TerrainChunkBiomeHunkView(TerrainChunk chunk) {
@@ -32,12 +32,12 @@ public class TerrainChunkBiomeHunkView extends StorageHunk<Biome> implements Hun
     }
 
     @Override
-    public void setRaw(int x, int y, int z, Biome biome) {
+    public void setRaw(int x, int y, int z, PlatformBiome biome) {
         chunk.setBiome(x, y + chunk.getMinHeight(), z, biome);
     }
 
     @Override
-    public Biome getRaw(int x, int y, int z) {
+    public PlatformBiome getRaw(int x, int y, int z) {
         return chunk.getBiome(x, y + chunk.getMinHeight(), z);
     }
 }

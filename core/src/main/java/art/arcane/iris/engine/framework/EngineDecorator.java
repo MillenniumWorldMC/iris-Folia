@@ -19,6 +19,7 @@
 package art.arcane.iris.engine.framework;
 
 import art.arcane.iris.engine.object.IrisBiome;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.data.B;
 import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.iris.util.project.hunk.Hunk;
@@ -27,19 +28,19 @@ import org.bukkit.block.data.BlockData;
 public interface EngineDecorator extends EngineComponent {
 
     @BlockCoordinates
-    void decorate(int x, int z, int realX, int realX1, int realX_1, int realZ, int realZ1, int realZ_1, Hunk<BlockData> data, IrisBiome biome, int height, int max);
+    void decorate(int x, int z, int realX, int realX1, int realX_1, int realZ, int realZ1, int realZ_1, Hunk<PlatformBlockState> data, IrisBiome biome, int height, int max);
 
     @BlockCoordinates
-    default void decorate(int x, int z, int realX, int realZ, Hunk<BlockData> data, IrisBiome biome, int height, int max) {
+    default void decorate(int x, int z, int realX, int realZ, Hunk<PlatformBlockState> data, IrisBiome biome, int height, int max) {
         decorate(x, z, realX, realX, realX, realZ, realZ, realZ, data, biome, height, max);
     }
 
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
-    default boolean canGoOn(BlockData decorant, BlockData atop) {
-        if (atop == null || B.isAir(atop)) {
+    default boolean canGoOn(PlatformBlockState decorant, PlatformBlockState atop) {
+        if (atop == null || atop.isAir()) {
             return false;
         }
 
-        return B.canPlaceOnto(decorant.getMaterial(), atop.getMaterial());
+        return B.canPlaceOnto(((BlockData) decorant.nativeHandle()).getMaterial(), ((BlockData) atop.nativeHandle()).getMaterial());
     }
 }

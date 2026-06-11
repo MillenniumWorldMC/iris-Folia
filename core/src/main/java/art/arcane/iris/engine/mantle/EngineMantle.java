@@ -45,6 +45,8 @@ import art.arcane.volmlib.util.matter.Matter;
 import art.arcane.volmlib.util.matter.slices.UpdateMatter;
 import art.arcane.iris.util.common.parallel.MultiBurst;
 import art.arcane.iris.util.common.scheduling.J;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
 import org.jetbrains.annotations.UnmodifiableView;
@@ -54,7 +56,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public interface EngineMantle extends MatterGenerator {
-    BlockData AIR = B.get("AIR");
+    PlatformBlockState AIR = B.getState("AIR");
 
     Mantle<Matter> getMantle();
 
@@ -120,11 +122,11 @@ public interface EngineMantle extends MatterGenerator {
         return getMantle().get(x, h, z, MatterCavern.class) != null;
     }
 
-    default BlockData get(int x, int y, int z) {
+    default PlatformBlockState get(int x, int y, int z) {
         BlockData block = getMantle().get(x, y, z, BlockData.class);
         if (block == null)
             return AIR;
-        return block;
+        return BukkitBlockState.of(block);
     }
 
     default boolean isPreventingDecay() {
@@ -187,7 +189,7 @@ public interface EngineMantle extends MatterGenerator {
     }
 
     @ChunkCoordinates
-    default <T> void insertMatter(int x, int z, Class<T> t, Hunk<T> blocks, boolean multicore) {
+    default void insertMatter(int x, int z, Class<BlockData> t, Hunk<PlatformBlockState> blocks, boolean multicore) {
         if (!getEngine().getDimension().isUseMantle()) {
             return;
         }
@@ -214,11 +216,11 @@ public interface EngineMantle extends MatterGenerator {
                 chunk.iterate(t, (lx, y, lz, value) -> {
                     int colIdx = (lx << 4) | (lz & 15);
                     if (y < upperYs[colIdx]) {
-                        blocks.set(lx, y, lz, value);
+                        blocks.set(lx, y, lz, BukkitBlockState.of(value));
                     }
                 });
             } else {
-                chunk.iterate(t, blocks::set);
+                chunk.iterate(t, (lx, y, lz, value) -> blocks.set(lx, y, lz, BukkitBlockState.of(value)));
             }
         } finally {
             chunk.release();

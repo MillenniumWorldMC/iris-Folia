@@ -23,6 +23,7 @@ import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.iris.util.common.data.B;
@@ -275,7 +276,8 @@ public class IrisObjectPlacement {
                 tc.global.put(table, loot.getWeight());
             } else if (!loot.isExact()) //Table is meant to be by type
             {
-                for (BlockData filterData : loot.getFilter(manager)) {
+                for (PlatformBlockState filterState : loot.getFilter(manager)) {
+                    BlockData filterData = (BlockData) filterState.nativeHandle();
                     if (!tc.basic.containsKey(filterData.getMaterial())) {
                         tc.basic.put(filterData.getMaterial(), new WeightedRandom<>());
                     }
@@ -284,7 +286,8 @@ public class IrisObjectPlacement {
                 }
             } else //Filter is exact
             {
-                for (BlockData filterData : loot.getFilter(manager)) {
+                for (PlatformBlockState filterState : loot.getFilter(manager)) {
+                    BlockData filterData = (BlockData) filterState.nativeHandle();
                     if (!tc.exact.containsKey(filterData.getMaterial())) {
                         tc.exact.put(filterData.getMaterial(), new KMap<>());
                     }
@@ -311,12 +314,13 @@ public class IrisObjectPlacement {
     /**
      * Gets the loot table that should be used for the block
      *
-     * @param data        The block data of the block
+     * @param state       The block state of the block
      * @param dataManager Iris Data Manager
      * @return The loot table it should use.
      */
-    public IrisLootTable getTable(BlockData data, IrisData dataManager) {
+    public IrisLootTable getTable(PlatformBlockState state, IrisData dataManager) {
         TableCache cache = getCache(dataManager);
+        BlockData data = (BlockData) state.nativeHandle();
         if (B.isStorageChest(data)) {
             IrisLootTable picked = null;
             if (cache.exact.containsKey(data.getMaterial()) && cache.exact.get(data.getMaterial()).containsKey(data)) {

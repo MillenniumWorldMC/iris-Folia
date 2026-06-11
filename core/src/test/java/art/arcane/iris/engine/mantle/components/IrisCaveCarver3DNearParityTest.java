@@ -27,12 +27,14 @@ import org.bukkit.Server;
 import org.bukkit.block.data.BlockData;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.mockito.invocation.InvocationOnMock;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -61,13 +63,12 @@ public class IrisCaveCarver3DNearParityTest {
     public static void setupBukkit() throws Exception {
         if (Bukkit.getServer() == null) {
             Server server = mock(Server.class);
-            BlockData emptyBlockData = mock(BlockData.class);
             doReturn(Logger.getLogger("IrisTest")).when(server).getLogger();
             doReturn("IrisTestServer").when(server).getName();
             doReturn("1.0").when(server).getVersion();
             doReturn("1.0").when(server).getBukkitVersion();
-            doReturn(emptyBlockData).when(server).createBlockData(any(Material.class));
-            doReturn(emptyBlockData).when(server).createBlockData(anyString());
+            doAnswer((InvocationOnMock invocation) -> namedBlockData(invocation.getArgument(0, Material.class).name().toLowerCase(Locale.ROOT))).when(server).createBlockData(any(Material.class));
+            doAnswer((InvocationOnMock invocation) -> namedBlockData(invocation.getArgument(0, String.class))).when(server).createBlockData(anyString());
             Bukkit.setServer(server);
         }
 
@@ -89,6 +90,13 @@ public class IrisCaveCarver3DNearParityTest {
         carveLavaField.setAccessible(true);
         carveForcedAirField = IrisCaveCarver3D.class.getDeclaredField("carveForcedAir");
         carveForcedAirField.setAccessible(true);
+    }
+
+    private static BlockData namedBlockData(String key) {
+        String canonical = key.indexOf(':') >= 0 ? key : "minecraft:" + key;
+        BlockData data = mock(BlockData.class);
+        doReturn(canonical).when(data).getAsString();
+        return data;
     }
 
     @Test

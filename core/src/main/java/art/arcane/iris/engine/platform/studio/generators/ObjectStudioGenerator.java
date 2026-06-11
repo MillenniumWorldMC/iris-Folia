@@ -29,11 +29,14 @@ import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.WrongEngineBroException;
 import art.arcane.iris.engine.object.IrisObject;
 import art.arcane.iris.engine.platform.studio.EnginedStudioGenerator;
+import art.arcane.iris.platform.bukkit.BukkitBiome;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBiome;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.data.VectorMap;
 import art.arcane.iris.util.common.math.Vector3i;
 import org.bukkit.Material;
 import org.bukkit.block.Biome;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.util.BlockVector;
 
 import java.io.File;
@@ -44,15 +47,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ObjectStudioGenerator extends EnginedStudioGenerator {
     public static final int DEFAULT_PADDING = 2;
-    private static final BlockData FLOOR = Material.POLISHED_DEEPSLATE.createBlockData();
-    private static final BlockData FRAME = Material.SMOOTH_QUARTZ.createBlockData();
-    private static final BlockData MARKER = Material.END_ROD.createBlockData();
-    private static final Biome DEFAULT_BIOME = Biome.PLAINS;
+    private static final PlatformBlockState FLOOR = BukkitBlockState.of(Material.POLISHED_DEEPSLATE.createBlockData());
+    private static final PlatformBlockState FRAME = BukkitBlockState.of(Material.SMOOTH_QUARTZ.createBlockData());
+    private static final PlatformBlockState MARKER = BukkitBlockState.of(Material.END_ROD.createBlockData());
+    private static final PlatformBiome DEFAULT_BIOME = BukkitBiome.of(Biome.PLAINS);
 
     private final int padding;
-    private final BlockData floor;
-    private final BlockData frame;
-    private final BlockData marker;
+    private final PlatformBlockState floor;
+    private final PlatformBlockState frame;
+    private final PlatformBlockState marker;
     private final AtomicBoolean layoutBuilt = new AtomicBoolean(false);
     private final Object layoutLock = new Object();
     private final Map<String, IrisObject> objectCache = new ConcurrentHashMap<>();
@@ -63,7 +66,7 @@ public class ObjectStudioGenerator extends EnginedStudioGenerator {
         this(engine, DEFAULT_PADDING, FLOOR, FRAME, MARKER);
     }
 
-    public ObjectStudioGenerator(Engine engine, int padding, BlockData floor, BlockData frame, BlockData marker) {
+    public ObjectStudioGenerator(Engine engine, int padding, PlatformBlockState floor, PlatformBlockState frame, PlatformBlockState marker) {
         super(engine);
         this.padding = padding;
         this.floor = floor;
@@ -183,7 +186,7 @@ public class ObjectStudioGenerator extends EnginedStudioGenerator {
     }
 
     private void placeSlice(IrisObject object, GridCell cell, TerrainChunk tc, int chunkWorldX, int chunkWorldZ, int minHeight, int maxHeight) {
-        VectorMap<BlockData> blocks = object.getBlocks();
+        VectorMap<PlatformBlockState> blocks = object.getBlocks();
         if (blocks == null || blocks.isEmpty()) return;
 
         Vector3i center = object.getCenter();
@@ -195,7 +198,7 @@ public class ObjectStudioGenerator extends EnginedStudioGenerator {
         int originY = cell.originY();
         int originZ = cell.originZ();
 
-        for (Map.Entry<BlockVector, BlockData> entry : blocks) {
+        for (Map.Entry<BlockVector, PlatformBlockState> entry : blocks) {
             BlockVector signed = entry.getKey();
             int worldX = originX + signed.getBlockX() + centerX;
             int worldY = originY + signed.getBlockY() + centerY;
@@ -205,7 +208,7 @@ public class ObjectStudioGenerator extends EnginedStudioGenerator {
             if (worldZ < chunkWorldZ || worldZ > chunkWorldZ + 15) continue;
             if (worldY < minHeight || worldY >= maxHeight) continue;
 
-            BlockData data = entry.getValue();
+            PlatformBlockState data = entry.getValue();
             if (data == null) continue;
 
             tc.setBlock(worldX - chunkWorldX, worldY, worldZ - chunkWorldZ, data);

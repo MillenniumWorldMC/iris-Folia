@@ -616,7 +616,7 @@ public final class VillageImporter {
             File objectFile = new File(data.getDataFolder(), "objects/" + pieceName + ".iob");
             objectFile.getParentFile().mkdirs();
             IrisObject object = new IrisObject(1, 1, 1);
-            object.setUnsigned(0, 0, 0, Material.AIR.createBlockData());
+            object.setUnsigned(0, 0, 0, art.arcane.iris.platform.bukkit.BukkitBlockState.of(Material.AIR.createBlockData()));
             object.write(objectFile);
             return true;
         } catch (Throwable e) {

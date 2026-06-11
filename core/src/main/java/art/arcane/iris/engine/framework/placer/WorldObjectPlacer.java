@@ -11,6 +11,8 @@ import art.arcane.iris.engine.object.IObjectPlacer;
 import art.arcane.iris.engine.object.InventorySlotType;
 import art.arcane.iris.engine.object.IrisLootTable;
 import art.arcane.iris.engine.object.TileData;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.common.data.IrisCustomData;
@@ -51,7 +53,8 @@ public class WorldObjectPlacer implements IObjectPlacer {
     }
 
     @Override
-    public void set(int x, int y, int z, BlockData d) {
+    public void set(int x, int y, int z, PlatformBlockState state) {
+        BlockData d = (BlockData) state.nativeHandle();
         Block block = world.getBlockAt(x, y + world.getMinHeight(), z);
 
         if (y <= world.getMinHeight() || block.getType() == Material.BEDROCK) return;
@@ -87,8 +90,8 @@ public class WorldObjectPlacer implements IObjectPlacer {
     }
 
     @Override
-    public BlockData get(int x, int y, int z) {
-        return world.getBlockAt(x, y + world.getMinHeight(), z).getBlockData();
+    public PlatformBlockState get(int x, int y, int z) {
+        return BukkitBlockState.of(world.getBlockAt(x, y + world.getMinHeight(), z).getBlockData());
     }
 
     @Override

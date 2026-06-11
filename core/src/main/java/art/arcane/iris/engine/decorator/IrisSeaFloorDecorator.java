@@ -25,7 +25,7 @@ import art.arcane.iris.engine.object.IrisDecorator;
 import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.volmlib.util.math.RNG;
-import org.bukkit.block.data.BlockData;
+import art.arcane.iris.spi.PlatformBlockState;
 
 public class IrisSeaFloorDecorator extends IrisEngineDecorator {
     private final RNG partRNG;
@@ -38,7 +38,7 @@ public class IrisSeaFloorDecorator extends IrisEngineDecorator {
     @BlockCoordinates
     @Override
     public void decorate(int x, int z, int realX, int realX1, int realX_1, int realZ, int realZ1, int realZ_1,
-                         Hunk<BlockData> data, IrisBiome biome, int height, int max) {
+                         Hunk<PlatformBlockState> data, IrisBiome biome, int height, int max) {
         RNG rng = getRNG(realX, realZ);
         IrisDecorator decorator = DecoratorCore.pickDecorator(biome, getPart(), partRNG, rng, getData(), realX, realZ);
 

@@ -30,11 +30,13 @@ import art.arcane.volmlib.util.math.RNG;
 import art.arcane.volmlib.util.matter.MatterCavern;
 import art.arcane.iris.util.common.parallel.BurstExecutor;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.util.BlockVector;
 
-public class IrisDepositModifier extends EngineAssignedModifier<BlockData> {
+public class IrisDepositModifier extends EngineAssignedModifier<PlatformBlockState> {
     private final RNG rng;
 
     public IrisDepositModifier(Engine engine) {
@@ -43,13 +45,13 @@ public class IrisDepositModifier extends EngineAssignedModifier<BlockData> {
     }
 
     @Override
-    public void onModify(int x, int z, Hunk<BlockData> output, boolean multicore, ChunkContext context) {
+    public void onModify(int x, int z, Hunk<PlatformBlockState> output, boolean multicore, ChunkContext context) {
         PrecisionStopwatch p = PrecisionStopwatch.start();
         generateDeposits(output, Math.floorDiv(x, 16), Math.floorDiv(z, 16), multicore, context);
         getEngine().getMetrics().getDeposit().put(p.getMilliseconds());
     }
 
-    public void generateDeposits(Hunk<BlockData> terrain, int x, int z, boolean multicore, ChunkContext context) {
+    public void generateDeposits(Hunk<PlatformBlockState> terrain, int x, int z, boolean multicore, ChunkContext context) {
         IrisRegion region = context.getRegion().get(7, 7);
         IrisBiome biome = context.getBiome().get(7, 7);
         BurstExecutor burst = burst().burst(multicore);
@@ -78,11 +80,11 @@ public class IrisDepositModifier extends EngineAssignedModifier<BlockData> {
         }
     }
 
-    public void generate(IrisDepositGenerator k, MantleChunk chunk, Hunk<BlockData> data, RNG rng, int cx, int cz, boolean safe, ChunkContext context) {
+    public void generate(IrisDepositGenerator k, MantleChunk chunk, Hunk<PlatformBlockState> data, RNG rng, int cx, int cz, boolean safe, ChunkContext context) {
         generate(k, chunk, data, rng, cx, cz, safe, null, context);
     }
 
-    public void generate(IrisDepositGenerator k, MantleChunk chunk, Hunk<BlockData> data, RNG rng, int cx, int cz, boolean safe, HeightMap he, ChunkContext context) {
+    public void generate(IrisDepositGenerator k, MantleChunk chunk, Hunk<PlatformBlockState> data, RNG rng, int cx, int cz, boolean safe, HeightMap he, ChunkContext context) {
         if (k.getSpawnChance() < rng.d())
             return;
 
@@ -130,29 +132,29 @@ public class IrisDepositModifier extends EngineAssignedModifier<BlockData> {
                 if (ny > height || nx > 15 || nx < 0 || ny > getEngine().getHeight() || ny < 0 || nz < 0 || nz > 15) {
                     continue;
                 }
-                if (!k.isReplaceBedrock() && data.get(nx, ny, nz).getMaterial() == Material.BEDROCK) {
+                if (!k.isReplaceBedrock() && ((BlockData) data.get(nx, ny, nz).nativeHandle()).getMaterial() == Material.BEDROCK) {
                     continue;
                 }
 
                 if (chunk.get(nx, ny, nz, MatterCavern.class) == null) {
-                    BlockData ore = clump.getBlocks().get(j);
-                    BlockData remapped = resolveDepositVariant(cx, cz, nx, ny, nz, ore, dimension, context);
-                    BlockData finalBlock = remapped != null
+                    PlatformBlockState ore = clump.getBlocks().get(j);
+                    PlatformBlockState remapped = resolveDepositVariant(cx, cz, nx, ny, nz, ore, dimension, context);
+                    PlatformBlockState finalBlock = remapped != null
                             ? remapped
-                            : B.toDeepSlateOre(data.get(nx, ny, nz), ore);
+                            : BukkitBlockState.of(B.toDeepSlateOre(unwrap(data.get(nx, ny, nz)), unwrap(ore)));
                     data.set(nx, ny, nz, finalBlock);
                 }
             }
         }
     }
 
-    private BlockData resolveDepositVariant(int cx, int cz, int nx, int ny, int nz, BlockData ore, IrisDimension dimension, ChunkContext context) {
+    private PlatformBlockState resolveDepositVariant(int cx, int cz, int nx, int ny, int nz, PlatformBlockState ore, IrisDimension dimension, ChunkContext context) {
         int worldX = (cx << 4) + nx;
         int worldZ = (cz << 4) + nz;
 
         IrisBiome biome = getEngine().getBiome(worldX, ny, worldZ);
         if (biome != null) {
-            BlockData match = matchDepositVariant(biome.getDepositVariants(), ore, ny);
+            PlatformBlockState match = matchDepositVariant(biome.getDepositVariants(), ore, ny);
             if (match != null) {
                 return match;
             }
@@ -160,14 +162,14 @@ public class IrisDepositModifier extends EngineAssignedModifier<BlockData> {
 
         IrisRegion region = context.getRegion().get(nx, nz);
         if (region != null) {
-            BlockData match = matchDepositVariant(region.getDepositVariants(), ore, ny);
+            PlatformBlockState match = matchDepositVariant(region.getDepositVariants(), ore, ny);
             if (match != null) {
                 return match;
             }
         }
 
         if (dimension != null) {
-            BlockData match = matchDepositVariant(dimension.getDepositVariants(), ore, ny);
+            PlatformBlockState match = matchDepositVariant(dimension.getDepositVariants(), ore, ny);
             if (match != null) {
                 return match;
             }
@@ -176,7 +178,7 @@ public class IrisDepositModifier extends EngineAssignedModifier<BlockData> {
         return null;
     }
 
-    private BlockData matchDepositVariant(java.util.List<IrisDepositVariant> variants, BlockData ore, int y) {
+    private PlatformBlockState matchDepositVariant(java.util.List<IrisDepositVariant> variants, PlatformBlockState ore, int y) {
         if (variants == null || variants.isEmpty()) {
             return null;
         }
@@ -186,12 +188,16 @@ public class IrisDepositModifier extends EngineAssignedModifier<BlockData> {
                 continue;
             }
 
-            BlockData swapped = variant.remapOrNull(ore, getData());
+            PlatformBlockState swapped = variant.remapOrNull(ore, getData());
             if (swapped != null) {
                 return swapped;
             }
         }
 
         return null;
+    }
+
+    private static BlockData unwrap(PlatformBlockState state) {
+        return state == null ? null : (BlockData) state.nativeHandle();
     }
 }

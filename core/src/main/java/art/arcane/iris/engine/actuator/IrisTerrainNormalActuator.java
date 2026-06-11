@@ -33,16 +33,17 @@ import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.volmlib.util.math.RNG;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import lombok.Getter;
 import org.bukkit.Material;
-import org.bukkit.block.data.BlockData;
 
-public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData> {
-    private static final BlockData AIR = Material.AIR.createBlockData();
-    private static final BlockData BEDROCK = Material.BEDROCK.createBlockData();
-    private static final BlockData LAVA = Material.LAVA.createBlockData();
-    private static final BlockData GLASS = Material.GLASS.createBlockData();
-    private static final BlockData CAVE_AIR = Material.CAVE_AIR.createBlockData();
+public class IrisTerrainNormalActuator extends EngineAssignedActuator<PlatformBlockState> {
+    private static final PlatformBlockState AIR = BukkitBlockState.of(Material.AIR.createBlockData());
+    private static final PlatformBlockState BEDROCK = BukkitBlockState.of(Material.BEDROCK.createBlockData());
+    private static final PlatformBlockState LAVA = BukkitBlockState.of(Material.LAVA.createBlockData());
+    private static final PlatformBlockState GLASS = BukkitBlockState.of(Material.GLASS.createBlockData());
+    private static final PlatformBlockState CAVE_AIR = BukkitBlockState.of(Material.CAVE_AIR.createBlockData());
     @Getter
     private final RNG rng;
     @Getter
@@ -55,7 +56,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
 
     @BlockCoordinates
     @Override
-    public void onActuate(int x, int z, Hunk<BlockData> h, boolean multicore, ChunkContext context) {
+    public void onActuate(int x, int z, Hunk<PlatformBlockState> h, boolean multicore, ChunkContext context) {
         PrecisionStopwatch p = PrecisionStopwatch.start();
 
         for (int xf = 0; xf < h.getWidth(); xf++) {
@@ -78,12 +79,12 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
      * @param h  the blockdata
      */
     @BlockCoordinates
-    public void terrainSliver(int x, int z, int xf, Hunk<BlockData> h, ChunkContext context) {
+    public void terrainSliver(int x, int z, int xf, Hunk<PlatformBlockState> h, ChunkContext context) {
         terrainSliverOptimized(x, z, xf, h, context);
     }
 
     @BlockCoordinates
-    private void terrainSliverLegacy(int x, int z, int xf, Hunk<BlockData> h, ChunkContext context) {
+    private void terrainSliverLegacy(int x, int z, int xf, Hunk<PlatformBlockState> h, ChunkContext context) {
         int zf, realX, realZ, hf, he;
         IrisBiome biome;
         IrisRegion region;
@@ -101,8 +102,8 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                 continue;
             }
 
-            KList<BlockData> blocks = null;
-            KList<BlockData> fblocks = null;
+            KList<PlatformBlockState> blocks = null;
+            KList<PlatformBlockState> fblocks = null;
             int depth, fdepth;
             for (int i = hf; i >= 0; i--) {
                 if (i >= h.getHeight()) {
@@ -117,7 +118,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                     }
                 }
 
-                BlockData ore = biome.generateOres(realX, i, realZ, rng, getData(), true);
+                PlatformBlockState ore = biome.generateOres(realX, i, realZ, rng, getData(), true);
                 ore = ore == null ? region.generateOres(realX, i, realZ, rng, getData(), true) : ore;
                 ore = ore == null ? getDimension().generateOres(realX, i, realZ, rng, getData(), true) : ore;
                 if (ore != null) {
@@ -179,9 +180,9 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
 
                 if (upperSurfaceY < chunkHeight - 1) {
                     IrisBiome upperBiome = upperContext.getUpperBiome(realX, realZ);
-                    BlockData upperRock = upperContext.getRockBlock(realX, realZ);
+                    PlatformBlockState upperRock = upperContext.getRockBlock(realX, realZ);
                     int upperThickness = chunkHeight - 1 - upperSurfaceY;
-                    KList<BlockData> upperBlocks = upperBiome != null
+                    KList<PlatformBlockState> upperBlocks = upperBiome != null
                             ? upperBiome.generateLayers(upperContext.getDimension(),
                             realX, realZ, rng, upperThickness, upperThickness,
                             upperContext.getData(), getComplex())
@@ -205,7 +206,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
     }
 
     @BlockCoordinates
-    private void terrainSliverOptimized(int x, int z, int xf, Hunk<BlockData> h, ChunkContext context) {
+    private void terrainSliverOptimized(int x, int z, int xf, Hunk<PlatformBlockState> h, ChunkContext context) {
         int chunkHeight = h.getHeight();
         int chunkDepth = h.getDepth();
         IrisDimension dimension = getDimension();
@@ -218,8 +219,8 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
         boolean hideOres = dimension.isHideOresForHiddenOre();
         ChunkedDataCache<IrisBiome> biomeCache = context.getBiome();
         ChunkedDataCache<IrisRegion> regionCache = context.getRegion();
-        ChunkedDataCache<BlockData> fluidCache = context.getFluid();
-        ChunkedDataCache<BlockData> rockCache = context.getRock();
+        ChunkedDataCache<PlatformBlockState> fluidCache = context.getFluid();
+        ChunkedDataCache<PlatformBlockState> rockCache = context.getRock();
         int realX = xf + x;
         UpperDimensionContext upperContext = getEngine().getUpperContext();
 
@@ -234,12 +235,12 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
             }
 
             int topY = Math.min(hf, chunkHeight - 1);
-            BlockData fluid = fluidCache.get(xf, zf);
-            BlockData rock = rockCache.get(xf, zf);
+            PlatformBlockState fluid = fluidCache.get(xf, zf);
+            PlatformBlockState rock = rockCache.get(xf, zf);
             boolean hasSurfaceOres = !hideOres && (biome.hasSurfaceOres() || region.hasSurfaceOres() || dimension.hasSurfaceOres());
             boolean hasUndergroundOres = !hideOres && (biome.hasUndergroundOres() || region.hasUndergroundOres() || dimension.hasUndergroundOres());
-            KList<BlockData> blocks = null;
-            KList<BlockData> fblocks = null;
+            KList<PlatformBlockState> blocks = null;
+            KList<PlatformBlockState> fblocks = null;
 
             for (int i = topY; i >= 0; i--) {
                 if (i == 0 && bedrockEnabled) {
@@ -248,7 +249,7 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
                     continue;
                 }
 
-                BlockData ore = null;
+                PlatformBlockState ore = null;
                 if (hasSurfaceOres) {
                     ore = biome.generateSurfaceOres(realX, i, realZ, localRng, data);
                     ore = ore == null ? region.generateSurfaceOres(realX, i, realZ, localRng, data) : ore;
@@ -305,9 +306,9 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<BlockData>
 
                 if (upperSurfaceY < chunkHeight - 1) {
                     IrisBiome upperBiome = upperContext.getUpperBiome(realX, realZ);
-                    BlockData upperRock = upperContext.getRockBlock(realX, realZ);
+                    PlatformBlockState upperRock = upperContext.getRockBlock(realX, realZ);
                     int upperThickness = chunkHeight - 1 - upperSurfaceY;
-                    KList<BlockData> upperBlocks = upperBiome != null
+                    KList<PlatformBlockState> upperBlocks = upperBiome != null
                             ? upperBiome.generateLayers(upperContext.getDimension(),
                             realX, realZ, localRng, upperThickness, upperThickness,
                             upperContext.getData(), complex)

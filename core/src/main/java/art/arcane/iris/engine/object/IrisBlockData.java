@@ -25,6 +25,8 @@ import art.arcane.iris.core.loader.IrisRegistrant;
 import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.iris.util.common.data.B;
@@ -47,7 +49,7 @@ import java.util.Map;
 @Data
 @EqualsAndHashCode(callSuper = false)
 public class IrisBlockData extends IrisRegistrant {
-    private final transient AtomicCache<BlockData> blockdata = new AtomicCache<>();
+    private final transient AtomicCache<PlatformBlockState> blockdata = new AtomicCache<>();
     private final transient AtomicCache<String> realProperties = new AtomicCache<>();
     @RegistryListBlockType
     @Required
@@ -139,7 +141,7 @@ public class IrisBlockData extends IrisRegistrant {
         return computeProperties(getData());
     }
 
-    public BlockData getBlockData(IrisData data) {
+    public PlatformBlockState getBlockData(IrisData data) {
         return blockdata.aquire(() ->
         {
             BlockData b = null;
@@ -147,7 +149,8 @@ public class IrisBlockData extends IrisRegistrant {
             IrisBlockData customData = data.getBlockLoader().load(getBlock(), false);
 
             if (customData != null) {
-                b = customData.getBlockData(data);
+                PlatformBlockState customState = customData.getBlockData(data);
+                b = customState == null ? null : (BlockData) customState.nativeHandle();
 
                 if (b != null) {
                     b = b.clone();
@@ -173,11 +176,11 @@ public class IrisBlockData extends IrisRegistrant {
                     BlockData bx = B.get(sx);
 
                     if (bx != null) {
-                        return bx;
+                        return BukkitBlockState.of(bx);
                     }
 
                     if (b != null) {
-                        return b;
+                        return BukkitBlockState.of(b);
                     }
                 }
             }
@@ -190,20 +193,20 @@ public class IrisBlockData extends IrisRegistrant {
             }
 
             if (b != null) {
-                return b;
+                return BukkitBlockState.of(b);
             }
 
             if (backup != null) {
                 return backup.getBlockData(data);
             }
 
-            return B.get("AIR");
+            return B.getState("AIR");
         });
     }
 
     public TileData tryGetTile(IrisData data) {
         //TODO Do like a registry thing with the tile data registry. Also update the parsing of data to include **block** entities.
-        var type = getBlockData(data).getMaterial();
+        Material type = ((BlockData) getBlockData(data).nativeHandle()).getMaterial();
         if (type == Material.SPAWNER && this.data.containsKey("entitySpawn")) {
             String id = (String) this.data.get("entitySpawn");
             if (tileData == null) tileData = new KMap<>();

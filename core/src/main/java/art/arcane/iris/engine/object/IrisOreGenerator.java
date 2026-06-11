@@ -26,8 +26,8 @@ import art.arcane.iris.util.project.noise.CNG;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import art.arcane.iris.spi.PlatformBlockState;
 import lombok.experimental.Accessors;
-import org.bukkit.block.data.BlockData;
 
 @Accessors(chain = true)
 @NoArgsConstructor
@@ -53,7 +53,7 @@ public class IrisOreGenerator {
         palette.getLayerGenerator(rng, data);
     }
 
-    public BlockData generate(int x, int y, int z, RNG rng, IrisData data) {
+    public PlatformBlockState generate(int x, int y, int z, RNG rng, IrisData data) {
         if (palette.getPalette().isEmpty()) {
             return null;
         }

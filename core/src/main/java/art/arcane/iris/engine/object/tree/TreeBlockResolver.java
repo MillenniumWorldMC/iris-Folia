@@ -22,6 +22,7 @@ import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.object.IrisMaterialPalette;
 import art.arcane.iris.engine.object.IrisProceduralTree;
 import art.arcane.iris.engine.object.IrisTreeDecorator;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.data.B;
 import art.arcane.volmlib.util.math.RNG;
 import org.bukkit.Axis;
@@ -100,8 +101,8 @@ public final class TreeBlockResolver {
 
     private static BlockData resolveSecondaryLeaf(IrisProceduralTree tree, IrisData data, TreeBlockCanvas.Vec pos, RNG paletteRng, RNG posRng) {
         if (TreeTrunkBuilder.paletteSet(tree.getSecondaryLeavesPalette())) {
-            BlockData bd = tree.getSecondaryLeavesPalette().get(paletteRng, pos.x(), pos.y(), pos.z(), data);
-            return bd == null ? null : bd.clone();
+            PlatformBlockState state = tree.getSecondaryLeavesPalette().get(paletteRng, pos.x(), pos.y(), pos.z(), data);
+            return state == null ? null : ((BlockData) state.nativeHandle()).clone();
         }
         if (tree.getWeightedSecondaryLeaves() != null && !tree.getWeightedSecondaryLeaves().isEmpty()) {
             String picked = pickWeighted(tree, posRng);
@@ -134,8 +135,8 @@ public final class TreeBlockResolver {
 
     private static BlockData resolveBlock(String block, IrisMaterialPalette palette, IrisData data, TreeBlockCanvas.Vec pos, RNG paletteRng) {
         if (TreeTrunkBuilder.paletteSet(palette)) {
-            BlockData bd = palette.get(paletteRng, pos.x(), pos.y(), pos.z(), data);
-            return bd == null ? null : bd.clone();
+            PlatformBlockState state = palette.get(paletteRng, pos.x(), pos.y(), pos.z(), data);
+            return state == null ? null : ((BlockData) state.nativeHandle()).clone();
         }
         if (block != null && !block.isEmpty()) {
             return cloneOrNull(B.getOrNull(block, false));

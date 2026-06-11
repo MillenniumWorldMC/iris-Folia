@@ -25,6 +25,7 @@ import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.iris.util.common.parallel.BurstExecutor;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.Material;
 import org.bukkit.block.data.Bisected;
 import org.bukkit.block.data.BlockData;
@@ -36,21 +37,21 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class IrisPerfectionModifier extends EngineAssignedModifier<BlockData> {
-    private static final BlockData AIR = B.get("AIR");
-    private static final BlockData WATER = B.get("WATER");
-    private static final Map<Material, BlockData> ORE_BASES = buildOreBases();
+public class IrisPerfectionModifier extends EngineAssignedModifier<PlatformBlockState> {
+    private static final PlatformBlockState AIR = B.getState("AIR");
+    private static final PlatformBlockState WATER = B.getState("WATER");
+    private static final Map<Material, PlatformBlockState> ORE_BASES = buildOreBases();
 
     public IrisPerfectionModifier(Engine engine) {
         super(engine, "Perfection");
     }
 
-    private static Map<Material, BlockData> buildOreBases() {
-        Map<Material, BlockData> map = new EnumMap<>(Material.class);
-        BlockData stone = B.get("STONE");
-        BlockData deepslate = B.get("DEEPSLATE");
-        BlockData netherrack = B.get("NETHERRACK");
-        BlockData blackstone = B.get("BLACKSTONE");
+    private static Map<Material, PlatformBlockState> buildOreBases() {
+        Map<Material, PlatformBlockState> map = new EnumMap<>(Material.class);
+        PlatformBlockState stone = B.getState("STONE");
+        PlatformBlockState deepslate = B.getState("DEEPSLATE");
+        PlatformBlockState netherrack = B.getState("NETHERRACK");
+        PlatformBlockState blackstone = B.getState("BLACKSTONE");
         map.put(Material.COAL_ORE, stone);
         map.put(Material.COPPER_ORE, stone);
         map.put(Material.IRON_ORE, stone);
@@ -75,7 +76,7 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<BlockData> {
     }
 
     @Override
-    public void onModify(int x, int z, Hunk<BlockData> output, boolean multicore, ChunkContext context) {
+    public void onModify(int x, int z, Hunk<PlatformBlockState> output, boolean multicore, ChunkContext context) {
         PrecisionStopwatch p = PrecisionStopwatch.start();
         if (getDimension().isHideOresForHiddenOre()) {
             hideOres(output, multicore);
@@ -100,8 +101,9 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<BlockData> {
                         surfaces.add(top);
 
                         for (int k = top; k >= 0; k--) {
-                            BlockData b = output.get(finalI, k, j);
-                            boolean now = b != null && !(B.isAir(b) || B.isFluid(b));
+                            PlatformBlockState b = output.get(finalI, k, j);
+                            BlockData rawB = unwrap(b);
+                            boolean now = b != null && !(B.isAir(rawB) || B.isFluid(rawB));
 
                             if (now != inside) {
                                 inside = now;
@@ -115,7 +117,7 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<BlockData> {
                         }
 
                         for (int k : surfaces) {
-                            BlockData tip = output.get(finalI, k, j);
+                            PlatformBlockState tip = output.get(finalI, k, j);
 
                             if (tip == null) {
                                 continue;
@@ -124,15 +126,16 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<BlockData> {
                             boolean remove = false;
                             boolean remove2 = false;
 
-                            if (B.isDecorant(tip)) {
-                                BlockData bel = output.get(finalI, k - 1, j);
+                            BlockData rawTip = (BlockData) tip.nativeHandle();
+                            if (B.isDecorant(rawTip)) {
+                                BlockData bel = unwrap(output.get(finalI, k - 1, j));
 
                                 if (bel == null) {
                                     remove = true;
-                                } else if (!B.canPlaceOnto(tip.getMaterial(), bel.getMaterial())) {
+                                } else if (!B.canPlaceOnto(rawTip.getMaterial(), bel.getMaterial())) {
                                     remove = true;
                                 } else if (bel instanceof Bisected) {
-                                    BlockData bb = output.get(finalI, k - 2, j);
+                                    BlockData bb = unwrap(output.get(finalI, k - 2, j));
                                     if (bb == null || !B.canPlaceOnto(bel.getMaterial(), bb.getMaterial())) {
                                         remove = true;
                                         remove2 = true;
@@ -159,7 +162,7 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<BlockData> {
         getEngine().getMetrics().getPerfection().put(p.getMilliseconds());
     }
 
-    private void hideOres(Hunk<BlockData> output, boolean multicore) {
+    private void hideOres(Hunk<PlatformBlockState> output, boolean multicore) {
         BurstExecutor burst = burst().burst(multicore);
         int height = output.getHeight();
         for (int i = 0; i < 16; i++) {
@@ -167,11 +170,11 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<BlockData> {
             burst.queue(() -> {
                 for (int j = 0; j < 16; j++) {
                     for (int k = height - 1; k >= 0; k--) {
-                        BlockData block = output.get(finalI, k, j);
+                        PlatformBlockState block = output.get(finalI, k, j);
                         if (block == null) {
                             continue;
                         }
-                        BlockData base = ORE_BASES.get(block.getMaterial());
+                        PlatformBlockState base = ORE_BASES.get(((BlockData) block.nativeHandle()).getMaterial());
                         if (base != null) {
                             output.set(finalI, k, j, base);
                         }
@@ -182,15 +185,22 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<BlockData> {
         burst.complete();
     }
 
-    private int getHeight(Hunk<BlockData> output, int x, int z) {
+    private int getHeight(Hunk<PlatformBlockState> output, int x, int z) {
         for (int i = output.getHeight() - 1; i >= 0; i--) {
-            BlockData b = output.get(x, i, z);
+            PlatformBlockState b = output.get(x, i, z);
 
-            if (b != null && !B.isAir(b) && !B.isFluid(b)) {
-                return i;
+            if (b != null) {
+                BlockData rawB = (BlockData) b.nativeHandle();
+                if (!B.isAir(rawB) && !B.isFluid(rawB)) {
+                    return i;
+                }
             }
         }
 
         return 0;
+    }
+
+    private static BlockData unwrap(PlatformBlockState state) {
+        return state == null ? null : (BlockData) state.nativeHandle();
     }
 }

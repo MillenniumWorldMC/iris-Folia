@@ -22,8 +22,6 @@ import art.arcane.iris.engine.data.chunk.TerrainChunk;
 import art.arcane.iris.spi.ChunkWriteTarget;
 import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.iris.spi.PlatformBlockState;
-import org.bukkit.block.Biome;
-import org.bukkit.block.data.BlockData;
 
 /**
  * Bukkit adapter for the hot-path chunk write surface backed by TerrainChunk.
@@ -37,12 +35,12 @@ public final class BukkitChunkWriteTarget implements ChunkWriteTarget {
 
     @Override
     public void setBlock(int x, int y, int z, PlatformBlockState state) {
-        terrain.setBlock(x, y, z, (BlockData) state.nativeHandle());
+        terrain.setBlock(x, y, z, state);
     }
 
     @Override
     public void setBiome(int x, int y, int z, PlatformBiome biome) {
-        terrain.setBiome(x, y, z, (Biome) biome.nativeHandle());
+        terrain.setBiome(x, y, z, biome);
     }
 
     @Override

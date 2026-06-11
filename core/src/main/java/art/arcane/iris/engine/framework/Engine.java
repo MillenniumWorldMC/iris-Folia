@@ -37,6 +37,9 @@ import art.arcane.iris.engine.data.cache.Cache;
 import art.arcane.iris.engine.data.chunk.TerrainChunk;
 import art.arcane.iris.engine.mantle.EngineMantle;
 import art.arcane.iris.engine.object.*;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBiome;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.project.matter.TileWrapper;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
@@ -69,7 +72,6 @@ import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
 import art.arcane.iris.util.project.stream.ProceduralStream;
 import io.papermc.lib.PaperLib;
 import org.bukkit.*;
-import org.bukkit.block.Biome;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.BlockData;
@@ -178,7 +180,7 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
     }
 
     @BlockCoordinates
-    void generate(int x, int z, Hunk<BlockData> blocks, Hunk<Biome> biomes, boolean multicore) throws WrongEngineBroException;
+    void generate(int x, int z, Hunk<PlatformBlockState> blocks, Hunk<PlatformBiome> biomes, boolean multicore) throws WrongEngineBroException;
 
     EngineMetrics getMetrics();
 
@@ -315,15 +317,16 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
 
     @BlockCoordinates
     @Override
-    default void catchBlockUpdates(int x, int y, int z, BlockData data) {
+    default void catchBlockUpdates(int x, int y, int z, PlatformBlockState data) {
         if (data == null) {
             return;
         }
 
-        if (B.isUpdatable(data)) {
+        BlockData blockData = (BlockData) data.nativeHandle();
+        if (B.isUpdatable(blockData)) {
             getMantle().updateBlock(x, y, z);
         }
-        if (data instanceof IrisCustomData) {
+        if (blockData instanceof IrisCustomData) {
             getMantle().getMantle().flag(x >> 4, z >> 4, MantleFlag.CUSTOM_ACTIVE, true);
         }
     }
@@ -601,7 +604,7 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
         PlacedObject po = getObjectPlacement(rx, ry, rz, mc);
         if (po != null && po.getPlacement() != null) {
             if (B.isStorageChest(b.getBlockData())) {
-                IrisLootTable table = po.getPlacement().getTable(b.getBlockData(), getData());
+                IrisLootTable table = po.getPlacement().getTable(BukkitBlockState.of(b.getBlockData()), getData());
                 if (table != null) {
                     tables.add(table);
                     if (po.getPlacement().isOverrideGlobalLoot()) {

@@ -64,7 +64,7 @@ public final class IrisMatterSupport {
         }
 
         for (BlockVector i : object.getBlocks().keys()) {
-            matter.slice(BlockData.class).set(i.getBlockX() - min.getBlockX(), i.getBlockY() - min.getBlockY(), i.getBlockZ() - min.getBlockZ(), object.getBlocks().get(i));
+            matter.slice(BlockData.class).set(i.getBlockX() - min.getBlockX(), i.getBlockY() - min.getBlockY(), i.getBlockZ() - min.getBlockZ(), (BlockData) object.getBlocks().get(i).nativeHandle());
         }
 
         return matter;

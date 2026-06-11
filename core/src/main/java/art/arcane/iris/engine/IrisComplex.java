@@ -24,6 +24,9 @@ import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.data.cache.Cache;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.*;
+import art.arcane.iris.platform.bukkit.BukkitBiome;
+import art.arcane.iris.spi.PlatformBiome;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.iris.util.project.context.IrisContext;
 import art.arcane.iris.util.common.data.DataProvider;
@@ -37,7 +40,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 import org.bukkit.Material;
-import org.bukkit.block.Biome;
 import org.bukkit.block.data.BlockData;
 
 import java.io.File;
@@ -68,7 +70,7 @@ public class IrisComplex implements DataProvider {
     private ProceduralStream<IrisBiome> baseBiomeStream;
     private ProceduralStream<UUID> baseBiomeIDStream;
     private ProceduralStream<IrisBiome> trueBiomeStream;
-    private ProceduralStream<Biome> trueBiomeDerivativeStream;
+    private ProceduralStream<PlatformBiome> trueBiomeDerivativeStream;
     private ProceduralStream<Double> heightStream;
     private ProceduralStream<Integer> roundedHeighteightStream;
     private ProceduralStream<Double> maxHeightStream;
@@ -83,8 +85,8 @@ public class IrisComplex implements DataProvider {
     private ProceduralStream<IrisDecorator> seaSurfaceDecoration;
     private ProceduralStream<IrisDecorator> seaFloorDecoration;
     private ProceduralStream<IrisDecorator> shoreSurfaceDecoration;
-    private ProceduralStream<BlockData> rockStream;
-    private ProceduralStream<BlockData> fluidStream;
+    private ProceduralStream<PlatformBlockState> rockStream;
+    private ProceduralStream<PlatformBlockState> fluidStream;
     private IrisBiome focusBiome;
     private IrisRegion focusRegion;
     private Map<IrisInterpolator, IdentityHashMap<IrisBiome, GeneratorBounds>> generatorBounds;
@@ -216,7 +218,7 @@ public class IrisComplex implements DataProvider {
                                 regionStream.contextInjecting((c, xx, zz) -> IrisContext.getOr(engine).getChunkContext().getRegion().get(xx, zz)).get(x, z), x, z, fluidHeight))
                 .cache2D("trueBiomeStream", engine, cacheSize).waste("True Biome Stream");
         trueBiomeDerivativeStream = trueBiomeStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getBiome().get(x, z))
-                .convert(IrisBiome::getDerivative).cache2D("trueBiomeDerivativeStream", engine, cacheSize).waste("True Biome Derivative Stream");
+                .convert((b) -> (PlatformBiome) BukkitBiome.of(b.getDerivative())).cache2D("trueBiomeDerivativeStream", engine, cacheSize).waste("True Biome Derivative Stream");
         heightFluidStream = heightStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getHeight().getDouble(x, z))
                 .max(fluidHeight).cache2DDouble("heightFluidStream", engine, cacheSize).waste("Height Fluid Stream");
         maxHeightStream = ProceduralStream.ofDouble((x, z) -> height).waste("Max Height Stream");
@@ -287,7 +289,7 @@ public class IrisComplex implements DataProvider {
                 continue;
             }
 
-            BlockData block = i.getBlockData(b, rngc, x, z, data);
+            PlatformBlockState block = i.getBlockData(b, rngc, x, z, data);
 
             if (block != null) {
                 return i;

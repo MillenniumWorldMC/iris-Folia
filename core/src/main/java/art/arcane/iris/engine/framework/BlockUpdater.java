@@ -18,15 +18,15 @@
 
 package art.arcane.iris.engine.framework;
 
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.mantle.runtime.MantleChunk;
 import art.arcane.volmlib.util.math.RNG;
 import art.arcane.volmlib.util.matter.Matter;
 import org.bukkit.Chunk;
-import org.bukkit.block.data.BlockData;
 
 public interface BlockUpdater {
 
-    void catchBlockUpdates(int x, int y, int z, BlockData data);
+    void catchBlockUpdates(int x, int y, int z, PlatformBlockState data);
 
     void updateChunk(Chunk c);
 

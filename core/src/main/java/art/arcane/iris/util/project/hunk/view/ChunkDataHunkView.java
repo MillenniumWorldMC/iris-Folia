@@ -18,6 +18,8 @@
 
 package art.arcane.iris.util.project.hunk.view;
 
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.common.data.IrisCustomData;
 import art.arcane.iris.util.project.hunk.Hunk;
@@ -25,23 +27,64 @@ import org.bukkit.block.data.BlockData;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 @SuppressWarnings("ClassCanBeRecord")
-public class ChunkDataHunkView extends art.arcane.volmlib.util.hunk.view.ChunkDataHunkView implements Hunk<BlockData> {
+public class ChunkDataHunkView implements Hunk<PlatformBlockState> {
     private static final BlockData AIR = B.getAir();
 
+    private final art.arcane.volmlib.util.hunk.view.ChunkDataHunkView view;
+
     public ChunkDataHunkView(ChunkData chunk) {
-        super(chunk, AIR, (data) -> data instanceof IrisCustomData d ? d.getBase() : data);
+        this.view = new art.arcane.volmlib.util.hunk.view.ChunkDataHunkView(chunk, AIR, (data) -> data instanceof IrisCustomData d ? d.getBase() : data);
     }
 
     @Override
-    public void set(int x1, int y1, int z1, int x2, int y2, int z2, BlockData t) {
-        setRegion(x1, y1, z1, x2, y2, z2, t);
+    public int getWidth() {
+        return view.getWidth();
     }
 
-    public BlockData get(int x, int y, int z) {
-        return super.get(x, y, z);
+    @Override
+    public int getDepth() {
+        return view.getDepth();
     }
 
-    public void set(int x, int y, int z, BlockData t) {
-        super.set(x, y, z, t);
+    @Override
+    public int getHeight() {
+        return view.getHeight();
+    }
+
+    @Override
+    public void set(int x1, int y1, int z1, int x2, int y2, int z2, PlatformBlockState t) {
+        if (t == null) {
+            return;
+        }
+
+        view.setRegion(x1, y1, z1, x2, y2, z2, (BlockData) t.nativeHandle());
+    }
+
+    @Override
+    public PlatformBlockState get(int x, int y, int z) {
+        return BukkitBlockState.of(view.get(x, y, z));
+    }
+
+    @Override
+    public void set(int x, int y, int z, PlatformBlockState t) {
+        if (t == null) {
+            return;
+        }
+
+        view.set(x, y, z, (BlockData) t.nativeHandle());
+    }
+
+    @Override
+    public void setRaw(int x, int y, int z, PlatformBlockState t) {
+        if (t == null) {
+            return;
+        }
+
+        view.setRaw(x, y, z, (BlockData) t.nativeHandle());
+    }
+
+    @Override
+    public PlatformBlockState getRaw(int x, int y, int z) {
+        return BukkitBlockState.of(view.getRaw(x, y, z));
     }
 }

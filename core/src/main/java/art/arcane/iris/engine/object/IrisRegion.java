@@ -21,6 +21,7 @@ package art.arcane.iris.engine.object;
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.gui.components.RenderType;
 import art.arcane.iris.core.loader.IrisData;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.core.loader.IrisRegistrant;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.object.annotations.*;
@@ -40,7 +41,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
-import org.bukkit.block.data.BlockData;
 
 import java.awt.*;
 import java.util.Random;
@@ -157,16 +157,16 @@ public class IrisRegion extends IrisRegistrant implements IRare {
     @ArrayType(type = IrisOreGenerator.class, min = 1)
     private KList<IrisOreGenerator> ores = new KList<>();
 
-    public BlockData generateOres(int x, int y, int z, RNG rng, IrisData data, boolean surface) {
+    public PlatformBlockState generateOres(int x, int y, int z, RNG rng, IrisData data, boolean surface) {
         KList<IrisOreGenerator> localOres = surface ? getSurfaceOres() : getUndergroundOres();
         return generateOres(localOres, x, y, z, rng, data);
     }
 
-    public BlockData generateSurfaceOres(int x, int y, int z, RNG rng, IrisData data) {
+    public PlatformBlockState generateSurfaceOres(int x, int y, int z, RNG rng, IrisData data) {
         return generateOres(getSurfaceOres(), x, y, z, rng, data);
     }
 
-    public BlockData generateUndergroundOres(int x, int y, int z, RNG rng, IrisData data) {
+    public PlatformBlockState generateUndergroundOres(int x, int y, int z, RNG rng, IrisData data) {
         return generateOres(getUndergroundOres(), x, y, z, rng, data);
     }
 
@@ -178,7 +178,7 @@ public class IrisRegion extends IrisRegistrant implements IRare {
         return !getUndergroundOres().isEmpty();
     }
 
-    private BlockData generateOres(KList<IrisOreGenerator> localOres, int x, int y, int z, RNG rng, IrisData data) {
+    private PlatformBlockState generateOres(KList<IrisOreGenerator> localOres, int x, int y, int z, RNG rng, IrisData data) {
         if (localOres.isEmpty()) {
             return null;
         }
@@ -186,7 +186,7 @@ public class IrisRegion extends IrisRegistrant implements IRare {
         int oreCount = localOres.size();
         for (int oreIndex = 0; oreIndex < oreCount; oreIndex++) {
             IrisOreGenerator oreGenerator = localOres.get(oreIndex);
-            BlockData ore = oreGenerator.generate(x, y, z, rng, data);
+            PlatformBlockState ore = oreGenerator.generate(x, y, z, rng, data);
             if (ore != null) {
                 return ore;
             }

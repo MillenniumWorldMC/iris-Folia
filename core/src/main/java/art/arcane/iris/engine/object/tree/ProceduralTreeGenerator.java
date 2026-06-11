@@ -21,6 +21,7 @@ package art.arcane.iris.engine.object.tree;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.object.IrisObject;
 import art.arcane.iris.engine.object.IrisProceduralTree;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.util.common.math.Vector3i;
 import art.arcane.volmlib.util.math.RNG;
 import org.bukkit.block.data.BlockData;
@@ -118,7 +119,7 @@ public final class ProceduralTreeGenerator {
             int nx = v.x() - minX - cx;
             int ny = v.y() - cy + 1;
             int nz = v.z() - minZ - cz;
-            object.getBlocks().put(new Vector3i(nx, ny, nz), entry.getValue());
+            object.getBlocks().put(new Vector3i(nx, ny, nz), BukkitBlockState.of(entry.getValue()));
         }
 
         return object;

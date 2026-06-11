@@ -19,26 +19,27 @@
 package art.arcane.iris.engine.framework;
 
 import art.arcane.iris.engine.data.chunk.TerrainChunk;
+import art.arcane.iris.spi.PlatformBiome;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.project.hunk.Hunk;
 import lombok.Data;
-import org.bukkit.block.Biome;
 import org.bukkit.block.data.BlockData;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Data
 public class PregeneratedData {
-    private final Hunk<BlockData> blocks;
-    private final Hunk<BlockData> post;
-    private final Hunk<Biome> biomes;
+    private final Hunk<PlatformBlockState> blocks;
+    private final Hunk<PlatformBlockState> post;
+    private final Hunk<PlatformBiome> biomes;
     private final AtomicBoolean postMod;
 
     public PregeneratedData(int height) {
         postMod = new AtomicBoolean(false);
         blocks = Hunk.newAtomicHunk(16, height, 16);
         biomes = Hunk.newAtomicHunk(16, height, 16);
-        Hunk<BlockData> p = Hunk.newMappedHunkSynced(16, height, 16);
+        Hunk<PlatformBlockState> p = Hunk.newMappedHunkSynced(16, height, 16);
         post = p.trackWrite(postMod);
     }
 
@@ -48,14 +49,14 @@ public class PregeneratedData {
                 tc.setBlock(x, y, z, b);
             }
 
-            Biome bf = biomes.get(x, y, z);
+            PlatformBiome bf = biomes.get(x, y, z);
             if (bf != null) {
                 tc.setBiome(x, y, z, bf);
             }
         });
 
         if (postMod.get()) {
-            return () -> Hunk.view(tc).insertSoftly(0, 0, 0, post, (b) -> b == null || B.isAirOrFluid(b));
+            return () -> Hunk.view(tc).insertSoftly(0, 0, 0, post, (b) -> b == null || B.isAirOrFluid((BlockData) b.nativeHandle()));
         }
 
         return () -> {

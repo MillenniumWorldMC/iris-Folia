@@ -25,8 +25,8 @@ import art.arcane.volmlib.util.collection.KList;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import art.arcane.iris.spi.PlatformBlockState;
 import lombok.experimental.Accessors;
-import org.bukkit.block.data.BlockData;
 
 @Snippet("object-marker")
 @Accessors(chain = true)
@@ -35,7 +35,7 @@ import org.bukkit.block.data.BlockData;
 @Desc("Find blocks to mark")
 @Data
 public class IrisObjectMarker {
-    private final transient AtomicCache<KList<BlockData>> findData = new AtomicCache<>();
+    private final transient AtomicCache<KList<PlatformBlockState>> findData = new AtomicCache<>();
     @ArrayType(min = 1, type = IrisBlockData.class)
     @Required
     @Desc("Find block types to mark")
@@ -51,13 +51,13 @@ public class IrisObjectMarker {
     @Desc("The marker to add")
     private String marker;
 
-    public KList<BlockData> getMark(IrisData rdata) {
+    public KList<PlatformBlockState> getMark(IrisData rdata) {
         return findData.aquire(() ->
         {
-            KList<BlockData> b = new KList<>();
+            KList<PlatformBlockState> b = new KList<>();
 
             for (IrisBlockData i : mark) {
-                BlockData bx = i.getBlockData(rdata);
+                PlatformBlockState bx = i.getBlockData(rdata);
 
                 if (bx != null) {
                     b.add(bx);

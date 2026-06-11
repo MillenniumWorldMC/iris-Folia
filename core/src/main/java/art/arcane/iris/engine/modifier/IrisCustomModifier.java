@@ -8,13 +8,14 @@ import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.volmlib.util.mantle.flag.MantleFlag;
 import art.arcane.iris.util.common.parallel.BurstExecutor;
 import art.arcane.iris.util.common.parallel.MultiBurst;
-import org.bukkit.block.data.BlockData;
-public class IrisCustomModifier extends EngineAssignedModifier<BlockData> {
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
+public class IrisCustomModifier extends EngineAssignedModifier<PlatformBlockState> {
     public IrisCustomModifier(Engine engine) {
         super(engine, "Custom");
     }
     @Override
-    public void onModify(int x, int z, Hunk<BlockData> output, boolean multicore, ChunkContext context) {
+    public void onModify(int x, int z, Hunk<PlatformBlockState> output, boolean multicore, ChunkContext context) {
         var mc = getEngine().getMantle().getMantle().getChunk(x >> 4, z >> 4);
         if (!mc.isFlagged(MantleFlag.CUSTOM_ACTIVE)) return;
         mc.use();
@@ -26,13 +27,13 @@ public class IrisCustomModifier extends EngineAssignedModifier<BlockData> {
             burst.queue(() -> {
                 for (int rX = 0; rX < output.getWidth(); rX++) {
                     for (int rZ = 0; rZ < output.getDepth(); rZ++) {
-                        BlockData b = output.get(rX, finalY, rZ);
-                        if (!(b instanceof IrisCustomData d)) continue;
+                        PlatformBlockState b = output.get(rX, finalY, rZ);
+                        if (b == null || !(b.nativeHandle() instanceof IrisCustomData d)) continue;
 
                         mc.getOrCreate(finalY >> 4)
                                 .slice(Identifier.class)
                                 .set(rX, finalY & 15, rZ, d.getCustom());
-                        output.set(rX, finalY, rZ, d.getBase());
+                        output.set(rX, finalY, rZ, BukkitBlockState.of(d.getBase()));
                     }
                 }
             });

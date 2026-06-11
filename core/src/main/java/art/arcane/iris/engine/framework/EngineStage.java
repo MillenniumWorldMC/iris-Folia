@@ -18,15 +18,15 @@
 
 package art.arcane.iris.engine.framework;
 
+import art.arcane.iris.spi.PlatformBiome;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.iris.util.project.hunk.Hunk;
-import org.bukkit.block.Biome;
-import org.bukkit.block.data.BlockData;
 
 public interface EngineStage {
     @BlockCoordinates
-    void generate(int x, int z, Hunk<BlockData> blocks, Hunk<Biome> biomes, boolean multicore, ChunkContext context);
+    void generate(int x, int z, Hunk<PlatformBlockState> blocks, Hunk<PlatformBiome> biomes, boolean multicore, ChunkContext context);
 
     default void close() {
         if (this instanceof EngineComponent c) {

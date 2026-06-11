@@ -18,6 +18,7 @@
 
 package art.arcane.iris.engine.object;
 
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.data.B;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.util.BlockVector;
@@ -68,8 +69,8 @@ public class FloatingObjectFootprint {
         int[] globalHighestKx = {0};
         int[] globalHighestKz = {0};
 
-        obj.getBlocks().forEach((BlockVector key, BlockData bd) -> {
-            if (!B.isSolid(bd)) {
+        obj.getBlocks().forEach((BlockVector key, PlatformBlockState bd) -> {
+            if (!B.isSolid((BlockData) bd.nativeHandle())) {
                 return;
             }
             int kx = key.getBlockX();

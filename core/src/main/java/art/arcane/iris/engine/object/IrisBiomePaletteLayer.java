@@ -27,8 +27,8 @@ import art.arcane.iris.util.project.noise.CNG;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import art.arcane.iris.spi.PlatformBlockState;
 import lombok.experimental.Accessors;
-import org.bukkit.block.data.BlockData;
 
 @Snippet("biome-palette")
 @Accessors(chain = true)
@@ -37,7 +37,7 @@ import org.bukkit.block.data.BlockData;
 @Desc("A layer of surface / subsurface material in biomes")
 @Data
 public class IrisBiomePaletteLayer {
-    private final transient AtomicCache<KList<BlockData>> blockData = new AtomicCache<>();
+    private final transient AtomicCache<KList<PlatformBlockState>> blockData = new AtomicCache<>();
     private final transient AtomicCache<CNG> layerGenerator = new AtomicCache<>();
     private final transient AtomicCache<CNG> heightGenerator = new AtomicCache<>();
     @Desc("The style of noise")
@@ -68,7 +68,7 @@ public class IrisBiomePaletteLayer {
         return heightGenerator.aquire(() -> CNG.signature(rng.nextParallelRNG(minHeight * maxHeight + getBlockData(data).size())));
     }
 
-    public BlockData get(RNG rng, double x, double y, double z, IrisData data) {
+    public PlatformBlockState get(RNG rng, double x, double y, double z, IrisData data) {
         if (getBlockData(data).isEmpty()) {
             return null;
         }
@@ -97,12 +97,12 @@ public class IrisBiomePaletteLayer {
         return palette;
     }
 
-    public KList<BlockData> getBlockData(IrisData data) {
+    public KList<PlatformBlockState> getBlockData(IrisData data) {
         return blockData.aquire(() ->
         {
-            KList<BlockData> blockData = new KList<>();
+            KList<PlatformBlockState> blockData = new KList<>();
             for (IrisBlockData ix : palette) {
-                BlockData bx = ix.getBlockData(data);
+                PlatformBlockState bx = ix.getBlockData(data);
                 if (bx != null) {
                     for (int i = 0; i < ix.getWeight(); i++) {
                         blockData.add(bx);

@@ -22,6 +22,7 @@ import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.object.IrisFormation;
 import art.arcane.iris.engine.object.IrisMaterialPalette;
 import art.arcane.iris.engine.object.IrisProceduralBlocks;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.math.Vector3i;
 import art.arcane.volmlib.util.math.RNG;
 import org.bukkit.block.data.BlockData;
@@ -47,9 +48,9 @@ public final class FormationBlockResolver {
             IrisMaterialPalette strata = f.getStrataPalette();
             int thickness = Math.max(1, f.getStrataThickness());
             int band = Math.floorDiv(y, thickness);
-            BlockData strataBlock = strata.get(new RNG(f.getSeed() + (band * 31L)), x, band, z, data);
-            if (strataBlock != null) {
-                return strataBlock.clone();
+            PlatformBlockState strataState = strata.get(new RNG(f.getSeed() + (band * 31L)), x, band, z, data);
+            if (strataState != null) {
+                return ((BlockData) strataState.nativeHandle()).clone();
             }
         }
 

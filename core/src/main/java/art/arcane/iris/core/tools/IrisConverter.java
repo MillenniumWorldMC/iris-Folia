@@ -93,7 +93,7 @@ public class IrisConverter {
                                 int blockIndex = isBytes ? din.read() & 0xFF : Varint.readUnsignedVarInt(din);
                                 BlockData bd = blockmap.get(blockIndex);
                                 if (!bd.getMaterial().isAir()) {
-                                    object.setUnsigned(w, h, d, bd);
+                                    object.setUnsigned(w, h, d, art.arcane.iris.platform.bukkit.BukkitBlockState.of(bd));
                                 }
                                 v.getAndAdd(1);
                             }

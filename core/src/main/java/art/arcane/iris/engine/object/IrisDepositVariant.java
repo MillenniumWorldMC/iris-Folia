@@ -30,6 +30,8 @@ import art.arcane.volmlib.util.collection.KMap;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import lombok.experimental.Accessors;
 import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
@@ -59,13 +61,14 @@ public class IrisDepositVariant {
     @Desc("Source block id (for example `minecraft:iron_ore`) -> replacement block id (for example `minecraft:deepslate_iron_ore`). Any block id the data loader resolves is accepted, including external/mod blocks. Source match is by material only, so block properties on the source key are ignored.")
     private KMap<String, String> remap = new KMap<>();
 
-    public BlockData remapOrNull(BlockData ore, IrisData rdata) {
+    public PlatformBlockState remapOrNull(PlatformBlockState ore, IrisData rdata) {
         if (ore == null || remap == null || remap.isEmpty()) {
             return null;
         }
 
         KMap<Material, BlockData> map = resolved.aquire(() -> buildResolved(rdata));
-        return map.get(ore.getMaterial());
+        BlockData target = map.get(((BlockData) ore.nativeHandle()).getMaterial());
+        return target == null ? null : BukkitBlockState.of(target);
     }
 
     private KMap<Material, BlockData> buildResolved(IrisData rdata) {

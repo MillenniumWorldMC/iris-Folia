@@ -27,8 +27,8 @@ import art.arcane.iris.util.project.noise.CNG;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import art.arcane.iris.spi.PlatformBlockState;
 import lombok.experimental.Accessors;
-import org.bukkit.block.data.BlockData;
 
 import java.util.Optional;
 
@@ -39,7 +39,7 @@ import java.util.Optional;
 @Desc("A palette of materials")
 @Data
 public class IrisMaterialPalette {
-    private final transient AtomicCache<KList<BlockData>> blockData = new AtomicCache<>();
+    private final transient AtomicCache<KList<PlatformBlockState>> blockData = new AtomicCache<>();
     private final transient AtomicCache<CNG> layerGenerator = new AtomicCache<>();
     private final transient AtomicCache<CNG> heightGenerator = new AtomicCache<>();
     @Desc("The style of noise")
@@ -52,7 +52,7 @@ public class IrisMaterialPalette {
     @Desc("The palette of blocks to be used in this layer")
     private KList<IrisBlockData> palette = new KList<IrisBlockData>().qadd(new IrisBlockData("STONE"));
 
-    public BlockData get(RNG rng, double x, double y, double z, IrisData rdata) {
+    public PlatformBlockState get(RNG rng, double x, double y, double z, IrisData rdata) {
         if (getBlockData(rdata).isEmpty()) {
             return null;
         }
@@ -100,12 +100,12 @@ public class IrisMaterialPalette {
         return this;
     }
 
-    public KList<BlockData> getBlockData(IrisData rdata) {
+    public KList<PlatformBlockState> getBlockData(IrisData rdata) {
         return blockData.aquire(() ->
         {
-            KList<BlockData> blockData = new KList<>();
+            KList<PlatformBlockState> blockData = new KList<>();
             for (IrisBlockData ix : palette) {
-                BlockData bx = ix.getBlockData(rdata);
+                PlatformBlockState bx = ix.getBlockData(rdata);
                 if (bx != null) {
                     for (int i = 0; i < ix.getWeight(); i++) {
                         blockData.add(bx);

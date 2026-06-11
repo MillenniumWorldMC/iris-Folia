@@ -12,9 +12,9 @@ import art.arcane.iris.util.common.data.DataProvider;
 import art.arcane.volmlib.util.math.M;
 import art.arcane.volmlib.util.math.RNG;
 import art.arcane.iris.util.project.interpolation.IrisInterpolation.NoiseBounds;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.project.stream.ProceduralStream;
 import art.arcane.iris.util.project.stream.interpolation.Interpolated;
-import org.bukkit.block.data.BlockData;
 
 import java.util.*;
 
@@ -26,14 +26,14 @@ public class UpperDimensionContext implements DataProvider {
     private final ProceduralStream<Double> heightStream;
     private final ProceduralStream<IrisBiome> biomeStream;
     private final ProceduralStream<IrisRegion> regionStream;
-    private final ProceduralStream<BlockData> rockStream;
+    private final ProceduralStream<PlatformBlockState> rockStream;
     private final boolean selfReferencing;
 
     private UpperDimensionContext(IrisDimension dimension, IrisData data, int chunkHeight,
                                  ProceduralStream<Double> heightStream,
                                  ProceduralStream<IrisBiome> biomeStream,
                                  ProceduralStream<IrisRegion> regionStream,
-                                 ProceduralStream<BlockData> rockStream,
+                                 ProceduralStream<PlatformBlockState> rockStream,
                                  boolean selfReferencing) {
         this.dimension = dimension;
         this.data = data;
@@ -227,7 +227,7 @@ public class UpperDimensionContext implements DataProvider {
             return Math.max(Math.min(interpolatedHeight + fluidHeight + overlayStream.get(x, z), chunkHeight), 0);
         }, Interpolated.DOUBLE);
 
-        ProceduralStream<BlockData> rockStream = upperDim.getRockPalette()
+        ProceduralStream<PlatformBlockState> rockStream = upperDim.getRockPalette()
                 .getLayerGenerator(rng.nextParallelRNG(45), upperData).stream()
                 .select(upperDim.getRockPalette().getBlockData(upperData));
 
@@ -256,7 +256,7 @@ public class UpperDimensionContext implements DataProvider {
         return regionStream == null ? null : regionStream.get((double) x, (double) z);
     }
 
-    public BlockData getRockBlock(int x, int z) {
+    public PlatformBlockState getRockBlock(int x, int z) {
         return rockStream.get((double) x, (double) z);
     }
 

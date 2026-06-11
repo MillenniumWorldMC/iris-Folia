@@ -18,14 +18,14 @@
 
 package art.arcane.iris.engine.object;
 
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.collection.KList;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 public interface IPostBlockAccess {
-    BlockData getPostBlock(int x, int y, int z, int currentPostX, int currentPostZ, ChunkData currentData);
+    PlatformBlockState getPostBlock(int x, int y, int z, int currentPostX, int currentPostZ, ChunkData currentData);
 
-    void setPostBlock(int x, int y, int z, BlockData d, int currentPostX, int currentPostZ, ChunkData currentData);
+    void setPostBlock(int x, int y, int z, PlatformBlockState d, int currentPostX, int currentPostZ, ChunkData currentData);
 
     int highestTerrainOrFluidBlock(int x, int z);
 

@@ -22,14 +22,14 @@ import art.arcane.iris.Iris;
 import art.arcane.iris.engine.data.chunk.TerrainChunk;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.mantle.EngineMantle;
+import art.arcane.iris.spi.PlatformBiome;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.format.C;
 import art.arcane.iris.util.common.parallel.MultiBurst;
 import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.volmlib.util.mantle.runtime.Mantle;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
-import org.bukkit.block.Biome;
-import org.bukkit.block.data.BlockData;
 
 import java.io.File;
 import java.io.IOException;
@@ -184,14 +184,14 @@ public final class GoldenHashScanner {
         MessageDigest biomeDigest = sha256();
         int minY = buffer.getMinHeight();
         int maxY = buffer.getMaxHeight();
-        IdentityHashMap<BlockData, byte[]> blockCache = new IdentityHashMap<>();
-        Map<Biome, byte[]> biomeCache = new HashMap<>();
+        IdentityHashMap<PlatformBlockState, byte[]> blockCache = new IdentityHashMap<>();
+        Map<PlatformBiome, byte[]> biomeCache = new HashMap<>();
 
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
                 for (int y = minY; y < maxY; y++) {
-                    BlockData data = buffer.getBlockData(x, y, z);
-                    byte[] bytes = blockCache.computeIfAbsent(data, d -> (d.getAsString() + "\n").getBytes(StandardCharsets.UTF_8));
+                    PlatformBlockState data = buffer.getBlockData(x, y, z);
+                    byte[] bytes = blockCache.computeIfAbsent(data, (PlatformBlockState d) -> (d.key() + "\n").getBytes(StandardCharsets.UTF_8));
                     blockDigest.update(bytes);
                 }
             }
@@ -200,10 +200,10 @@ public final class GoldenHashScanner {
         for (int x = 0; x < 16; x += BIOME_STEP) {
             for (int z = 0; z < 16; z += BIOME_STEP) {
                 for (int y = minY; y < maxY; y += BIOME_STEP) {
-                    Biome biome = buffer.getBiome(x, y, z);
+                    PlatformBiome biome = buffer.getBiome(x, y, z);
                     byte[] bytes = biome == null
                             ? NULL_BIOME
-                            : biomeCache.computeIfAbsent(biome, b -> (biomeKey(b) + "\n").getBytes(StandardCharsets.UTF_8));
+                            : biomeCache.computeIfAbsent(biome, (PlatformBiome b) -> (b.key() + "\n").getBytes(StandardCharsets.UTF_8));
                     biomeDigest.update(bytes);
                 }
             }
@@ -319,8 +319,8 @@ public final class GoldenHashScanner {
             for (int x = 0; x < 16 && diffs.size() < 50; x++) {
                 for (int z = 0; z < 16 && diffs.size() < 50; z++) {
                     for (int y = minY; y < maxY && diffs.size() < 50; y++) {
-                        String a = first.getBlockData(x, y, z).getAsString();
-                        String b = second.getBlockData(x, y, z).getAsString();
+                        String a = first.getBlockData(x, y, z).key();
+                        String b = second.getBlockData(x, y, z).key();
                         if (!a.equals(b)) {
                             diffs.add(x + " " + y + " " + z + " | " + a + " | " + b);
                         }
@@ -341,8 +341,8 @@ public final class GoldenHashScanner {
             for (int x = 0; x < 16 && mantleDiffs.size() < 80; x++) {
                 for (int z = 0; z < 16 && mantleDiffs.size() < 80; z++) {
                     for (int y = minY; y < maxY && mantleDiffs.size() < 80; y++) {
-                        String a = first.getBlockData(x, y, z).getAsString();
-                        String b = reset.getBlockData(x, y, z).getAsString();
+                        String a = first.getBlockData(x, y, z).key();
+                        String b = reset.getBlockData(x, y, z).key();
                         if (!a.equals(b)) {
                             mantleDiffs.add(x + " " + y + " " + z + " | scan: " + a + " | mantle-reset: " + b);
                         }
@@ -360,7 +360,7 @@ public final class GoldenHashScanner {
             for (int x = 0; x < 16; x++) {
                 for (int z = 0; z < 16; z++) {
                     for (int y = minY; y < maxY; y++) {
-                        String state = first.getBlockData(x, y, z).getAsString();
+                        String state = first.getBlockData(x, y, z).key();
                         if (!state.equals("minecraft:air") && !state.equals("minecraft:cave_air") && !state.equals("minecraft:void_air")) {
                             report.add(x + " " + y + " " + z + " " + state);
                         }
@@ -402,7 +402,7 @@ public final class GoldenHashScanner {
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
                 for (int y = minY; y < maxY; y++) {
-                    String state = buffer.getBlockData(x, y, z).getAsString();
+                    String state = buffer.getBlockData(x, y, z).key();
                     if (!state.equals("minecraft:air") && !state.equals("minecraft:cave_air") && !state.equals("minecraft:void_air")) {
                         out.add(x + " " + y + " " + z + " " + state);
                     }
@@ -410,19 +410,6 @@ public final class GoldenHashScanner {
             }
         }
         Files.write(new File(dir, chunkX + "_" + chunkZ + ".txt").toPath(), out, StandardCharsets.UTF_8);
-    }
-
-    private static String biomeKey(Biome biome) {
-        for (String method : new String[]{"getKeyOrNull", "getKeyOrThrow", "getKey"}) {
-            try {
-                Object key = Biome.class.getMethod(method).invoke(biome);
-                if (key != null) {
-                    return key.toString();
-                }
-            } catch (Throwable ignored) {
-            }
-        }
-        return biome.toString();
     }
 
     private static String shortHash(String hex) {

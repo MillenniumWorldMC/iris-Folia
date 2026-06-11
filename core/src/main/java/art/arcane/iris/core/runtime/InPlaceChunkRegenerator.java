@@ -23,6 +23,7 @@ import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.engine.data.chunk.TerrainChunk;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.mantle.EngineMantle;
+import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.iris.util.common.parallel.MultiBurst;
 import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
@@ -163,9 +164,12 @@ public final class InPlaceChunkRegenerator {
         for (int x = 0; x < 16; x += BIOME_STEP) {
             for (int z = 0; z < 16; z += BIOME_STEP) {
                 for (int y = minHeight; y < maxHeight; y += BIOME_STEP) {
-                    Biome biome = buffer.getBiome(x, y, z);
-                    if (biome != null && world.getBiome(baseX + x, y, baseZ + z) != biome) {
-                        world.setBiome(baseX + x, y, baseZ + z, biome);
+                    PlatformBiome biome = buffer.getBiome(x, y, z);
+                    if (biome != null) {
+                        Biome bukkitBiome = (Biome) biome.nativeHandle();
+                        if (world.getBiome(baseX + x, y, baseZ + z) != bukkitBiome) {
+                            world.setBiome(baseX + x, y, baseZ + z, bukkitBiome);
+                        }
                     }
                 }
             }

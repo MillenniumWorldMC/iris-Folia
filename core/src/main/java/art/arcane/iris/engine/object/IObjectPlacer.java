@@ -20,7 +20,7 @@ package art.arcane.iris.engine.object;
 
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.framework.Engine;
-import org.bukkit.block.data.BlockData;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.jetbrains.annotations.Nullable;
 
 public interface IObjectPlacer {
@@ -28,9 +28,9 @@ public interface IObjectPlacer {
 
     int getHighest(int x, int z, IrisData data, boolean ignoreFluid);
 
-    void set(int x, int y, int z, BlockData d);
+    void set(int x, int y, int z, PlatformBlockState d);
 
-    BlockData get(int x, int y, int z);
+    PlatformBlockState get(int x, int y, int z);
 
     boolean isPreventingDecay();
 

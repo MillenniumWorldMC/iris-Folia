@@ -20,7 +20,7 @@ package art.arcane.iris.engine.object;
 
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.framework.Engine;
-import org.bukkit.block.data.BlockData;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.jetbrains.annotations.Nullable;
 
 public class DecayControlPlacer implements IObjectPlacer {
@@ -41,12 +41,12 @@ public class DecayControlPlacer implements IObjectPlacer {
     }
 
     @Override
-    public void set(int x, int y, int z, BlockData d) {
+    public void set(int x, int y, int z, PlatformBlockState d) {
         delegate.set(x, y, z, d);
     }
 
     @Override
-    public BlockData get(int x, int y, int z) {
+    public PlatformBlockState get(int x, int y, int z) {
         return delegate.get(x, y, z);
     }
 

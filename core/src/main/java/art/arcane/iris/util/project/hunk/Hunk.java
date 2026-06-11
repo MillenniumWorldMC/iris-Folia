@@ -35,10 +35,10 @@ import art.arcane.iris.util.project.interpolation.InterpolationMethod3D;
 import art.arcane.iris.util.project.interpolation.IrisInterpolation;
 import art.arcane.volmlib.util.math.BlockPosition;
 import art.arcane.iris.util.common.parallel.MultiBurst;
+import art.arcane.iris.spi.PlatformBiome;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.project.stream.interpolation.Interpolated;
 import org.bukkit.Chunk;
-import org.bukkit.block.Biome;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 import java.io.IOException;
@@ -98,23 +98,23 @@ public interface Hunk<T> extends HunkLike<T> {
         return adapt(new art.arcane.volmlib.util.hunk.view.FringedHunkView<>(unwrap(i), unwrap(o)));
     }
 
-    static Hunk<BlockData> view(TerrainChunk src) {
+    static Hunk<PlatformBlockState> view(TerrainChunk src) {
         return new ChunkDataHunkView(src.getChunkData());
     }
 
-    static Hunk<Biome> viewBiomes(TerrainChunk src) {
+    static Hunk<PlatformBiome> viewBiomes(TerrainChunk src) {
         return new TerrainChunkBiomeHunkView(src);
     }
 
-    static Hunk<BlockData> view(ChunkData src) {
+    static Hunk<PlatformBlockState> view(ChunkData src) {
         return new ChunkDataHunkView(src);
     }
 
-    static Hunk<BlockData> viewBlocks(Chunk src) {
+    static Hunk<PlatformBlockState> viewBlocks(Chunk src) {
         return new ChunkHunkView(src);
     }
 
-    static Hunk<Biome> viewBiomes(Chunk src) {
+    static Hunk<PlatformBiome> viewBiomes(Chunk src) {
         return new ChunkBiomeHunkView(src);
     }
 

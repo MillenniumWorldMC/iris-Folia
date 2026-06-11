@@ -43,9 +43,10 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.Material;
 import org.bukkit.block.Biome;
-import org.bukkit.block.data.BlockData;
 
 import java.awt.*;
 import java.util.EnumMap;
@@ -57,7 +58,7 @@ import java.util.EnumMap;
 @Data
 @EqualsAndHashCode(callSuper = false)
 public class IrisBiome extends IrisRegistrant implements IRare {
-    private static final BlockData BARRIER = Material.BARRIER.createBlockData();
+    private static final PlatformBlockState BARRIER = BukkitBlockState.of(Material.BARRIER.createBlockData());
     private final transient AtomicCache<KMap<String, IrisBiomeGeneratorLink>> genCache = new AtomicCache<>();
     private final transient AtomicCache<KMap<String, Integer>> genCacheMax = new AtomicCache<>();
     private final transient AtomicCache<KMap<String, Integer>> genCacheMin = new AtomicCache<>();
@@ -189,16 +190,16 @@ public class IrisBiome extends IrisRegistrant implements IRare {
     @ArrayType(type = IrisOreGenerator.class, min = 1)
     private KList<IrisOreGenerator> ores = new KList<>();
 
-    public BlockData generateOres(int x, int y, int z, RNG rng, IrisData data, boolean surface) {
+    public PlatformBlockState generateOres(int x, int y, int z, RNG rng, IrisData data, boolean surface) {
         KList<IrisOreGenerator> localOres = surface ? getSurfaceOres() : getUndergroundOres();
         return generateOres(localOres, x, y, z, rng, data);
     }
 
-    public BlockData generateSurfaceOres(int x, int y, int z, RNG rng, IrisData data) {
+    public PlatformBlockState generateSurfaceOres(int x, int y, int z, RNG rng, IrisData data) {
         return generateOres(getSurfaceOres(), x, y, z, rng, data);
     }
 
-    public BlockData generateUndergroundOres(int x, int y, int z, RNG rng, IrisData data) {
+    public PlatformBlockState generateUndergroundOres(int x, int y, int z, RNG rng, IrisData data) {
         return generateOres(getUndergroundOres(), x, y, z, rng, data);
     }
 
@@ -210,7 +211,7 @@ public class IrisBiome extends IrisRegistrant implements IRare {
         return !getUndergroundOres().isEmpty();
     }
 
-    private BlockData generateOres(KList<IrisOreGenerator> localOres, int x, int y, int z, RNG rng, IrisData data) {
+    private PlatformBlockState generateOres(KList<IrisOreGenerator> localOres, int x, int y, int z, RNG rng, IrisData data) {
         if (localOres.isEmpty()) {
             return null;
         }
@@ -218,7 +219,7 @@ public class IrisBiome extends IrisRegistrant implements IRare {
         int oreCount = localOres.size();
         for (int oreIndex = 0; oreIndex < oreCount; oreIndex++) {
             IrisOreGenerator oreGenerator = localOres.get(oreIndex);
-            BlockData ore = oreGenerator.generate(x, y, z, rng, data);
+            PlatformBlockState ore = oreGenerator.generate(x, y, z, rng, data);
             if (ore != null) {
                 return ore;
             }
@@ -398,12 +399,12 @@ public class IrisBiome extends IrisRegistrant implements IRare {
         return childrenCell.aquire(() -> getChildStyle().create(random.nextParallelRNG(sig * 2137), getLoader()).bake().scale(scale).bake());
     }
 
-    public KList<BlockData> generateLayers(IrisDimension dim, double wx, double wz, RNG random, int maxDepth, int height, IrisData rdata, IrisComplex complex) {
+    public KList<PlatformBlockState> generateLayers(IrisDimension dim, double wx, double wz, RNG random, int maxDepth, int height, IrisData rdata, IrisComplex complex) {
         if (isLockLayers()) {
             return generateLockedLayers(wx, wz, random, maxDepth, height, rdata, complex);
         }
 
-        KList<BlockData> data = new KList<>();
+        KList<PlatformBlockState> data = new KList<>();
 
         if (maxDepth <= 0) {
             return data;
@@ -456,8 +457,8 @@ public class IrisBiome extends IrisRegistrant implements IRare {
         return data;
     }
 
-    public KList<BlockData> generateCeilingLayers(IrisDimension dim, double wx, double wz, RNG random, int maxDepth, int height, IrisData rdata, IrisComplex complex) {
-        KList<BlockData> data = new KList<>();
+    public KList<PlatformBlockState> generateCeilingLayers(IrisDimension dim, double wx, double wz, RNG random, int maxDepth, int height, IrisData rdata, IrisComplex complex) {
+        KList<PlatformBlockState> data = new KList<>();
 
         if (maxDepth <= 0) {
             return data;
@@ -502,9 +503,9 @@ public class IrisBiome extends IrisRegistrant implements IRare {
         return data;
     }
 
-    public KList<BlockData> generateLockedLayers(double wx, double wz, RNG random, int maxDepthf, int height, IrisData rdata, IrisComplex complex) {
-        KList<BlockData> data = new KList<>();
-        KList<BlockData> real = new KList<>();
+    public KList<PlatformBlockState> generateLockedLayers(double wx, double wz, RNG random, int maxDepthf, int height, IrisData rdata, IrisComplex complex) {
+        KList<PlatformBlockState> data = new KList<>();
+        KList<PlatformBlockState> real = new KList<>();
         int maxDepth = Math.min(maxDepthf, getLockLayersMax());
         if (maxDepth <= 0) {
             return data;
@@ -583,8 +584,8 @@ public class IrisBiome extends IrisRegistrant implements IRare {
         });
     }
 
-    public KList<BlockData> generateSeaLayers(double wx, double wz, RNG random, int maxDepth, IrisData rdata) {
-        KList<BlockData> data = new KList<>();
+    public KList<PlatformBlockState> generateSeaLayers(double wx, double wz, RNG random, int maxDepth, IrisData rdata) {
+        KList<PlatformBlockState> data = new KList<>();
 
         for (int i = 0; i < seaLayers.size(); i++) {
             CNG hgen = getLayerSeaHeightGenerators(random, rdata).get(i);
@@ -733,9 +734,9 @@ public class IrisBiome extends IrisRegistrant implements IRare {
         return getBiomeGenerator(rng).fit(biomeScatter, x, y, z);
     }
 
-    public BlockData getSurfaceBlock(int x, int z, RNG rng, IrisData idm) {
+    public PlatformBlockState getSurfaceBlock(int x, int z, RNG rng, IrisData idm) {
         if (getLayers().isEmpty()) {
-            return B.get("AIR");
+            return B.getState("AIR");
         }
 
         return getLayers().get(0).get(rng, x, 0, z, idm);

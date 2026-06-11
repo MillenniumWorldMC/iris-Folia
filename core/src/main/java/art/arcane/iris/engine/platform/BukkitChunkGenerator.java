@@ -37,6 +37,7 @@ import art.arcane.iris.engine.object.VanillaStructureMode;
 import art.arcane.iris.engine.object.IrisWorld;
 import art.arcane.iris.engine.object.StudioMode;
 import art.arcane.iris.engine.platform.studio.StudioGenerator;
+import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.iris.util.project.hunk.view.ChunkDataHunkHolder;
@@ -49,8 +50,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.Setter;
 import org.bukkit.*;
-import org.bukkit.block.Biome;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -419,7 +418,7 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
                 studioGenerator.generateChunk(engine, tc, x, z);
             } else {
                 ChunkDataHunkHolder blocks = new ChunkDataHunkHolder(d);
-                Hunk<Biome> biomes = Hunk.viewBiomes(tc);
+                Hunk<PlatformBiome> biomes = Hunk.viewBiomes(tc);
                 boolean useMulticore = studio && !J.isFolia();
                 engine.generate(x << 4, z << 4, blocks, biomes, useMulticore);
                 blocks.apply();

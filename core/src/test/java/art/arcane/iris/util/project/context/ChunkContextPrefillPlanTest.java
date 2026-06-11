@@ -133,6 +133,7 @@ public class ChunkContextPrefillPlanTest {
         @SuppressWarnings("unchecked")
         ProceduralStream<BlockData> rockStream = mock(ProceduralStream.class);
         BlockData rock = mock(BlockData.class);
+        doReturn("minecraft:stone").when(rock).getAsString();
         doAnswer(invocation -> {
             rockCalls.incrementAndGet();
             return rock;
@@ -141,6 +142,7 @@ public class ChunkContextPrefillPlanTest {
         @SuppressWarnings("unchecked")
         ProceduralStream<BlockData> fluidStream = mock(ProceduralStream.class);
         BlockData fluid = mock(BlockData.class);
+        doReturn("minecraft:water").when(fluid).getAsString();
         doAnswer(invocation -> {
             fluidCalls.incrementAndGet();
             return fluid;

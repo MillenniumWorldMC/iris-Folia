@@ -31,9 +31,10 @@ import art.arcane.volmlib.util.matter.MatterBiomeInject;
 import art.arcane.volmlib.util.matter.slices.BiomeInjectMatter;
 import art.arcane.volmlib.util.scheduling.ChronoLatch;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
+import art.arcane.iris.spi.PlatformBiome;
 import org.bukkit.block.Biome;
 
-public class IrisBiomeActuator extends EngineAssignedActuator<Biome> {
+public class IrisBiomeActuator extends EngineAssignedActuator<PlatformBiome> {
     private final RNG rng;
     private final ChronoLatch cl = new ChronoLatch(5000);
 
@@ -44,7 +45,7 @@ public class IrisBiomeActuator extends EngineAssignedActuator<Biome> {
 
     @BlockCoordinates
     @Override
-    public void onActuate(int x, int z, Hunk<Biome> h, boolean multicore, ChunkContext context) {
+    public void onActuate(int x, int z, Hunk<PlatformBiome> h, boolean multicore, ChunkContext context) {
         try {
             PrecisionStopwatch p = PrecisionStopwatch.start();
             for (int xf = 0; xf < h.getWidth(); xf++) {

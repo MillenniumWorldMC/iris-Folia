@@ -20,16 +20,16 @@ package art.arcane.iris.util.project.stream.interpolation;
 
 import art.arcane.iris.Iris;
 import art.arcane.iris.engine.object.CaveResult;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.math.RNG;
 import art.arcane.iris.util.project.stream.ProceduralStream;
-import org.bukkit.block.data.BlockData;
 
 import java.util.UUID;
 import java.util.function.Function;
 
 public interface Interpolated<T> {
-    Interpolated<BlockData> BLOCK_DATA = of((t) -> 0D, (t) -> null);
+    Interpolated<PlatformBlockState> BLOCK_DATA = of((t) -> 0D, (t) -> null);
     Interpolated<KList<CaveResult>> CAVE_RESULTS = of((t) -> 0D, (t) -> null);
     Interpolated<RNG> RNG = of((t) -> 0D, (t) -> null);
     Interpolated<Double> DOUBLE = of((t) -> t, (t) -> t);

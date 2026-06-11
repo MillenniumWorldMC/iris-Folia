@@ -135,7 +135,7 @@ public final class StructureImporter {
             } else if (mat == Material.STRUCTURE_BLOCK) {
                 continue;
             }
-            object.setUnsigned(x, y, z, blockData);
+            object.setUnsigned(x, y, z, art.arcane.iris.platform.bukkit.BukkitBlockState.of(blockData));
             count++;
             if (!structural) {
                 LegacyTileData tile = captureTile(block);

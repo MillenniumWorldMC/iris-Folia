@@ -24,6 +24,8 @@ import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.*;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.data.Cuboid;
@@ -139,7 +141,8 @@ public class TreeSVC implements IrisService {
             }
 
             @Override
-            public void set(int x, int y, int z, BlockData d) {
+            public void set(int x, int y, int z, PlatformBlockState s) {
+                BlockData d = (BlockData) s.nativeHandle();
                 Block b = event.getWorld().getBlockAt(x, y, z);
                 BlockState state = b.getState();
                 if (d instanceof IrisCustomData data)
@@ -150,8 +153,8 @@ public class TreeSVC implements IrisService {
             }
 
             @Override
-            public BlockData get(int x, int y, int z) {
-                return event.getWorld().getBlockAt(x, y, z).getBlockData();
+            public PlatformBlockState get(int x, int y, int z) {
+                return BukkitBlockState.of(event.getWorld().getBlockAt(x, y, z).getBlockData());
             }
 
             @Override
@@ -166,7 +169,7 @@ public class TreeSVC implements IrisService {
 
             @Override
             public boolean isSolid(int x, int y, int z) {
-                return get(x, y, z).getMaterial().isSolid();
+                return event.getWorld().getBlockAt(x, y, z).getBlockData().getMaterial().isSolid();
             }
 
             @Override

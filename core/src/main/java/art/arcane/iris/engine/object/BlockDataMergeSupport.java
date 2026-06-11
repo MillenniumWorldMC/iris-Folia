@@ -1,5 +1,7 @@
 package art.arcane.iris.engine.object;
 
+import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.data.B;
 import org.bukkit.block.data.BlockData;
 
@@ -9,8 +11,9 @@ final class BlockDataMergeSupport {
     private BlockDataMergeSupport() {
     }
 
-    static BlockData merge(BlockData base, BlockData update) {
-        return merge(base, update, B::get);
+    static PlatformBlockState merge(PlatformBlockState base, PlatformBlockState update) {
+        BlockData merged = merge((BlockData) base.nativeHandle(), (BlockData) update.nativeHandle(), B::get);
+        return merged == null ? null : BukkitBlockState.of(merged);
     }
 
     static BlockData merge(BlockData base, BlockData update, Function<String, BlockData> resolver) {
