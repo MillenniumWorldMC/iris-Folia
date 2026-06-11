@@ -136,6 +136,14 @@ public class B {
         return BASE.toDeepSlateOre(block, ore);
     }
 
+    public static art.arcane.iris.spi.PlatformBlockState toDeepSlateOre(art.arcane.iris.spi.PlatformBlockState block, art.arcane.iris.spi.PlatformBlockState ore) {
+        return art.arcane.iris.platform.bukkit.BukkitBlockState.of(BASE.toDeepSlateOre((BlockData) block.nativeHandle(), (BlockData) ore.nativeHandle()));
+    }
+
+    public static boolean isOre(art.arcane.iris.spi.PlatformBlockState state) {
+        return BASE.isOre(state == null ? null : (BlockData) state.nativeHandle());
+    }
+
     public static boolean isDeepSlate(BlockData blockData) {
         return BASE.isDeepSlate(blockData);
     }
@@ -164,6 +172,10 @@ public class B {
         return BASE.isWater(b);
     }
 
+    public static boolean isWater(art.arcane.iris.spi.PlatformBlockState state) {
+        return BASE.isWater(state == null ? null : (BlockData) state.nativeHandle());
+    }
+
     public static BlockData getAir() {
         return BASE.getAir();
     }
@@ -178,6 +190,10 @@ public class B {
 
     public static boolean isSolid(BlockData mat) {
         return BASE.isSolid(mat);
+    }
+
+    public static boolean isSolid(art.arcane.iris.spi.PlatformBlockState state) {
+        return BASE.isSolid(state == null ? null : (BlockData) state.nativeHandle());
     }
 
     public static BlockData getOrNull(String bdxf) {
@@ -233,12 +249,24 @@ public class B {
         return BASE.isDecorant(m);
     }
 
+    public static boolean isDecorant(art.arcane.iris.spi.PlatformBlockState state) {
+        return BASE.isDecorant(state == null ? null : (BlockData) state.nativeHandle());
+    }
+
     public static KList<BlockData> get(KList<String> find) {
         return BASE.get(find);
     }
 
     public static boolean isFluid(BlockData d) {
         return BASE.isFluid(d);
+    }
+
+    public static boolean isFluid(art.arcane.iris.spi.PlatformBlockState state) {
+        return BASE.isFluid(state == null ? null : (BlockData) state.nativeHandle());
+    }
+
+    public static boolean matches(art.arcane.iris.spi.PlatformBlockState filter, art.arcane.iris.spi.PlatformBlockState state) {
+        return ((BlockData) filter.nativeHandle()).matches((BlockData) state.nativeHandle());
     }
 
     public static boolean isAirOrFluid(BlockData d) {

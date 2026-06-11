@@ -31,19 +31,11 @@ import art.arcane.volmlib.util.math.RNG;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
 import art.arcane.iris.spi.PlatformBlockState;
 import lombok.Getter;
-import org.bukkit.Material;
-import org.bukkit.block.data.BlockData;
 
 import java.util.function.Predicate;
 
 public class IrisDecorantActuator extends EngineAssignedActuator<PlatformBlockState> {
-    private static final Predicate<PlatformBlockState> PREDICATE_SOLID = (s) -> {
-        if (s == null) {
-            return false;
-        }
-        BlockData b = (BlockData) s.nativeHandle();
-        return !b.getMaterial().isAir() && !b.getMaterial().equals(Material.WATER) && !b.getMaterial().equals(Material.LAVA);
-    };
+    private static final Predicate<PlatformBlockState> PREDICATE_SOLID = (s) -> s != null && !B.isAirOrFluid(s);
     private final RNG rng;
     @Getter
     private final EngineDecorator surfaceDecorator;
@@ -96,7 +88,7 @@ public class IrisDecorantActuator extends EngineAssignedActuator<PlatformBlockSt
                 }
 
                 if (height < getDimension().getFluidHeight() && PREDICATE_SOLID.test(output.get(i, height, j))
-                        && height + 1 < output.getHeight() && B.isWater(unwrap(output.get(i, height + 1, j)))) {
+                        && height + 1 < output.getHeight() && B.isWater(output.get(i, height + 1, j))) {
                     getSeaSurfaceDecorator().decorate(i, j,
                             realX, Math.round(i + 1), Math.round(x + i - 1),
                             realZ, Math.round(z + j + 1), Math.round(z + j - 1),
@@ -141,9 +133,5 @@ public class IrisDecorantActuator extends EngineAssignedActuator<PlatformBlockSt
 
     private boolean shouldRayDecorate() {
         return false; // TODO CAVES
-    }
-
-    private static BlockData unwrap(PlatformBlockState state) {
-        return state == null ? null : (BlockData) state.nativeHandle();
     }
 }

@@ -18,11 +18,6 @@
 
 package art.arcane.iris.engine.object;
 
-import art.arcane.iris.spi.PlatformBlockState;
-import art.arcane.iris.util.common.data.B;
-import org.bukkit.block.data.BlockData;
-import org.bukkit.util.BlockVector;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -69,8 +64,8 @@ public class FloatingObjectFootprint {
         int[] globalHighestKx = {0};
         int[] globalHighestKz = {0};
 
-        obj.getBlocks().forEach((BlockVector key, PlatformBlockState bd) -> {
-            if (!B.isSolid((BlockData) bd.nativeHandle())) {
+        obj.getBlocks().forEach((key, bd) -> {
+            if (!bd.isSolid()) {
                 return;
             }
             int kx = key.getBlockX();

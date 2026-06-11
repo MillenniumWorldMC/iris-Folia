@@ -39,8 +39,6 @@ import art.arcane.iris.util.project.stream.interpolation.Interpolated;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
-import org.bukkit.Material;
-import org.bukkit.block.data.BlockData;
 
 import java.io.File;
 import java.util.*;
@@ -49,7 +47,6 @@ import java.util.*;
 @EqualsAndHashCode(exclude = "data")
 @ToString(exclude = "data")
 public class IrisComplex implements DataProvider {
-    private static final BlockData AIR = Material.AIR.createBlockData();
     private static final NoiseBounds ZERO_NOISE_BOUNDS = new NoiseBounds(0D, 0D);
     private static final int GRID_BOUNDS_CACHE_SIZE = 8192;
     private static final int HEIGHT_BOUNDS_GRID = 4;

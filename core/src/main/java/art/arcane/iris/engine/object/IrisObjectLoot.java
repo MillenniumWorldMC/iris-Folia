@@ -21,13 +21,13 @@ package art.arcane.iris.engine.object;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.util.common.data.B;
 import art.arcane.volmlib.util.collection.KList;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import art.arcane.iris.spi.PlatformBlockState;
 import lombok.experimental.Accessors;
-import org.bukkit.block.data.BlockData;
 
 @Snippet("object-loot")
 @Accessors(chain = true)
@@ -67,9 +67,8 @@ public class IrisObjectLoot implements IObjectLoot {
     }
 
     public boolean matchesFilter(IrisData manager, PlatformBlockState data) {
-        BlockData raw = (BlockData) data.nativeHandle();
         for (PlatformBlockState filterState : getFilter(manager)) {
-            if (((BlockData) filterState.nativeHandle()).matches(raw)) return true;
+            if (B.matches(filterState, data)) return true;
         }
         return false;
     }

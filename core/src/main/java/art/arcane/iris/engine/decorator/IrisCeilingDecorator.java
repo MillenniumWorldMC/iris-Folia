@@ -28,7 +28,6 @@ import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.volmlib.util.math.RNG;
 import art.arcane.iris.spi.PlatformBlockState;
-import org.bukkit.block.data.BlockData;
 
 public class IrisCeilingDecorator extends IrisEngineDecorator {
     private final RNG partRNG;
@@ -53,7 +52,7 @@ public class IrisCeilingDecorator extends IrisEngineDecorator {
         if (!decorator.isStacking()) {
             if (caveSkipFluid) {
                 PlatformBlockState state = data.get(x, height, z);
-                if (B.isFluid(state == null ? null : (BlockData) state.nativeHandle())) {
+                if (B.isFluid(state)) {
                     return;
                 }
             }

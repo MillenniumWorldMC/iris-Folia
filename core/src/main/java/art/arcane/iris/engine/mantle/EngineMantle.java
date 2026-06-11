@@ -185,13 +185,13 @@ public interface EngineMantle extends MatterGenerator {
     }
 
     @ChunkCoordinates
-    default void insertMatter(int x, int z, Class<BlockData> t, Hunk<PlatformBlockState> blocks, boolean multicore) {
+    default void insertMatter(int x, int z, Hunk<PlatformBlockState> blocks, boolean multicore) {
         if (!getEngine().getDimension().isUseMantle()) {
             return;
         }
 
         UpperDimensionContext upperCtx = getEngine().getUpperContext();
-        boolean protectUpper = t == BlockData.class && upperCtx != null;
+        boolean protectUpper = upperCtx != null;
 
         MantleChunk<Matter> chunk = getMantle().getChunk(x, z).use();
         try {
@@ -209,14 +209,14 @@ public interface EngineMantle extends MatterGenerator {
                     int rawUpper = upperCtx.getUpperSurfaceY(worldX, worldZ);
                     upperYs[i] = Math.max(rawUpper, he + gap);
                 }
-                chunk.iterate(t, (lx, y, lz, value) -> {
+                chunk.iterate(BlockData.class, (lx, y, lz, value) -> {
                     int colIdx = (lx << 4) | (lz & 15);
                     if (y < upperYs[colIdx]) {
                         blocks.set(lx, y, lz, BukkitBlockState.of(value));
                     }
                 });
             } else {
-                chunk.iterate(t, (lx, y, lz, value) -> blocks.set(lx, y, lz, BukkitBlockState.of(value)));
+                chunk.iterate(BlockData.class, (lx, y, lz, value) -> blocks.set(lx, y, lz, BukkitBlockState.of(value)));
             }
         } finally {
             chunk.release();

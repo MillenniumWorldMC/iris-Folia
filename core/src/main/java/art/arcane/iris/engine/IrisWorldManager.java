@@ -692,7 +692,7 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
         }
 
         int cX = e.getX(), cZ = e.getZ();
-        Long key = Cache.key(e);
+        Long key = Cache.key(cX, cZ);
         cleanup.put(key, cleanupService.schedule(() -> {
             cleanup.remove(key);
             getEngine().cleanupMantleChunk(cX, cZ);
@@ -701,7 +701,7 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
 
     @Override
     public void onChunkUnload(Chunk e) {
-        final var future = cleanup.remove(Cache.key(e));
+        final var future = cleanup.remove(Cache.key(e.getX(), e.getZ()));
         if (future != null) {
             future.cancel(false);
         }

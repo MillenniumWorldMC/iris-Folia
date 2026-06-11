@@ -97,13 +97,9 @@ art/arcane/iris/core/tools/IrisWorldCreator.java
 art/arcane/iris/core/tools/TreePlausibilizer.java
 art/arcane/iris/core/wand/WandSelection.java
 art/arcane/iris/engine/actuator/IrisBiomeActuator.java
-art/arcane/iris/engine/actuator/IrisDecorantActuator.java
-art/arcane/iris/engine/actuator/IrisTerrainNormalActuator.java
-art/arcane/iris/engine/data/cache/Cache.java
 art/arcane/iris/engine/data/chunk/LinkedTerrainChunk.java
 art/arcane/iris/engine/data/chunk/TerrainChunk.java
 art/arcane/iris/engine/decorator/DecoratorCore.java
-art/arcane/iris/engine/decorator/IrisCeilingDecorator.java
 art/arcane/iris/engine/framework/BlockUpdater.java
 art/arcane/iris/engine/framework/Engine.java
 art/arcane/iris/engine/framework/EngineAssignedWorldManager.java
@@ -111,15 +107,12 @@ art/arcane/iris/engine/framework/EnginePlayer.java
 art/arcane/iris/engine/framework/EngineWorldManager.java
 art/arcane/iris/engine/framework/LootProvider.java
 art/arcane/iris/engine/framework/placer/WorldObjectPlacer.java
-art/arcane/iris/engine/IrisComplex.java
 art/arcane/iris/engine/IrisEngineEffects.java
 art/arcane/iris/engine/IrisWorldManager.java
 art/arcane/iris/engine/mantle/components/MantleFloatingObjectComponent.java
 art/arcane/iris/engine/mantle/components/MantleObjectComponent.java
 art/arcane/iris/engine/mantle/EngineMantle.java
 art/arcane/iris/engine/mantle/MantleWriter.java
-art/arcane/iris/engine/mode/ModeOverworld.java
-art/arcane/iris/engine/modifier/IrisCarveModifier.java
 art/arcane/iris/engine/modifier/IrisDepositModifier.java
 art/arcane/iris/engine/modifier/IrisFloatingChildBiomeModifier.java
 art/arcane/iris/engine/modifier/IrisPerfectionModifier.java
@@ -128,7 +121,6 @@ art/arcane/iris/engine/object/annotations/functions/LootTableKeyFunction.java
 art/arcane/iris/engine/object/BlockDataMergeSupport.java
 art/arcane/iris/engine/object/coral/CoralGenerator.java
 art/arcane/iris/engine/object/crystal/CrystalGenerator.java
-art/arcane/iris/engine/object/FloatingObjectFootprint.java
 art/arcane/iris/engine/object/formation/FormationBlockResolver.java
 art/arcane/iris/engine/object/formation/FormationGenerator.java
 art/arcane/iris/engine/object/fungi/FungusGenerator.java
@@ -141,8 +133,6 @@ art/arcane/iris/engine/object/IrisBiomeCustomParticle.java
 art/arcane/iris/engine/object/IrisBiomeCustomSpawn.java
 art/arcane/iris/engine/object/IrisBlockData.java
 art/arcane/iris/engine/object/IrisBlockDrops.java
-art/arcane/iris/engine/object/IrisCaveShape.java
-art/arcane/iris/engine/object/IrisColor.java
 art/arcane/iris/engine/object/IrisCommandRegistry.java
 art/arcane/iris/engine/object/IrisCompat.java
 art/arcane/iris/engine/object/IrisCompatabilityBlockFilter.java
@@ -157,7 +147,6 @@ art/arcane/iris/engine/object/IrisEntitySpawn.java
 art/arcane/iris/engine/object/IrisLoot.java
 art/arcane/iris/engine/object/IrisLootTable.java
 art/arcane/iris/engine/object/IrisObject.java
-art/arcane/iris/engine/object/IrisObjectLoot.java
 art/arcane/iris/engine/object/IrisObjectPlacement.java
 art/arcane/iris/engine/object/IrisObjectRotation.java
 art/arcane/iris/engine/object/IrisObjectTranslate.java
@@ -181,7 +170,6 @@ art/arcane/iris/engine/object/tree/TreePlausibility.java
 art/arcane/iris/engine/platform/BukkitChunkGenerator.java
 art/arcane/iris/engine/platform/DummyBiomeProvider.java
 art/arcane/iris/engine/platform/DummyChunkGenerator.java
-art/arcane/iris/engine/platform/studio/generators/BiomeBuffetGenerator.java
 art/arcane/iris/engine/platform/studio/generators/ObjectStudioGenerator.java
 art/arcane/iris/Iris.java
 art/arcane/iris/platform/bukkit/BukkitBiome.java

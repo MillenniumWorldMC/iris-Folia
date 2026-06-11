@@ -28,7 +28,6 @@ import art.arcane.iris.engine.framework.EngineStage;
 import art.arcane.iris.engine.framework.IrisEngineMode;
 import art.arcane.iris.engine.modifier.*;
 import art.arcane.iris.util.common.scheduling.J;
-import org.bukkit.block.data.BlockData;
 
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -77,7 +76,7 @@ public class ModeOverworld extends IrisEngineMode implements EngineMode {
             if (shouldBypassMantleStages(getEngine())) {
                 return;
             }
-            getMantle().insertMatter(x >> 4, z >> 4, BlockData.class, K, m);
+            getMantle().insertMatter(x >> 4, z >> 4, K, m);
         };
         EngineStage sFloatingTerrainSolid = (x, z, k, p, m, c) -> floatingChildBiomes.modify(x, z, k, m, c);
         EngineStage sFloatingDecorate = (x, z, k, p, m, c) -> floatingChildBiomes.decorateColumns(x, z, k, m, c);

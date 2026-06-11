@@ -33,17 +33,16 @@ import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.volmlib.util.math.RNG;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
-import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.spi.PlatformBlockState;
+import art.arcane.iris.util.common.data.B;
 import lombok.Getter;
-import org.bukkit.Material;
 
 public class IrisTerrainNormalActuator extends EngineAssignedActuator<PlatformBlockState> {
-    private static final PlatformBlockState AIR = BukkitBlockState.of(Material.AIR.createBlockData());
-    private static final PlatformBlockState BEDROCK = BukkitBlockState.of(Material.BEDROCK.createBlockData());
-    private static final PlatformBlockState LAVA = BukkitBlockState.of(Material.LAVA.createBlockData());
-    private static final PlatformBlockState GLASS = BukkitBlockState.of(Material.GLASS.createBlockData());
-    private static final PlatformBlockState CAVE_AIR = BukkitBlockState.of(Material.CAVE_AIR.createBlockData());
+    private static final PlatformBlockState AIR = B.getState("AIR");
+    private static final PlatformBlockState BEDROCK = B.getState("BEDROCK");
+    private static final PlatformBlockState LAVA = B.getState("LAVA");
+    private static final PlatformBlockState GLASS = B.getState("GLASS");
+    private static final PlatformBlockState CAVE_AIR = B.getState("CAVE_AIR");
     @Getter
     private final RNG rng;
     @Getter

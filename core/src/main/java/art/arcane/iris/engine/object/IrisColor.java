@@ -96,10 +96,6 @@ public class IrisColor {
         });
     }
 
-    public org.bukkit.Color getBukkitColor() {
-        return org.bukkit.Color.fromRGB(getColor().getRGB());
-    }
-
     public int getAsRGB() {
         if (hex != null) {
             try {

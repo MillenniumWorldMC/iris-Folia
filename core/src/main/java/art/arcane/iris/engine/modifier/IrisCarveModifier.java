@@ -44,10 +44,7 @@ import art.arcane.volmlib.util.matter.slices.MarkerMatter;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import lombok.Data;
-import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.spi.PlatformBlockState;
-import org.bukkit.Material;
-import org.bukkit.block.data.BlockData;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -59,8 +56,8 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
     private static final int CAVE_BIOME_BLEND_CENTER_WEIGHT = 4;
     private static final int CAVE_BIOME_BLEND_TOTAL_WEIGHT = 8;
     private final RNG rng;
-    private final PlatformBlockState AIR = BukkitBlockState.of(Material.CAVE_AIR.createBlockData());
-    private final PlatformBlockState LAVA = BukkitBlockState.of(Material.LAVA.createBlockData());
+    private final PlatformBlockState AIR = B.getState("CAVE_AIR");
+    private final PlatformBlockState LAVA = B.getState("LAVA");
     private final IrisDecorantActuator decorant;
 
     public IrisCarveModifier(Engine engine) {
@@ -123,9 +120,8 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
                 }
 
                 PlatformBlockState current = output.getRaw(rx, yy, rz);
-                BlockData currentRaw = current == null ? null : (BlockData) current.nativeHandle();
 
-                if (B.isFluid(currentRaw)) {
+                if (B.isFluid(current)) {
                     return;
                 }
 
@@ -147,7 +143,7 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
                     walls.put(rx - 1, yy, rz, c);
                 }
 
-                if (currentRaw.getMaterial().isAir()) {
+                if (current.isAir()) {
                     return;
                 }
 
@@ -181,7 +177,7 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
                         PlatformBlockState data = biome.getWall().get(rng, worldX, yy, worldZ, getData());
                         int columnIndex = PowerOfTwoCoordinates.packLocal16(rx, rz);
 
-                        if (data != null && B.isSolid(unwrap(output.getRaw(rx, yy, rz))) && yy < surfaceHeights[columnIndex]) {
+                        if (data != null && B.isSolid(output.getRaw(rx, yy, rz)) && yy < surfaceHeights[columnIndex]) {
                             output.setRaw(rx, yy, rz, data);
                         }
                     }
@@ -418,14 +414,14 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
                 break;
             }
 
-            BlockData down = unwrap(output.getRaw(rx, fy, rz));
+            PlatformBlockState down = output.getRaw(rx, fy, rz);
             if (!B.isSolid(down)) {
                 break;
             }
 
             PlatformBlockState layer = floorLayers.get(i);
             if (B.isOre(down)) {
-                output.setRaw(rx, fy, rz, BukkitBlockState.of(B.toDeepSlateOre(down, unwrap(layer))));
+                output.setRaw(rx, fy, rz, B.toDeepSlateOre(down, layer));
                 continue;
             }
 
@@ -440,14 +436,14 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
                 break;
             }
 
-            BlockData up = unwrap(output.getRaw(rx, cy, rz));
+            PlatformBlockState up = output.getRaw(rx, cy, rz);
             if (!B.isSolid(up)) {
                 continue;
             }
 
             PlatformBlockState layer = ceilingLayers.get(i);
             if (B.isOre(up)) {
-                output.setRaw(rx, cy, rz, BukkitBlockState.of(B.toDeepSlateOre(up, unwrap(layer))));
+                output.setRaw(rx, cy, rz, B.toDeepSlateOre(up, layer));
                 continue;
             }
 
@@ -460,11 +456,11 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
         int maxY = output.getHeight();
         String customBiome = "";
 
-        if (zone.ceiling + 1 < maxY && B.isDecorant(unwrap(output.getRaw(rx, zone.ceiling + 1, rz)))) {
+        if (zone.ceiling + 1 < maxY && B.isDecorant(output.getRaw(rx, zone.ceiling + 1, rz))) {
             output.setRaw(rx, zone.ceiling + 1, rz, AIR);
         }
 
-        if (B.isDecorant(unwrap(output.getRaw(rx, zone.ceiling, rz)))) {
+        if (B.isDecorant(output.getRaw(rx, zone.ceiling, rz))) {
             output.setRaw(rx, zone.ceiling, rz, AIR);
         }
 
@@ -505,14 +501,14 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
             int y = zone.floor - i - 1;
 
             PlatformBlockState b = blocks.get(i);
-            BlockData down = unwrap(output.getRaw(rx, y, rz));
+            PlatformBlockState down = output.getRaw(rx, y, rz);
 
             if (!B.isSolid(down)) {
                 continue;
             }
 
             if (B.isOre(down)) {
-                output.setRaw(rx, y, rz, BukkitBlockState.of(B.toDeepSlateOre(down, unwrap(b))));
+                output.setRaw(rx, y, rz, B.toDeepSlateOre(down, b));
                 continue;
             }
 
@@ -528,14 +524,14 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
             }
 
             PlatformBlockState b = blocks.get(i);
-            BlockData up = unwrap(output.getRaw(rx, cy, rz));
+            PlatformBlockState up = output.getRaw(rx, cy, rz);
 
             if (!B.isSolid(up)) {
                 continue;
             }
 
             if (B.isOre(up)) {
-                output.setRaw(rx, cy, rz, BukkitBlockState.of(B.toDeepSlateOre(up, unwrap(b))));
+                output.setRaw(rx, cy, rz, B.toDeepSlateOre(up, b));
                 continue;
             }
 
@@ -543,9 +539,9 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
         }
 
         for (IrisDecorator decorator : biome.getDecorators()) {
-            if (decorator.getPartOf().equals(IrisDecorationPart.NONE) && zone.getFloor() > 0 && B.isSolid(unwrap(output.getRaw(rx, zone.getFloor() - 1, rz)))) {
+            if (decorator.getPartOf().equals(IrisDecorationPart.NONE) && zone.getFloor() > 0 && B.isSolid(output.getRaw(rx, zone.getFloor() - 1, rz))) {
                 decorant.getSurfaceDecorator().decorate(rx, rz, xx, xx, xx, zz, zz, zz, output, biome, zone.getFloor() - 1, zone.airThickness());
-            } else if (decorator.getPartOf().equals(IrisDecorationPart.CEILING) && zone.getCeiling() + 1 < maxY && B.isSolid(unwrap(output.getRaw(rx, zone.getCeiling() + 1, rz)))) {
+            } else if (decorator.getPartOf().equals(IrisDecorationPart.CEILING) && zone.getCeiling() + 1 < maxY && B.isSolid(output.getRaw(rx, zone.getCeiling() + 1, rz))) {
                 decorant.getCeilingDecorator().decorate(rx, rz, xx, xx, xx, zz, zz, zz, output, biome, zone.getCeiling(), zone.airThickness());
             }
         }
@@ -595,10 +591,6 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
             caveBiomeCache.put(key, resolvedBiome);
         }
         return resolvedBiome;
-    }
-
-    private static BlockData unwrap(PlatformBlockState state) {
-        return state == null ? null : (BlockData) state.nativeHandle();
     }
 
     private IrisBiome resolveCustomBiome(Map<String, IrisBiome> customBiomeCache, String customBiome) {

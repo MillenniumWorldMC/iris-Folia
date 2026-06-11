@@ -19,13 +19,8 @@
 package art.arcane.iris.engine.data.cache;
 
 import art.arcane.volmlib.util.cache.CacheKey;
-import org.bukkit.Chunk;
 
 public interface Cache<V> {
-    static long key(Chunk chunk) {
-        return CacheKey.key(chunk);
-    }
-
     static long key(int x, int z) {
         return CacheKey.key(x, z);
     }
