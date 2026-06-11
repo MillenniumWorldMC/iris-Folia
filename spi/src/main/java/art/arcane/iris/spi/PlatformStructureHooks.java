@@ -32,6 +32,10 @@ public interface PlatformStructureHooks {
 
     List<String> objectFeatureKeys();
 
+    List<String> reachableStructureKeys(PlatformWorld world);
+
+    List<String> possibleBiomeKeys(PlatformWorld world);
+
     boolean placeFeature(PlatformWorld world, int x, int y, int z, String featureKey, long seed);
 
     int[] placeStructure(PlatformWorld world, int chunkX, int chunkZ, String structureKey, long seed, int maxSpan);

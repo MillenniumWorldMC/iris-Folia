@@ -20,10 +20,10 @@ package art.arcane.iris.engine.object;
 
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.link.Identifier;
-import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.service.ExternalDataSVC;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.iris.util.common.data.B;
@@ -116,7 +116,7 @@ public class IrisLoot {
             if (is == null)
                 return new ItemStack(Material.AIR);
             is.setItemMeta(applyProperties(is, rng, debug, null));
-            return INMS.get().applyCustomNbt(is, customNbt);
+            return BukkitPlatform.applyCustomNbt(is, customNbt);
         } catch (Throwable e) {
             Iris.reportError(e);
             return new ItemStack(Material.AIR);
@@ -134,7 +134,7 @@ public class IrisLoot {
                 if (is == null)
                     return null;
                 is.setItemMeta(applyProperties(is, rng, debug, table));
-                return INMS.get().applyCustomNbt(is, customNbt);
+                return BukkitPlatform.applyCustomNbt(is, customNbt);
             } catch (Throwable e) {
                 //Iris.reportError(e);
                 e.printStackTrace();

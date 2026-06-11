@@ -23,9 +23,9 @@ import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.ServerConfigurator.DimensionHeight;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.core.loader.IrisRegistrant;
-import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.nms.datapack.IDataFixer;
 import art.arcane.iris.core.nms.datapack.IDataFixer.Dimension;
 import art.arcane.iris.engine.data.cache.AtomicCache;
@@ -601,7 +601,7 @@ public class IrisDimension extends IrisRegistrant {
                                 "max_format": {}
                             }
                         }
-                        """.replace("{}", INMS.get().getDataVersion().getPackFormat() + "");
+                        """.replace("{}", BukkitPlatform.dataPackFormat() + "");
 
         for (File datapacks : folders) {
             File mcm = new File(datapacks, "iris/pack.mcmeta");

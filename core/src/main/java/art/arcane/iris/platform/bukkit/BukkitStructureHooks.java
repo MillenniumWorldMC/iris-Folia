@@ -51,6 +51,16 @@ public final class BukkitStructureHooks implements PlatformStructureHooks {
     }
 
     @Override
+    public List<String> reachableStructureKeys(PlatformWorld world) {
+        return new ArrayList<>(INMS.get().getReachableStructureKeys(BukkitPlatform.unwrapWorld(world)));
+    }
+
+    @Override
+    public List<String> possibleBiomeKeys(PlatformWorld world) {
+        return new ArrayList<>(INMS.get().getPossibleBiomeKeys(BukkitPlatform.unwrapWorld(world)));
+    }
+
+    @Override
     public boolean placeFeature(PlatformWorld world, int x, int y, int z, String featureKey, long seed) {
         return INMS.get().placeFeature(BukkitPlatform.unwrapWorld(world), x, y, z, featureKey, seed);
     }

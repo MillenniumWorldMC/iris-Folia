@@ -22,7 +22,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.Strictness;
 import art.arcane.iris.Iris;
-import art.arcane.iris.core.nms.INMS;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.util.common.reflect.KeyedType;
 import art.arcane.volmlib.util.collection.KMap;
 import lombok.*;
@@ -56,7 +56,7 @@ public class TileData implements Cloneable {
     }
 
     public static TileData getTileState(Block block, boolean useLegacy) {
-        if (!INMS.get().hasTile(block.getType()))
+        if (!BukkitPlatform.hasTile(block.getType()))
             return null;
         if (useLegacy) {
             var legacy = LegacyTileData.fromBukkit(block.getState());
@@ -91,14 +91,14 @@ public class TileData implements Cloneable {
         if (material == null) throw new IllegalStateException("Material not set");
         if (block.getType() != material)
             throw new IllegalStateException("Material mismatch: " + block.getType() + " vs " + material);
-        INMS.get().deserializeTile(properties, block.getLocation());
+        BukkitPlatform.deserializeTile(properties, block.getLocation());
     }
 
     public TileData fromBukkit(Block block) {
         if (material != null && block.getType() != material)
             throw new IllegalStateException("Material mismatch: " + block.getType() + " vs " + material);
         if (material == null) material = block.getType();
-        properties = INMS.get().serializeTile(block.getLocation());
+        properties = BukkitPlatform.serializeTile(block.getLocation());
         return this;
     }
 

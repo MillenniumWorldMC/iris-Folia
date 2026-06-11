@@ -22,10 +22,10 @@ import art.arcane.iris.Iris;
 import art.arcane.iris.core.link.Identifier;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.loader.IrisRegistrant;
-import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.object.annotations.*;
 import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
@@ -215,7 +215,7 @@ public class IrisBlockData extends IrisRegistrant {
             entity.putIfAbsent("id", Identifier.fromString(id).toString());
         }
 
-        if (!INMS.get().hasTile(type) || tileData == null || tileData.isEmpty())
+        if (!BukkitPlatform.hasTile(type) || tileData == null || tileData.isEmpty())
             return null;
         return new TileData(type, this.tileData);
     }

@@ -19,8 +19,8 @@
 package art.arcane.iris.engine.framework;
 
 import art.arcane.iris.core.loader.IrisData;
-import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.engine.object.IrisWorld;
+import art.arcane.iris.platform.bukkit.BukkitWorld;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.volmlib.util.collection.KList;
 
@@ -85,7 +85,7 @@ public final class StructureReachability {
             return Collections.emptySet();
         }
         Set<String> reachable = new LinkedHashSet<>();
-        for (String key : INMS.get().getReachableStructureKeys(world.realWorld())) {
+        for (String key : IrisPlatforms.get().structureHooks().reachableStructureKeys(new BukkitWorld(world.realWorld()))) {
             if (key != null && !key.isEmpty()) {
                 reachable.add(key.toLowerCase());
             }
@@ -108,7 +108,7 @@ public final class StructureReachability {
             return missing;
         }
         Set<String> possible = new LinkedHashSet<>();
-        for (String key : INMS.get().getPossibleBiomeKeys(world.realWorld())) {
+        for (String key : IrisPlatforms.get().structureHooks().possibleBiomeKeys(new BukkitWorld(world.realWorld()))) {
             if (key != null) {
                 possible.add(key.toLowerCase());
             }

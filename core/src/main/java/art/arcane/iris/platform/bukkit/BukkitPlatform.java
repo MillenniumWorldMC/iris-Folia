@@ -31,9 +31,11 @@ import art.arcane.iris.spi.PlatformScheduler;
 import art.arcane.iris.spi.PlatformStructureHooks;
 import art.arcane.iris.spi.PlatformWorld;
 import art.arcane.iris.util.common.scheduling.J;
+import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.math.Vector3d;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Biome;
 import org.bukkit.block.data.BlockData;
@@ -41,6 +43,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.Vector;
 
 import java.io.File;
@@ -103,6 +106,26 @@ public final class BukkitPlatform implements IrisPlatform {
 
     public static Vector3d entityBoundingBox(EntityType type) {
         return INMS.get().getBoundingbox(type);
+    }
+
+    public static boolean hasTile(Material material) {
+        return INMS.get().hasTile(material);
+    }
+
+    public static KMap<String, Object> serializeTile(Location location) {
+        return INMS.get().serializeTile(location);
+    }
+
+    public static void deserializeTile(KMap<String, Object> properties, Location location) {
+        INMS.get().deserializeTile(properties, location);
+    }
+
+    public static ItemStack applyCustomNbt(ItemStack itemStack, KMap<String, Object> customNbt) {
+        return INMS.get().applyCustomNbt(itemStack, customNbt);
+    }
+
+    public static int dataPackFormat() {
+        return INMS.get().getDataVersion().getPackFormat();
     }
 
     @Override
