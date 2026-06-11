@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "irisworldgen",
+  "version": "${version}",
+  "name": "Iris",
+  "description": "Iris World Generation Engine (Fabric adapter - SKELETON, worldgen not yet wired)",
+  "authors": ["Arcane Arts (Volmit Software)"],
+  "license": "GPL-3.0",
+  "environment": "server",
+  "entrypoints": {
+    "main": ["art.arcane.iris.fabric.IrisFabricBootstrap"]
+  }
+}

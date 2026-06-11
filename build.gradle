@@ -41,7 +41,8 @@ plugins {
 }
 
 group = 'art.arcane'
-version = '4.0.0-26.1'
+version = providers.gradleProperty('irisVersion').getOrElse('4.0.0-26.1')
+String minecraftVersion = providers.gradleProperty('minecraftVersion').getOrElse('26.1.2')
 String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')
     .orElse('com.github.VolmitSoftware:VolmLib:master-SNAPSHOT')
     .get()
@@ -72,7 +73,7 @@ def nmsBindings = [
 ]
 Class nmsTypeClass = Class.forName('NMSBinding$Type')
 nmsBindings.each { key, value ->
-    project(":nms:${key}") {
+    project(":adapters:bukkit:nms:${key}") {
         apply plugin: JavaPlugin
 
         def nmsConfig = new Config()
@@ -98,7 +99,7 @@ def included = configurations.create('included')
 def jarJar = configurations.create('jarJar')
 dependencies {
     nmsBindings.keySet().each { key ->
-        add('included', project(path: ":nms:${key}", configuration: 'runtimeElements'))
+        add('included', project(path: ":adapters:bukkit:nms:${key}", configuration: 'runtimeElements'))
     }
     add('included', project(path: ':core', configuration: 'shadow'))
     add('jarJar', project(':core:agent'))
@@ -116,6 +117,46 @@ tasks.register('iris', Copy) {
     dependsOn('jar')
     from(layout.buildDirectory.file("libs/Iris-${project.version}.jar"))
     into(layout.buildDirectory)
+}
+
+tasks.register('buildBukkit', Copy) {
+    group = 'iris'
+    dependsOn('jar')
+    from(layout.buildDirectory.file("libs/Iris-${project.version}.jar"))
+    rename { "Iris-${project.version}+mc${minecraftVersion}.jar" }
+    into(layout.projectDirectory.dir('dist'))
+}
+
+tasks.register('buildFabric', Copy) {
+    group = 'iris'
+    dependsOn(':adapters:fabric:jar')
+    from(project(':adapters:fabric').layout.buildDirectory.file("libs/Iris-${project.version}-fabric-skeleton.jar"))
+    rename { "Iris-${project.version}+mc${minecraftVersion}-fabric-skeleton.jar" }
+    into(layout.projectDirectory.dir('dist'))
+}
+
+tasks.register('buildNeoforge', Copy) {
+    group = 'iris'
+    dependsOn(':adapters:neoforge:jar')
+    from(project(':adapters:neoforge').layout.buildDirectory.file("libs/Iris-${project.version}-neoforge-skeleton.jar"))
+    rename { "Iris-${project.version}+mc${minecraftVersion}-neoforge-skeleton.jar" }
+    into(layout.projectDirectory.dir('dist'))
+}
+
+tasks.register('buildAll') {
+    group = 'iris'
+    dependsOn('buildBukkit', 'buildFabric', 'buildNeoforge', ':spi:jar')
+    doLast {
+        File dist = layout.projectDirectory.dir('dist').asFile
+        File[] jars = dist.listFiles((java.io.FileFilter) { File f -> f.name.endsWith('.jar') })
+        println('')
+        println('=== Iris buildAll -> dist/ ===')
+        if (jars != null) {
+            jars.sort { it.name }.each { File f ->
+                println(String.format('  %-60s %8d KB', f.name, (long) (f.length() / 1024)))
+            }
+        }
+    }
 }
 
 tasks.register('irisDev', Copy) {

@@ -1,0 +1,27 @@
+plugins {
+    id 'java'
+}
+
+group = 'art.arcane'
+version = rootProject.version
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+dependencies {
+    implementation(project(':spi'))
+}
+
+processResources {
+    inputs.property('version', project.version)
+    filesMatching('fabric.mod.json') {
+        expand('version': project.version)
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    archiveFileName.set("Iris-${project.version}-fabric-skeleton.jar")
+}
