@@ -27,14 +27,13 @@ import art.arcane.iris.engine.object.IrisStructurePlacement;
 import art.arcane.iris.engine.object.StructureDistribution;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.math.RNG;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.WeakHashMap;
 
 /**
  * Finds where IRIS_PLACED structures generate. A structure key matches either the iris
@@ -51,7 +50,7 @@ import java.util.WeakHashMap;
  * exhaustive per-chunk ring scan.
  */
 public final class IrisStructureLocator {
-    private static final Map<IrisData, PlacementIndex> INDEX_CACHE = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final com.github.benmanes.caffeine.cache.Cache<IrisData, PlacementIndex> INDEX_CACHE = Caffeine.newBuilder().weakKeys().build();
 
     private IrisStructureLocator() {
     }
@@ -280,13 +279,7 @@ public final class IrisStructureLocator {
 
     private static PlacementIndex index(Engine engine) {
         IrisData data = engine.getData();
-        PlacementIndex cached = INDEX_CACHE.get(data);
-        if (cached != null) {
-            return cached;
-        }
-        PlacementIndex built = build(engine, data);
-        INDEX_CACHE.put(data, built);
-        return built;
+        return INDEX_CACHE.get(data, (IrisData keyData) -> build(engine, keyData));
     }
 
     private static PlacementIndex build(Engine engine, IrisData data) {

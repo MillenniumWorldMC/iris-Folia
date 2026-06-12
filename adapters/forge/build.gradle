@@ -208,6 +208,8 @@ tasks.named('shadowJar', ShadowJar).configure {
     exclude('META-INF/*.RSA')
     exclude('org/apache/commons/lang/enum/**')
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    relocate('org.objectweb.asm', 'art.arcane.iris.shadow.asm')
+    exclude('oshi.properties')
 }
 
 tasks.named('assemble').configure {

@@ -19,10 +19,9 @@
 package art.arcane.iris.core.structure;
 
 import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.core.loader.IrisData;
-import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.util.project.matter.IrisMatterSupport;
-import art.arcane.volmlib.util.collection.KList;
 import com.google.gson.GsonBuilder;
 
 import java.io.File;
@@ -64,8 +63,8 @@ public final class StructureIndexService {
     }
 
     public static File write(IrisData data) {
-        KList<String> structures = INMS.get().getStructureKeys();
-        KList<String> sets = INMS.get().getStructureSetKeys();
+        List<String> structures = IrisPlatforms.get().structureHooks().structureKeys();
+        List<String> sets = IrisPlatforms.get().structureHooks().structureSetKeys();
 
         List<String> vanilla = new ArrayList<>();
         List<String> datapack = new ArrayList<>();

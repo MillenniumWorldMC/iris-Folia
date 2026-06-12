@@ -28,6 +28,8 @@ public interface ModdedLoader {
 
     String minecraftVersion();
 
+    String modVersion();
+
     MinecraftServer currentServer();
 
     Path configDir();

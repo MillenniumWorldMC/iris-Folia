@@ -23,9 +23,15 @@ import art.arcane.iris.modded.ModdedEngineBootstrap;
 import art.arcane.iris.modded.ModdedParityProbe;
 import art.arcane.iris.modded.ModdedWorldCheck;
 import art.arcane.iris.modded.ModdedWorldEngines;
+import art.arcane.iris.modded.command.IrisModdedCommands;
+import art.arcane.iris.modded.command.ModdedObjectUndo;
+import art.arcane.iris.modded.command.ModdedWandService;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.fml.ModContainer;
 import net.minecraftforge.fml.ModList;
@@ -34,6 +40,8 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.loading.FMLLoader;
 import net.minecraftforge.fml.loading.VersionInfo;
 import net.minecraftforge.registries.DeferredRegister;
+
+import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +51,7 @@ public final class IrisForgeBootstrap {
 
     public IrisForgeBootstrap(FMLJavaModLoadingContext context) {
         ModdedEngineBootstrap.initialize(new ForgeModdedLoader());
+        art.arcane.iris.modded.ModdedPackInstaller.ensureDefaultPack(ModdedEngineBootstrap.loader().configDir());
         String modVersion = ModList.getModContainerById("irisworldgen")
             .map((ModContainer container) -> container.getModInfo().getVersion().toString())
             .orElse("unknown");
@@ -57,7 +66,17 @@ public final class IrisForgeBootstrap {
         chunkGenerators.register(context.getModBusGroup());
         LOGGER.info("Iris chunk generator registered as irisworldgen:iris");
 
-        ServerStoppingEvent.BUS.addListener((ServerStoppingEvent event) -> ModdedWorldEngines.shutdown());
+        ServerStoppingEvent.BUS.addListener((ServerStoppingEvent event) -> {
+            ModdedObjectUndo.clearAll();
+            ModdedWandService.clearAll();
+            ModdedWorldEngines.shutdown();
+        });
+        RegisterCommandsEvent.BUS.addListener((RegisterCommandsEvent event) -> IrisModdedCommands.register(event.getDispatcher()));
+        PlayerInteractEvent.LeftClickBlock.BUS.addListener((Predicate<PlayerInteractEvent.LeftClickBlock>) (PlayerInteractEvent.LeftClickBlock event) ->
+                ModdedWandService.attackBlock(event.getEntity(), event.getLevel(), event.getHand(), event.getPos()));
+        PlayerInteractEvent.RightClickBlock.BUS.addListener((Predicate<PlayerInteractEvent.RightClickBlock>) (PlayerInteractEvent.RightClickBlock event) ->
+                ModdedWandService.useBlock(event.getEntity(), event.getLevel(), event.getHand(), event.getPos()));
+        TickEvent.ServerTickEvent.Post.BUS.addListener((TickEvent.ServerTickEvent.Post event) -> ModdedWandService.serverTick(event.server()));
 
         String parity = System.getProperty("iris.parity");
         if (parity != null) {

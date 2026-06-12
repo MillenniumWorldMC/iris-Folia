@@ -41,6 +41,13 @@ public final class NeoForgeModdedLoader implements ModdedLoader {
     }
 
     @Override
+    public String modVersion() {
+        return ModList.get().getModContainerById("irisworldgen")
+                .map((net.neoforged.fml.ModContainer container) -> container.getModInfo().getVersion().toString())
+                .orElse("unknown");
+    }
+
+    @Override
     public MinecraftServer currentServer() {
         return ServerLifecycleHooks.getCurrentServer();
     }

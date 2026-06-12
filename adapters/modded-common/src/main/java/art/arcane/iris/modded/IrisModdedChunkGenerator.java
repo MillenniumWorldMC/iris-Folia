@@ -134,6 +134,18 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
         }
     }
 
+    public String dimensionKey() {
+        return dimensionKey;
+    }
+
+    public Engine engineIfBound() {
+        return engine;
+    }
+
+    public Engine commandEngine() {
+        return engine();
+    }
+
     @Override
     public CompletableFuture<ChunkAccess> fillFromNoise(Blender blender, RandomState randomState, StructureManager structureManager, ChunkAccess chunk) {
         Engine generationEngine = engine();
@@ -190,6 +202,13 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
         Holder<Biome> resolved = reference.<Holder<Biome>>map((Holder.Reference<Biome> value) -> value).orElseGet(() -> fallbackBiome(registry));
         Holder<Biome> raced = biomeHolders.putIfAbsent(key, resolved);
         return raced != null ? raced : resolved;
+    }
+
+    public BiomeResolver regenBiomeResolver(Registry<Biome> registry, Hunk<PlatformBiome> biomes, ChunkPos pos) {
+        Engine current = engine();
+        int dimMinY = current.getMinHeight();
+        int height = current.getMaxHeight() - dimMinY;
+        return new HunkBiomeResolver(this, biomes, registry, pos, dimMinY, height);
     }
 
     private void writeBlocks(ChunkAccess chunk, ModdedBlockBuffer blocks, int dimMinY, int height) {

@@ -40,6 +40,13 @@ public final class FabricModdedLoader implements ModdedLoader {
     }
 
     @Override
+    public String modVersion() {
+        return FabricLoader.getInstance().getModContainer("irisworldgen")
+                .map((ModContainer container) -> container.getMetadata().getVersion().getFriendlyString())
+                .orElse("unknown");
+    }
+
+    @Override
     public MinecraftServer currentServer() {
         Object instance = FabricLoader.getInstance().getGameInstance();
         return instance instanceof MinecraftServer server ? server : null;
