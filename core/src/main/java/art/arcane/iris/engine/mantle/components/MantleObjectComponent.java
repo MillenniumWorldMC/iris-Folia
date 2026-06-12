@@ -49,7 +49,7 @@ import art.arcane.iris.util.project.noise.NoiseType;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import art.arcane.iris.spi.PlatformBlockState;
-import org.bukkit.util.BlockVector;
+import art.arcane.iris.util.common.math.IrisBlockVector;
 import org.bukkit.block.data.BlockData;
 
 import java.io.IOException;
@@ -1597,7 +1597,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
             }
         }
 
-        KMap<String, BlockVector> sizeCache = new KMap<>();
+        KMap<String, IrisBlockVector> sizeCache = new KMap<>();
         for (String i : objects) {
             updateRadiusBounds(sizeCache, xg, zg, i, 1D);
         }
@@ -1635,14 +1635,14 @@ public class MantleObjectComponent extends IrisMantleComponent {
     }
 
     private void updateRadiusBounds(
-            KMap<String, BlockVector> sizeCache,
+            KMap<String, IrisBlockVector> sizeCache,
             AtomicInteger xg,
             AtomicInteger zg,
             String objectKey,
             double scale
     ) {
         try {
-            BlockVector bv = loadObjectSize(sizeCache, objectKey);
+            IrisBlockVector bv = loadObjectSize(sizeCache, objectKey);
             if (bv == null) {
                 throw new RuntimeException();
             }
@@ -1663,7 +1663,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
     }
 
     private void updateVacuumRadiusBounds(
-            KMap<String, BlockVector> sizeCache,
+            KMap<String, IrisBlockVector> sizeCache,
             AtomicInteger xg,
             AtomicInteger zg,
             IrisObjectPlacement placement
@@ -1676,7 +1676,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
         double scale = placement.getScale() != null ? Math.max(1D, placement.getScale().getMaxScale()) : 1D;
         for (String objectKey : placement.getPlace()) {
             try {
-                BlockVector bv = loadObjectSize(sizeCache, objectKey);
+                IrisBlockVector bv = loadObjectSize(sizeCache, objectKey);
                 if (bv == null) {
                     continue;
                 }
@@ -1691,7 +1691,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
         }
     }
 
-    private BlockVector loadObjectSize(KMap<String, BlockVector> sizeCache, String objectKey) {
+    private IrisBlockVector loadObjectSize(KMap<String, IrisBlockVector> sizeCache, String objectKey) {
         return sizeCache.computeIfAbsent(objectKey, k -> {
             try {
                 return IrisObject.sampleSize(getData().getObjectLoader().findFile(objectKey));

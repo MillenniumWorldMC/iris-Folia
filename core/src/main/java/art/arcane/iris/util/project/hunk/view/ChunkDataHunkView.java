@@ -29,12 +29,10 @@ import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 @SuppressWarnings("ClassCanBeRecord")
 public class ChunkDataHunkView implements Hunk<PlatformBlockState> {
-    private static final BlockData AIR = BukkitBlockResolution.getAir();
-
     private final art.arcane.volmlib.util.hunk.view.ChunkDataHunkView view;
 
     public ChunkDataHunkView(ChunkData chunk) {
-        this.view = new art.arcane.volmlib.util.hunk.view.ChunkDataHunkView(chunk, AIR, (data) -> data instanceof IrisCustomData d ? d.getBase() : data);
+        this.view = new art.arcane.volmlib.util.hunk.view.ChunkDataHunkView(chunk, BukkitBlockResolution.getAir(), (data) -> data instanceof IrisCustomData d ? d.getBase() : data);
     }
 
     @Override

@@ -19,11 +19,11 @@
 package art.arcane.iris.engine.object;
 
 import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.util.common.math.IrisBlockVector;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
-import org.bukkit.util.BlockVector;
 
 @Snippet("object-translator")
 @Accessors(chain = true)
@@ -57,17 +57,17 @@ public class IrisObjectTranslate {
         return x != 0 || y != 0 || z != 0;
     }
 
-    public BlockVector translate(BlockVector i) {
+    public IrisBlockVector translate(IrisBlockVector i) {
         if (canTranslate()) {
-            return (BlockVector) i.clone().add(new BlockVector(x, y, z));
+            return (IrisBlockVector) i.clone().add(new IrisBlockVector(x, y, z));
         }
 
         return i;
     }
 
-    public BlockVector translate(BlockVector clone, IrisObjectRotation rotation, int sx, int sy, int sz) {
+    public IrisBlockVector translate(IrisBlockVector clone, IrisObjectRotation rotation, int sx, int sy, int sz) {
         if (canTranslate()) {
-            return (BlockVector) clone.clone().add(rotation.rotate(new BlockVector(x, y, z), sx, sy, sz));
+            return (IrisBlockVector) clone.clone().add(rotation.rotate(new IrisBlockVector(x, y, z), sx, sy, sz));
         }
 
         return clone;

@@ -29,7 +29,7 @@ import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Orientable;
 import org.bukkit.block.data.type.Leaves;
-import org.bukkit.util.BlockVector;
+import art.arcane.iris.util.common.math.IrisBlockVector;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -92,8 +92,8 @@ public final class TreePlausibilizer {
         int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
 
-        for (Map.Entry<BlockVector, PlatformBlockState> entry : blocks) {
-            BlockVector pos = entry.getKey();
+        for (Map.Entry<IrisBlockVector, PlatformBlockState> entry : blocks) {
+            IrisBlockVector pos = entry.getKey();
             BlockData data = (BlockData) entry.getValue().nativeHandle();
             long key = packKey(pos);
             positions.put(key, data);
@@ -653,7 +653,7 @@ public final class TreePlausibilizer {
         return Tag.LEAVES.isTagged(data.getMaterial()) || data instanceof Leaves;
     }
 
-    private static long packKey(BlockVector pos) {
+    private static long packKey(IrisBlockVector pos) {
         return packXYZ(pos.getBlockX(), pos.getBlockY(), pos.getBlockZ());
     }
 
@@ -671,9 +671,9 @@ public final class TreePlausibilizer {
         return new int[]{x, y, z};
     }
 
-    private static BlockVector unpackKey(long key) {
+    private static IrisBlockVector unpackKey(long key) {
         int[] xyz = unpack(key);
-        return new BlockVector(xyz[0], xyz[1], xyz[2]);
+        return new IrisBlockVector(xyz[0], xyz[1], xyz[2]);
     }
 
     private record LogInsertion(long key, BlockData data) {

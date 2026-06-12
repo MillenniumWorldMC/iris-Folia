@@ -260,9 +260,7 @@ public enum C {
     @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
     private final static Map<Integer, C> BY_ID = new HashMap<>();
     private final static Map<Character, C> BY_CHAR = new HashMap<>();
-    private final static Map<DyeColor, C> dyeChatMap = new HashMap<>();
     private final static Map<C, String> chatHexMap = new HashMap<>();
-    private final static Map<DyeColor, String> dyeHexMap = new HashMap<>();
 
     static {
         chatHexMap.put(C.BLACK, "#000000");
@@ -282,44 +280,52 @@ public enum C {
         chatHexMap.put(C.LIGHT_PURPLE, "#FF55FF");
         chatHexMap.put(C.YELLOW, "#FFFF55");
         chatHexMap.put(C.WHITE, "#FFFFFF");
-        dyeChatMap.put(DyeColor.BLACK, C.DARK_GRAY);
-        dyeChatMap.put(DyeColor.BLUE, C.DARK_BLUE);
-        dyeChatMap.put(DyeColor.BROWN, C.GOLD);
-        dyeChatMap.put(DyeColor.CYAN, C.AQUA);
-        dyeChatMap.put(DyeColor.GRAY, C.GRAY);
-        dyeChatMap.put(DyeColor.GREEN, C.DARK_GREEN);
-        dyeChatMap.put(DyeColor.LIGHT_BLUE, C.BLUE);
-        dyeChatMap.put(DyeColor.LIME, C.GREEN);
-        dyeChatMap.put(DyeColor.MAGENTA, C.LIGHT_PURPLE);
-        dyeChatMap.put(DyeColor.ORANGE, C.GOLD);
-        dyeChatMap.put(DyeColor.PINK, C.LIGHT_PURPLE);
-        dyeChatMap.put(DyeColor.PURPLE, C.DARK_PURPLE);
-        dyeChatMap.put(DyeColor.RED, C.RED);
-        dyeChatMap.put(DyeColor.LIGHT_GRAY, C.GRAY);
-        dyeChatMap.put(DyeColor.WHITE, C.WHITE);
-        dyeChatMap.put(DyeColor.YELLOW, C.YELLOW);
-        dyeHexMap.put(DyeColor.BLACK, "#181414");
-        dyeHexMap.put(DyeColor.BLUE, "#253193");
-        dyeHexMap.put(DyeColor.BROWN, "#56331c");
-        dyeHexMap.put(DyeColor.CYAN, "#267191");
-        dyeHexMap.put(DyeColor.GRAY, "#414141");
-        dyeHexMap.put(DyeColor.GREEN, "#364b18");
-        dyeHexMap.put(DyeColor.LIGHT_BLUE, "#6387d2");
-        dyeHexMap.put(DyeColor.LIME, "#39ba2e");
-        dyeHexMap.put(DyeColor.MAGENTA, "#be49c9");
-        dyeHexMap.put(DyeColor.ORANGE, "#ea7e35");
-        dyeHexMap.put(DyeColor.PINK, "#d98199");
-        dyeHexMap.put(DyeColor.PURPLE, "#7e34bf");
-        dyeHexMap.put(DyeColor.RED, "#9e2b27");
-        dyeHexMap.put(DyeColor.LIGHT_GRAY, "#a0a7a7");
-        dyeHexMap.put(DyeColor.WHITE, "#a4a4a4");
-        dyeHexMap.put(DyeColor.YELLOW, "#c2b51c");
     }
 
     static {
         for (C color : values()) {
             BY_ID.put(color.intCode, color);
             BY_CHAR.put(color.code, color);
+        }
+    }
+
+    private static final class DyeMaps {
+        private static final Map<DyeColor, C> CHAT = new HashMap<>();
+        private static final Map<DyeColor, String> HEX = new HashMap<>();
+
+        static {
+            CHAT.put(DyeColor.BLACK, C.DARK_GRAY);
+            CHAT.put(DyeColor.BLUE, C.DARK_BLUE);
+            CHAT.put(DyeColor.BROWN, C.GOLD);
+            CHAT.put(DyeColor.CYAN, C.AQUA);
+            CHAT.put(DyeColor.GRAY, C.GRAY);
+            CHAT.put(DyeColor.GREEN, C.DARK_GREEN);
+            CHAT.put(DyeColor.LIGHT_BLUE, C.BLUE);
+            CHAT.put(DyeColor.LIME, C.GREEN);
+            CHAT.put(DyeColor.MAGENTA, C.LIGHT_PURPLE);
+            CHAT.put(DyeColor.ORANGE, C.GOLD);
+            CHAT.put(DyeColor.PINK, C.LIGHT_PURPLE);
+            CHAT.put(DyeColor.PURPLE, C.DARK_PURPLE);
+            CHAT.put(DyeColor.RED, C.RED);
+            CHAT.put(DyeColor.LIGHT_GRAY, C.GRAY);
+            CHAT.put(DyeColor.WHITE, C.WHITE);
+            CHAT.put(DyeColor.YELLOW, C.YELLOW);
+            HEX.put(DyeColor.BLACK, "#181414");
+            HEX.put(DyeColor.BLUE, "#253193");
+            HEX.put(DyeColor.BROWN, "#56331c");
+            HEX.put(DyeColor.CYAN, "#267191");
+            HEX.put(DyeColor.GRAY, "#414141");
+            HEX.put(DyeColor.GREEN, "#364b18");
+            HEX.put(DyeColor.LIGHT_BLUE, "#6387d2");
+            HEX.put(DyeColor.LIME, "#39ba2e");
+            HEX.put(DyeColor.MAGENTA, "#be49c9");
+            HEX.put(DyeColor.ORANGE, "#ea7e35");
+            HEX.put(DyeColor.PINK, "#d98199");
+            HEX.put(DyeColor.PURPLE, "#7e34bf");
+            HEX.put(DyeColor.RED, "#9e2b27");
+            HEX.put(DyeColor.LIGHT_GRAY, "#a0a7a7");
+            HEX.put(DyeColor.WHITE, "#a4a4a4");
+            HEX.put(DyeColor.YELLOW, "#c2b51c");
         }
     }
 
@@ -511,15 +517,15 @@ public enum C {
      * @return the color
      */
     public static C dyeToChat(DyeColor dclr) {
-        if (dyeChatMap.containsKey(dclr)) {
-            return dyeChatMap.get(dclr);
+        if (DyeMaps.CHAT.containsKey(dclr)) {
+            return DyeMaps.CHAT.get(dclr);
         }
 
         return C.MAGIC;
     }
 
     public static DyeColor chatToDye(ChatColor color) {
-        for (Map.Entry<DyeColor, C> entry : dyeChatMap.entrySet()) {
+        for (Map.Entry<DyeColor, C> entry : DyeMaps.CHAT.entrySet()) {
             if (entry.getValue().toString().equals(color.toString())) {
                 return entry.getKey();
             }
@@ -538,8 +544,8 @@ public enum C {
     }
 
     public static String dyeToHex(DyeColor clr) {
-        if (dyeHexMap.containsKey(clr)) {
-            return dyeHexMap.get(clr);
+        if (DyeMaps.HEX.containsKey(clr)) {
+            return DyeMaps.HEX.get(clr);
         }
 
         return "#000000";
@@ -592,7 +598,7 @@ public enum C {
 
         str.append("</table>");
         str.append("<table><tr><td>Dye Color</td><td>Color</td></tr>");
-        for (Map.Entry<DyeColor, String> e : dyeHexMap.entrySet()) {
+        for (Map.Entry<DyeColor, String> e : DyeMaps.HEX.entrySet()) {
             str.append(String.format("<tr><td style='color: %2$s;'>%1$s</td>" + "<td style='color: %2$s;'>Test String</td></tr>", e.getKey().name(), e.getValue()));
         }
 

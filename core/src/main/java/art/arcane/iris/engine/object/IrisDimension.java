@@ -21,7 +21,6 @@ package art.arcane.iris.engine.object;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.ServerConfigurator.DimensionHeight;
 import art.arcane.iris.core.loader.IrisData;
-import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.PlatformBlockState;
@@ -49,7 +48,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
-import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World.Environment;
 import org.bukkit.block.Biome;
@@ -70,8 +68,6 @@ import java.util.Map;
 @Data
 @EqualsAndHashCode(callSuper = false)
 public class IrisDimension extends IrisRegistrant {
-    public static final PlatformBlockState STONE = BukkitBlockState.of(Material.STONE.createBlockData());
-    public static final PlatformBlockState WATER = BukkitBlockState.of(Material.WATER.createBlockData());
     private final transient AtomicCache<Position2> parallaxSize = new AtomicCache<>();
     private final transient AtomicCache<CNG> rockLayerGenerator = new AtomicCache<>();
     private final transient AtomicCache<CNG> fluidLayerGenerator = new AtomicCache<>();

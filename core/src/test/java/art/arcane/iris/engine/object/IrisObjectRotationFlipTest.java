@@ -1,6 +1,6 @@
 package art.arcane.iris.engine.object;
 
-import org.bukkit.util.BlockVector;
+import art.arcane.iris.util.common.math.IrisBlockVector;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -28,8 +28,8 @@ public class IrisObjectRotationFlipTest {
     @Test
     public void xFlip180WithY_zeroYaw_stillUsesFixedYRotation() {
         IrisObjectRotation rot = IrisObjectRotation.xFlip180WithY(0);
-        BlockVector v = new BlockVector(1, 2, 3);
-        BlockVector result = rot.rotate(v, 117, 253, 91);
+        IrisBlockVector v = new IrisBlockVector(1, 2, 3);
+        IrisBlockVector result = rot.rotate(v, 117, 253, 91);
         assertTrue(rot.canRotateY());
         assertEquals(1, result.getBlockX());
         assertEquals(-2, result.getBlockY());
@@ -39,8 +39,8 @@ public class IrisObjectRotationFlipTest {
     @Test
     public void xFlip180WithY_ninetyYaw_rotatesMirroredFootprint() {
         IrisObjectRotation rot = IrisObjectRotation.xFlip180WithY(90);
-        BlockVector v = new BlockVector(2, 5, 3);
-        BlockVector result = rot.rotate(v, 0, 0, 0);
+        IrisBlockVector v = new IrisBlockVector(2, 5, 3);
+        IrisBlockVector result = rot.rotate(v, 0, 0, 0);
         assertEquals(-3, result.getBlockX());
         assertEquals(-5, result.getBlockY());
         assertEquals(-2, result.getBlockZ());
@@ -49,8 +49,8 @@ public class IrisObjectRotationFlipTest {
     @Test
     public void xFlip180_rotateVector_negatesYandZ() {
         IrisObjectRotation rot = IrisObjectRotation.xFlip180();
-        BlockVector v = new BlockVector(1, 2, 3);
-        BlockVector result = rot.rotate(v, 0, 0, 0);
+        IrisBlockVector v = new IrisBlockVector(1, 2, 3);
+        IrisBlockVector result = rot.rotate(v, 0, 0, 0);
         assertEquals(1, result.getBlockX());
         assertEquals(-2, result.getBlockY());
         assertEquals(-3, result.getBlockZ());
@@ -59,8 +59,8 @@ public class IrisObjectRotationFlipTest {
     @Test
     public void xFlip180_rotateNegativeVector_negatesYandZ() {
         IrisObjectRotation rot = IrisObjectRotation.xFlip180();
-        BlockVector v = new BlockVector(-3, -5, -7);
-        BlockVector result = rot.rotate(v, 0, 0, 0);
+        IrisBlockVector v = new IrisBlockVector(-3, -5, -7);
+        IrisBlockVector result = rot.rotate(v, 0, 0, 0);
         assertEquals(-3, result.getBlockX());
         assertEquals(5, result.getBlockY());
         assertEquals(7, result.getBlockZ());

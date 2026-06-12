@@ -41,8 +41,11 @@ import org.bukkit.block.data.type.Slab;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class IrisPostModifier extends EngineAssignedModifier<PlatformBlockState> {
-    private static final PlatformBlockState AIR = B.getState("AIR");
-    private static final PlatformBlockState WATER = B.getState("WATER");
+    private static final class States {
+        private static final PlatformBlockState AIR = B.getState("AIR");
+        private static final PlatformBlockState WATER = B.getState("WATER");
+    }
+
     private final RNG rng;
 
     public IrisPostModifier(Engine engine) {
@@ -87,7 +90,7 @@ public class IrisPostModifier extends EngineAssignedModifier<PlatformBlockState>
         g += hd < h - 1 ? 1 : 0;
 
         if (g == 4 && isAir(x, h - 1, z, currentPostX, currentPostZ, currentData)) {
-            setPostBlock(x, h, z, AIR, currentPostX, currentPostZ, currentData);
+            setPostBlock(x, h, z, States.AIR, currentPostX, currentPostZ, currentData);
 
             for (int i = h - 1; i > 0; i--) {
                 if (!isAir(x, i, z, currentPostX, currentPostZ, currentData)) {
@@ -207,7 +210,8 @@ public class IrisPostModifier extends EngineAssignedModifier<PlatformBlockState>
         BlockData b = (BlockData) getPostBlock(x, h, z, currentPostX, currentPostZ, currentData).nativeHandle();
 
         if (b instanceof Waterlogged) {
-            Waterlogged ww = (Waterlogged) b.clone();
+            BlockData cloned = b.clone();
+            Waterlogged ww = (Waterlogged) cloned;
             boolean w = false;
 
             if (h <= getDimension().getFluidHeight() + 1) {
@@ -220,11 +224,11 @@ public class IrisPostModifier extends EngineAssignedModifier<PlatformBlockState>
 
             if (w != ww.isWaterlogged()) {
                 ww.setWaterlogged(w);
-                setPostBlock(x, h, z, BukkitBlockState.of(ww), currentPostX, currentPostZ, currentData);
+                setPostBlock(x, h, z, BukkitBlockState.of(cloned), currentPostX, currentPostZ, currentData);
             }
         } else if (b.getMaterial().equals(Material.AIR) && h <= getDimension().getFluidHeight()) {
             if ((isWaterOrWaterlogged(x + 1, h, z, currentPostX, currentPostZ, currentData) || isWaterOrWaterlogged(x - 1, h, z, currentPostX, currentPostZ, currentData) || isWaterOrWaterlogged(x, h, z + 1, currentPostX, currentPostZ, currentData) || isWaterOrWaterlogged(x, h, z - 1, currentPostX, currentPostZ, currentData))) {
-                setPostBlock(x, h, z, WATER, currentPostX, currentPostZ, currentData);
+                setPostBlock(x, h, z, States.WATER, currentPostX, currentPostZ, currentData);
             }
         }
 
@@ -232,7 +236,8 @@ public class IrisPostModifier extends EngineAssignedModifier<PlatformBlockState>
         b = (BlockData) getPostBlock(x, h + 1, z, currentPostX, currentPostZ, currentData).nativeHandle();
 
         if (BukkitBlockResolution.isVineBlock(b) && b instanceof MultipleFacing) {
-            MultipleFacing f = (MultipleFacing) b.clone();
+            BlockData cloned = b.clone();
+            MultipleFacing f = (MultipleFacing) cloned;
             int finalH = h + 1;
 
             f.getAllowedFaces().forEach(face -> {
@@ -240,7 +245,7 @@ public class IrisPostModifier extends EngineAssignedModifier<PlatformBlockState>
                 f.setFace(face, !BukkitBlockResolution.isAir(d) && !BukkitBlockResolution.isVineBlock(d));
             });
             if (!f.equals(b)) {
-                setPostBlock(x, h + 1, z, BukkitBlockState.of(f), currentPostX, currentPostZ, currentData);
+                setPostBlock(x, h + 1, z, BukkitBlockState.of(cloned), currentPostX, currentPostZ, currentData);
             }
         }
 
@@ -248,7 +253,7 @@ public class IrisPostModifier extends EngineAssignedModifier<PlatformBlockState>
             Material onto = ((BlockData) getPostBlock(x, h, z, currentPostX, currentPostZ, currentData).nativeHandle()).getMaterial();
 
             if (!BukkitBlockResolution.canPlaceOnto(b.getMaterial(), onto) && !BukkitBlockResolution.isDecorant(b)) {
-                setPostBlock(x, h + 1, z, AIR, currentPostX, currentPostZ, currentData);
+                setPostBlock(x, h + 1, z, States.AIR, currentPostX, currentPostZ, currentData);
             }
         }
     }
@@ -312,6 +317,6 @@ public class IrisPostModifier extends EngineAssignedModifier<PlatformBlockState>
     public PlatformBlockState getPostBlock(int x, int y, int z, int cpx, int cpz, Hunk<PlatformBlockState> h) {
         PlatformBlockState b = h.getClosest(x & 15, y, z & 15);
 
-        return b == null ? AIR : b;
+        return b == null ? States.AIR : b;
     }
 }

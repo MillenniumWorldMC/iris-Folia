@@ -1,26 +1,65 @@
 package art.arcane.iris.util.common.math;
 
-import org.bukkit.util.BlockVector;
-import org.bukkit.util.Vector;
-import org.jetbrains.annotations.NotNull;
+public class Vector3i implements Cloneable {
+    private final int x;
+    private final int y;
+    private final int z;
 
-public class Vector3i extends BlockVector {
     public Vector3i(int x, int y, int z) {
-        super(x, y, z);
+        this.x = x;
+        this.y = y;
+        this.z = z;
     }
 
-    public Vector3i(Vector vec) {
-        super(vec);
+    public int getX() {
+        return x;
     }
 
-    @NotNull
+    public int getY() {
+        return y;
+    }
+
+    public int getZ() {
+        return z;
+    }
+
+    public int getBlockX() {
+        return x;
+    }
+
+    public int getBlockY() {
+        return y;
+    }
+
+    public int getBlockZ() {
+        return z;
+    }
+
     @Override
     public Vector3i clone() {
-        return (Vector3i) super.clone();
+        try {
+            return (Vector3i) super.clone();
+        } catch (CloneNotSupportedException e) {
+            throw new Error(e);
+        }
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof Vector3i other)) {
+            return false;
+        }
+
+        return x == other.x && y == other.y && z == other.z;
     }
 
     @Override
     public int hashCode() {
-        return (int) x ^ ((int) z << 12) ^ ((int) y << 24);
+        return x ^ (z << 12) ^ (y << 24);
+    }
+
+    @Override
+    public String toString() {
+        return x + "," + y + "," + z;
     }
 }

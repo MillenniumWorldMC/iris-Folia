@@ -23,6 +23,7 @@ import art.arcane.iris.platform.bukkit.BukkitBlockResolution;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.spi.PlatformBlockState;
+import art.arcane.iris.util.common.math.IrisBlockVector;
 import art.arcane.iris.util.common.math.Vector3i;
 import art.arcane.volmlib.util.math.RNG;
 import org.bukkit.block.data.BlockData;
@@ -88,7 +89,7 @@ public final class IrisProceduralBlocks {
             int nx = v.getBlockX() - minX - cx;
             int ny = v.getBlockY() - cy + 1;
             int nz = v.getBlockZ() - minZ - cz;
-            object.getBlocks().put(new Vector3i(nx, ny, nz), BukkitBlockState.of(entry.getValue()));
+            object.getBlocks().put(new IrisBlockVector(nx, ny, nz), BukkitBlockState.of(entry.getValue()));
         }
 
         return object;

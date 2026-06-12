@@ -41,20 +41,23 @@ import java.util.Map;
 import java.util.Locale;
 
 public class NBTWorld {
-    private static final BlockData AIR = BukkitBlockResolution.get("AIR");
-    private static final NBTWorldSupport.BlockStateCodec<BlockData> BLOCK_STATE_CODEC = NBTWorldSupport.blockStateCodec(
-            blockStateString -> BukkitBlockResolution.getOrNull(blockStateString, true),
-            BukkitBlockResolution::getAir,
-            blockData -> blockData.getAsString(true),
-            blockData -> {
-                NamespacedKey key = KeyedType.getKey(blockData.getMaterial());
-                if (key == null) {
-                    return "minecraft:" + blockData.getMaterial().name().toLowerCase(Locale.ROOT);
+    private static final class Holder {
+        private static final BlockData AIR = BukkitBlockResolution.get("AIR");
+        private static final NBTWorldSupport.BlockStateCodec<BlockData> BLOCK_STATE_CODEC = NBTWorldSupport.blockStateCodec(
+                blockStateString -> BukkitBlockResolution.getOrNull(blockStateString, true),
+                BukkitBlockResolution::getAir,
+                blockData -> blockData.getAsString(true),
+                blockData -> {
+                    NamespacedKey key = KeyedType.getKey(blockData.getMaterial());
+                    if (key == null) {
+                        return "minecraft:" + blockData.getMaterial().name().toLowerCase(Locale.ROOT);
+                    }
+                    return key.getNamespace() + ":" + key.getKey();
                 }
-                return key.getNamespace() + ":" + key.getKey();
-            }
-    );
-    private static final Map<Biome, Integer> biomeIds = computeBiomeIDs();
+        );
+        private static final Map<Biome, Integer> BIOME_IDS = computeBiomeIDs();
+    }
+
     private final HyperLock hyperLock = new HyperLock();
     private final MCAWorldStoreSupport<MCAFile> regionStore;
     private final MCAWorldRuntimeSupport<MCAFile, Chunk, Section> worldRuntime;
@@ -124,11 +127,11 @@ public class NBTWorld {
     }
 
     public static BlockData getBlockData(CompoundTag tag) {
-        return BLOCK_STATE_CODEC.decode(tag);
+        return Holder.BLOCK_STATE_CODEC.decode(tag);
     }
 
     public static CompoundTag getCompound(BlockData bd) {
-        return BLOCK_STATE_CODEC.encode(bd);
+        return Holder.BLOCK_STATE_CODEC.encode(bd);
     }
 
     private static Map<Biome, Integer> computeBiomeIDs() {
@@ -193,7 +196,7 @@ public class NBTWorld {
             CompoundTag tag = worldRuntime.getBlockStateTag(x, y, z);
 
             if (tag == null) {
-                return AIR;
+                return Holder.AIR;
             }
 
             return getBlockData(tag);
@@ -201,7 +204,7 @@ public class NBTWorld {
             IrisLogging.reportError(e);
 
         }
-        return AIR;
+        return Holder.AIR;
     }
 
     public void setBlockData(int x, int y, int z, BlockData data) {
@@ -209,11 +212,11 @@ public class NBTWorld {
     }
 
     public int getBiomeId(Biome b) {
-        return biomeIds.get(b);
+        return Holder.BIOME_IDS.get(b);
     }
 
     public void setBiome(int x, int y, int z, Biome biome) {
-        worldRuntime.setBiomeId(x, y, z, biomeIds.get(biome));
+        worldRuntime.setBiomeId(x, y, z, Holder.BIOME_IDS.get(biome));
     }
 
     public Section getChunkSection(int x, int y, int z) {

@@ -12,11 +12,17 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 public class ServerID {
-    public static final String ID = calculate();
+    private static final class Holder {
+        private static final String ID = calculate();
+    }
+
+    public static String getId() {
+        return Holder.ID;
+    }
 
     public static User asUser() {
         User u = new User();
-        u.setId(ID);
+        u.setId(Holder.ID);
         return u;
     }
 

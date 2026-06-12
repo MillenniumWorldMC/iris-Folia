@@ -1,0 +1,37 @@
+plugins {
+    id 'application'
+}
+
+group = 'art.arcane'
+version = rootProject.version
+
+application {
+    mainClass = 'art.arcane.iris.probe.ClassloadProbe'
+}
+
+dependencies {
+    implementation(project(':core'))
+    runtimeOnly(libs.paralithic)
+    runtimeOnly(libs.gson)
+    runtimeOnly(libs.lru)
+    runtimeOnly(libs.kotlin.coroutines)
+    runtimeOnly(libs.commons.io)
+    runtimeOnly(libs.commons.lang)
+    runtimeOnly(libs.commons.lang3)
+    runtimeOnly(libs.commons.math3)
+    runtimeOnly(libs.fastutil)
+    runtimeOnly(libs.caffeine)
+    runtimeOnly(libs.lz4)
+    runtimeOnly(libs.zip)
+    runtimeOnly('com.google.guava:guava:33.4.0-jre')
+    runtimeOnly(libs.sentry)
+    runtimeOnly(libs.oshi)
+    runtimeOnly(libs.byteBuddy.core)
+    runtimeOnly(libs.byteBuddy.agent)
+}
+
+tasks.named('run', JavaExec).configure {
+    args(project(':core').layout.buildDirectory.dir('classes/java/main').get().asFile.absolutePath)
+    jvmArgs('--add-modules', 'jdk.incubator.vector')
+    dependsOn(':core:compileJava')
+}

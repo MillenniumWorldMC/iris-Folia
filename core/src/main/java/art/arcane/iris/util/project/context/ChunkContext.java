@@ -102,7 +102,10 @@ public class ChunkContext {
             return false;
         }
 
-        String threadName = Thread.currentThread().getName();
+        return prefillAsyncEligible(Thread.currentThread().getName());
+    }
+
+    static boolean prefillAsyncEligible(String threadName) {
         return threadName != null && threadName.startsWith("Iris ");
     }
 

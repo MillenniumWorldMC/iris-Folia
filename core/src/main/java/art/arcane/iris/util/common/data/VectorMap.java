@@ -2,7 +2,7 @@ package art.arcane.iris.util.common.data;
 
 import art.arcane.volmlib.util.collection.KMap;
 import lombok.NonNull;
-import org.bukkit.util.BlockVector;
+import art.arcane.iris.util.common.math.IrisBlockVector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-public class VectorMap<T> implements Iterable<Map.Entry<BlockVector, T>> {
+public class VectorMap<T> implements Iterable<Map.Entry<IrisBlockVector, T>> {
     private final Map<Key, Map<Key, T>> map = new KMap<>();
 
     public int size() {
@@ -22,7 +22,7 @@ public class VectorMap<T> implements Iterable<Map.Entry<BlockVector, T>> {
         return map.values().stream().allMatch(Map::isEmpty);
     }
 
-    public boolean containsKey(@NonNull BlockVector vector) {
+    public boolean containsKey(@NonNull IrisBlockVector vector) {
         var chunk = map.get(chunk(vector));
         return chunk != null && chunk.containsKey(relative(vector));
     }
@@ -31,22 +31,22 @@ public class VectorMap<T> implements Iterable<Map.Entry<BlockVector, T>> {
         return map.values().stream().anyMatch(m -> m.containsValue(value));
     }
 
-    public @Nullable T get(@NonNull BlockVector vector) {
+    public @Nullable T get(@NonNull IrisBlockVector vector) {
         var chunk = map.get(chunk(vector));
         return chunk == null ? null : chunk.get(relative(vector));
     }
 
-    public @Nullable T put(@NonNull BlockVector vector, @NonNull T value) {
+    public @Nullable T put(@NonNull IrisBlockVector vector, @NonNull T value) {
         return map.computeIfAbsent(chunk(vector), k -> new KMap<>())
                 .put(relative(vector), value);
     }
 
-    public @Nullable T computeIfAbsent(@NonNull BlockVector vector, @NonNull Function<@NonNull BlockVector, @NonNull T> mappingFunction) {
+    public @Nullable T computeIfAbsent(@NonNull IrisBlockVector vector, @NonNull Function<@NonNull IrisBlockVector, @NonNull T> mappingFunction) {
          return map.computeIfAbsent(chunk(vector), k -> new KMap<>())
                  .computeIfAbsent(relative(vector), $ -> mappingFunction.apply(vector));
     }
 
-    public @Nullable T remove(@NonNull BlockVector vector) {
+    public @Nullable T remove(@NonNull IrisBlockVector vector) {
         var chunk = map.get(chunk(vector));
         return chunk == null ? null : chunk.remove(relative(vector));
     }
@@ -59,7 +59,7 @@ public class VectorMap<T> implements Iterable<Map.Entry<BlockVector, T>> {
         map.clear();
     }
 
-    public void forEach(@NonNull BiConsumer<@NonNull BlockVector, @NonNull T> consumer) {
+    public void forEach(@NonNull BiConsumer<@NonNull IrisBlockVector, @NonNull T> consumer) {
         map.forEach((chunk, values) -> {
             int rX = chunk.x << 10;
             int rY = chunk.y << 10;
@@ -72,11 +72,11 @@ public class VectorMap<T> implements Iterable<Map.Entry<BlockVector, T>> {
         });
     }
 
-    private static Key chunk(BlockVector vector) {
+    private static Key chunk(IrisBlockVector vector) {
         return new Key(vector.getBlockX() >> 10, vector.getBlockY() >> 10, vector.getBlockZ() >> 10);
     }
 
-    private static Key relative(BlockVector vector) {
+    private static Key relative(IrisBlockVector vector) {
         return new Key(vector.getBlockX() & 0x3FF, vector.getBlockY() & 0x3FF, vector.getBlockZ() & 0x3FF);
     }
 
@@ -93,7 +93,7 @@ public class VectorMap<T> implements Iterable<Map.Entry<BlockVector, T>> {
         return new ValueIterator();
     }
 
-    public class EntryIterator implements Iterator<Map.Entry<BlockVector, T>> {
+    public class EntryIterator implements Iterator<Map.Entry<IrisBlockVector, T>> {
         private final Iterator<Map.Entry<Key, Map<Key, T>>> chunkIterator = map.entrySet().iterator();
         private Iterator<Map.Entry<Key, T>> relativeIterator;
         private int rX, rY, rZ;
@@ -104,7 +104,7 @@ public class VectorMap<T> implements Iterable<Map.Entry<BlockVector, T>> {
         }
 
         @Override
-        public Map.Entry<BlockVector, T> next() {
+        public Map.Entry<IrisBlockVector, T> next() {
             if (relativeIterator == null || !relativeIterator.hasNext()) {
                 if (!chunkIterator.hasNext()) throw new IllegalStateException("No more elements");
                 var chunk = chunkIterator.next();
@@ -125,7 +125,7 @@ public class VectorMap<T> implements Iterable<Map.Entry<BlockVector, T>> {
         }
     }
 
-    public class KeyIterator implements Iterator<BlockVector>, Iterable<BlockVector> {
+    public class KeyIterator implements Iterator<IrisBlockVector>, Iterable<IrisBlockVector> {
         private final Iterator<Map.Entry<Key, Map<Key, T>>> chunkIterator = map.entrySet().iterator();
         private Iterator<Key> relativeIterator;
         private int rX, rY, rZ;
@@ -136,7 +136,7 @@ public class VectorMap<T> implements Iterable<Map.Entry<BlockVector, T>> {
         }
 
         @Override
-        public BlockVector next() {
+        public IrisBlockVector next() {
             if (relativeIterator == null || !relativeIterator.hasNext()) {
                 var chunk = chunkIterator.next();
                 rX = chunk.getKey().x << 10;
@@ -155,7 +155,7 @@ public class VectorMap<T> implements Iterable<Map.Entry<BlockVector, T>> {
         }
 
         @Override
-        public @NotNull Iterator<BlockVector> iterator() {
+        public @NotNull Iterator<IrisBlockVector> iterator() {
             return this;
         }
     }
@@ -202,8 +202,8 @@ public class VectorMap<T> implements Iterable<Map.Entry<BlockVector, T>> {
             this.hashCode = (x << 20) | (y << 10) | z;
         }
 
-        private BlockVector resolve(int rX, int rY, int rZ) {
-            return new BlockVector(rX + x, rY + y, rZ + z);
+        private IrisBlockVector resolve(int rX, int rY, int rZ) {
+            return new IrisBlockVector(rX + x, rY + y, rZ + z);
         }
 
         @Override

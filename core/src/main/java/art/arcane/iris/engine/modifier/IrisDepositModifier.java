@@ -35,7 +35,6 @@ import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
-import org.bukkit.util.BlockVector;
 
 public class IrisDepositModifier extends EngineAssignedModifier<PlatformBlockState> {
     private final RNG rng;
@@ -125,7 +124,7 @@ public class IrisDepositModifier extends EngineAssignedModifier<PlatformBlockSta
 
             IrisDimension dimension = getDimension();
 
-            for (BlockVector j : clump.getBlocks().keys()) {
+            for (art.arcane.iris.util.common.math.IrisBlockVector j : clump.getBlocks().keys()) {
                 int nx = j.getBlockX() + x;
                 int ny = j.getBlockY() + y;
                 int nz = j.getBlockZ() + z;

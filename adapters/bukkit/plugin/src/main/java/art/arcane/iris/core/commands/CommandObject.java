@@ -661,8 +661,9 @@ public class CommandObject implements DirectorExecutor {
         Iris.service(ObjectSVC.class).addChanges(futureChanges);
 
         if (edit) {
-            ItemStack newWand = WandSVC.createWand(block.clone().subtract(o.getCenter()).add(o.getW() - 1,
-                    o.getH() + o.getCenter().clone().getY() - 1, o.getD() - 1), block.clone().subtract(o.getCenter().clone().setY(0)));
+            Vector center = new Vector(o.getCenter().getX(), o.getCenter().getY(), o.getCenter().getZ());
+            ItemStack newWand = WandSVC.createWand(block.clone().subtract(center).add(o.getW() - 1,
+                    o.getH() + center.getY() - 1, o.getD() - 1), block.clone().subtract(center.clone().setY(0)));
             if (WandSVC.isWand(wand)) {
                 wand = newWand;
                 player().getInventory().setItemInMainHand(wand);

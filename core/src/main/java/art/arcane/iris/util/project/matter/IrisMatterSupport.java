@@ -28,7 +28,7 @@ import art.arcane.iris.util.project.matter.slices.TileMatter;
 import art.arcane.volmlib.util.matter.IrisMatter;
 import art.arcane.volmlib.util.matter.Matter;
 import org.bukkit.block.data.BlockData;
-import org.bukkit.util.BlockVector;
+import art.arcane.iris.util.common.math.IrisBlockVector;
 
 import java.io.File;
 
@@ -54,16 +54,16 @@ public final class IrisMatterSupport {
         ensureRegistered();
         object.clean();
         object.shrinkwrap();
-        BlockVector min = new BlockVector();
+        IrisBlockVector min = new IrisBlockVector();
         Matter matter = new IrisMatter(Math.max(object.getW(), 1) + 1, Math.max(object.getH(), 1) + 1, Math.max(object.getD(), 1) + 1);
 
-        for (BlockVector i : object.getBlocks().keys()) {
+        for (IrisBlockVector i : object.getBlocks().keys()) {
             min.setX(Math.min(min.getX(), i.getX()));
             min.setY(Math.min(min.getY(), i.getY()));
             min.setZ(Math.min(min.getZ(), i.getZ()));
         }
 
-        for (BlockVector i : object.getBlocks().keys()) {
+        for (IrisBlockVector i : object.getBlocks().keys()) {
             matter.slice(BlockData.class).set(i.getBlockX() - min.getBlockX(), i.getBlockY() - min.getBlockY(), i.getBlockZ() - min.getBlockZ(), (BlockData) object.getBlocks().get(i).nativeHandle());
         }
 

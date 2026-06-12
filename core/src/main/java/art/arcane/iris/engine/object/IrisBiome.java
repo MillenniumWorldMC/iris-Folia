@@ -43,9 +43,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
-import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.spi.PlatformBlockState;
-import org.bukkit.Material;
 import org.bukkit.block.Biome;
 
 import java.awt.*;
@@ -58,7 +56,10 @@ import java.util.EnumMap;
 @Data
 @EqualsAndHashCode(callSuper = false)
 public class IrisBiome extends IrisRegistrant implements IRare {
-    private static final PlatformBlockState BARRIER = BukkitBlockState.of(Material.BARRIER.createBlockData());
+    private static final class States {
+        private static final PlatformBlockState BARRIER = B.getState("BARRIER");
+    }
+
     private final transient AtomicCache<KMap<String, IrisBiomeGeneratorLink>> genCache = new AtomicCache<>();
     private final transient AtomicCache<KMap<String, Integer>> genCacheMax = new AtomicCache<>();
     private final transient AtomicCache<KMap<String, Integer>> genCacheMin = new AtomicCache<>();
@@ -445,7 +446,7 @@ public class IrisBiome extends IrisRegistrant implements IRare {
 
             if (dim.isExplodeBiomePalettes()) {
                 for (int j = 0; j < dim.getExplodeBiomePaletteSize(); j++) {
-                    data.add(BARRIER);
+                    data.add(States.BARRIER);
 
                     if (data.size() >= maxDepth) {
                         break;
@@ -491,7 +492,7 @@ public class IrisBiome extends IrisRegistrant implements IRare {
 
             if (dim.isExplodeBiomePalettes()) {
                 for (int j = 0; j < dim.getExplodeBiomePaletteSize(); j++) {
-                    data.add(BARRIER);
+                    data.add(States.BARRIER);
 
                     if (data.size() >= maxDepth) {
                         break;

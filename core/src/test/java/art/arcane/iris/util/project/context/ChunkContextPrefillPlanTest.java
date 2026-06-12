@@ -172,7 +172,7 @@ public class ChunkContextPrefillPlanTest {
             return thread;
         });
         try {
-            Future<Boolean> future = executor.submit(() -> ChunkContext.shouldPrefillAsync(2));
+            Future<Boolean> future = executor.submit(() -> ChunkContext.prefillAsyncEligible(Thread.currentThread().getName()));
             boolean actual = future.get(10, TimeUnit.SECONDS);
             if (expected) {
                 assertTrue(actual);

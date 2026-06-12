@@ -69,6 +69,7 @@ if (useLocalVolmLib && localVolmLibDirectory != null) {
 }
 
 include(':core', ':core:agent')
+include(':probe')
 include(':spi')
 include(':adapters:bukkit:plugin')
 include(':adapters:bukkit:nms:v1_21_R7')

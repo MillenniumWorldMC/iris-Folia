@@ -45,7 +45,7 @@ public class Bindings {
         var settings = IrisSettings.get().getSentry();
         if (settings.disableAutoReporting || Sentry.isEnabled() || Boolean.getBoolean("iris.suppressReporting")) return;
         IrisLogging.info("Enabling Sentry for anonymous error reporting. You can disable this in the settings.");
-        IrisLogging.info("Your server ID is: " + ServerID.ID);
+        IrisLogging.info("Your server ID is: " + ServerID.getId());
 
         Sentry.init(options -> {
             options.setDsn("http://4cdbb9ac953306529947f4ca1e8e6b26@sentry.volmit.com:8080/2");

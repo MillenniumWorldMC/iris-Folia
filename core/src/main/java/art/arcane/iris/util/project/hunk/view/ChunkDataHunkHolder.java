@@ -18,16 +18,18 @@
 
 package art.arcane.iris.util.project.hunk.view;
 
-import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.spi.PlatformBlockState;
+import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.project.hunk.storage.AtomicHunk;
-import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 @SuppressWarnings("ClassCanBeRecord")
 public class ChunkDataHunkHolder extends AtomicHunk<PlatformBlockState> {
-    private static final PlatformBlockState AIR = BukkitBlockState.of(Material.AIR.createBlockData());
+    private static final class States {
+        private static final PlatformBlockState AIR = B.getState("AIR");
+    }
+
     private final ChunkData chunk;
 
     public ChunkDataHunkHolder(ChunkData chunk) {
@@ -54,7 +56,7 @@ public class ChunkDataHunkHolder extends AtomicHunk<PlatformBlockState> {
     public PlatformBlockState getRaw(int x, int y, int z) {
         PlatformBlockState b = super.getRaw(x, y, z);
 
-        return b != null ? b : AIR;
+        return b != null ? b : States.AIR;
     }
 
     public void apply() {

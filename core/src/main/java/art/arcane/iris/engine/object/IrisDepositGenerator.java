@@ -22,6 +22,8 @@ import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.util.common.math.IrisBlockVector;
+import art.arcane.iris.util.common.math.Vector3i;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KSet;
 import art.arcane.volmlib.util.math.BlockPosition;
@@ -113,7 +115,8 @@ public class IrisDepositGenerator {
         int s = rngv.i(minSize, maxSize + 1);
         if (s == 1) {
             IrisObject o = new IrisObject(1, 1, 1);
-            o.getBlocks().put(o.getCenter(), nextBlock(rngv, rdata));
+            Vector3i center = o.getCenter();
+            o.getBlocks().put(new IrisBlockVector(center.getX(), center.getY(), center.getZ()), nextBlock(rngv, rdata));
             return o;
         }
 

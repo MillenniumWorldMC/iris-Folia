@@ -40,6 +40,7 @@ import art.arcane.iris.engine.object.IrisObjectTranslate;
 import art.arcane.iris.engine.object.ObjectPlaceMode;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.util.common.data.IrisCustomData;
+import art.arcane.iris.util.common.math.IrisBlockVector;
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.documentation.ChunkCoordinates;
@@ -48,7 +49,6 @@ import art.arcane.volmlib.util.math.RNG;
 import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
-import org.bukkit.util.BlockVector;
 
 import java.io.File;
 import java.util.HashSet;
@@ -384,7 +384,7 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
     }
 
     private static boolean isFootprintFlatBottom(FloatingObjectFootprint fp, IrisObjectRotation rotation, int pickedXf, int pickedZf, int pickBottomY, FloatingIslandSample[] samples, int tolerance) {
-        BlockVector anchor = invertedFootprintAnchor(fp, rotation);
+        IrisBlockVector anchor = invertedFootprintAnchor(fp, rotation);
         int checked = 0;
         boolean touchedChunkEdge = false;
         long[] cells = fp.footprintXZ();
@@ -392,7 +392,7 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
             long encoded = cells[i];
             int kx = (int) (encoded >> 32);
             int kz = (int) (encoded & 0xFFFFFFFFL);
-            BlockVector cell = rotation.rotate(new BlockVector(kx, 0, kz), 0, 0, 0);
+            IrisBlockVector cell = rotation.rotate(new IrisBlockVector(kx, 0, kz), 0, 0, 0);
             int colXf = pickedXf + cell.getBlockX() - anchor.getBlockX();
             int colZf = pickedZf + cell.getBlockZ() - anchor.getBlockZ();
             if (colXf < 0 || colXf >= 16 || colZf < 0 || colZf >= 16) {
@@ -439,12 +439,12 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
         return minZ + pickedZf - invertedFootprintAnchor(fp, rotation).getBlockZ();
     }
 
-    private static BlockVector invertedFootprintAnchor(FloatingObjectFootprint fp, IrisObjectRotation rotation) {
-        return rotation.rotate(new BlockVector(fp.getTallestKx(), 0, fp.getTallestKz()), 0, 0, 0);
+    private static IrisBlockVector invertedFootprintAnchor(FloatingObjectFootprint fp, IrisObjectRotation rotation) {
+        return rotation.rotate(new IrisBlockVector(fp.getTallestKx(), 0, fp.getTallestKz()), 0, 0, 0);
     }
 
-    private static BlockVector invertedSolidAnchor(FloatingObjectFootprint fp, IrisObjectRotation rotation) {
-        return rotation.rotate(new BlockVector(fp.getTallestKx(), fp.getLowestSolidKeyY(), fp.getTallestKz()), 0, 0, 0);
+    private static IrisBlockVector invertedSolidAnchor(FloatingObjectFootprint fp, IrisObjectRotation rotation) {
+        return rotation.rotate(new IrisBlockVector(fp.getTallestKx(), fp.getLowestSolidKeyY(), fp.getTallestKz()), 0, 0, 0);
     }
 
     private static boolean shouldWritePlacementMarker(IObjectPlacer placer, PlatformBlockState state, int x, int y, int z) {
@@ -568,7 +568,7 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
                     if (f == null) {
                         continue;
                     }
-                    BlockVector sz = IrisObject.sampleSize(f);
+                    IrisBlockVector sz = IrisObject.sampleSize(f);
                     int extent = Math.max(sz.getBlockX(), sz.getBlockZ());
                     if (extent > maxObjectExtent) {
                         maxObjectExtent = extent;

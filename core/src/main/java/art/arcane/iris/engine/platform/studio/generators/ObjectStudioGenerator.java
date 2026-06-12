@@ -37,7 +37,7 @@ import art.arcane.iris.util.common.data.VectorMap;
 import art.arcane.iris.util.common.math.Vector3i;
 import org.bukkit.Material;
 import org.bukkit.block.Biome;
-import org.bukkit.util.BlockVector;
+import art.arcane.iris.util.common.math.IrisBlockVector;
 
 import java.io.File;
 import java.util.LinkedHashMap;
@@ -198,8 +198,8 @@ public class ObjectStudioGenerator extends EnginedStudioGenerator {
         int originY = cell.originY();
         int originZ = cell.originZ();
 
-        for (Map.Entry<BlockVector, PlatformBlockState> entry : blocks) {
-            BlockVector signed = entry.getKey();
+        for (Map.Entry<IrisBlockVector, PlatformBlockState> entry : blocks) {
+            IrisBlockVector signed = entry.getKey();
             int worldX = originX + signed.getBlockX() + centerX;
             int worldY = originY + signed.getBlockY() + centerY;
             int worldZ = originZ + signed.getBlockZ() + centerZ;
@@ -257,7 +257,7 @@ public class ObjectStudioGenerator extends EnginedStudioGenerator {
             }
 
             int cellCount = layout.cells().size();
-            BlockVector worldExtent = computeExtent(layout);
+            IrisBlockVector worldExtent = computeExtent(layout);
             IrisLogging.info("Object Studio layout built: %d cells from %d pack(s), extent %d x %d blocks",
                     cellCount, sources.size(), worldExtent.getBlockX(), worldExtent.getBlockZ());
         }
@@ -280,13 +280,13 @@ public class ObjectStudioGenerator extends EnginedStudioGenerator {
         return new File(new File(worldFolder, ".iris"), "object-studio-layout.json");
     }
 
-    private static BlockVector computeExtent(ObjectStudioLayout layout) {
+    private static IrisBlockVector computeExtent(ObjectStudioLayout layout) {
         int maxX = 0;
         int maxZ = 0;
         for (GridCell cell : layout.cells()) {
             maxX = Math.max(maxX, cell.originX() + cell.w());
             maxZ = Math.max(maxZ, cell.originZ() + cell.d());
         }
-        return new BlockVector(maxX, 0, maxZ);
+        return new IrisBlockVector(maxX, 0, maxZ);
     }
 }

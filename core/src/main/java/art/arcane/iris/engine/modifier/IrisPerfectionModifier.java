@@ -28,53 +28,60 @@ import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.iris.util.common.parallel.BurstExecutor;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
 import art.arcane.iris.spi.PlatformBlockState;
-import org.bukkit.Material;
 import org.bukkit.block.data.Bisected;
 import org.bukkit.block.data.BlockData;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class IrisPerfectionModifier extends EngineAssignedModifier<PlatformBlockState> {
-    private static final PlatformBlockState AIR = B.getState("AIR");
-    private static final PlatformBlockState WATER = B.getState("WATER");
-    private static final Map<Material, PlatformBlockState> ORE_BASES = buildOreBases();
+    private static final class States {
+        private static final PlatformBlockState AIR = B.getState("AIR");
+        private static final PlatformBlockState WATER = B.getState("WATER");
+        private static final Map<String, PlatformBlockState> ORE_BASES = buildOreBases();
+    }
 
     public IrisPerfectionModifier(Engine engine) {
         super(engine, "Perfection");
     }
 
-    private static Map<Material, PlatformBlockState> buildOreBases() {
-        Map<Material, PlatformBlockState> map = new EnumMap<>(Material.class);
+    private static Map<String, PlatformBlockState> buildOreBases() {
+        Map<String, PlatformBlockState> map = new HashMap<>();
         PlatformBlockState stone = B.getState("STONE");
         PlatformBlockState deepslate = B.getState("DEEPSLATE");
         PlatformBlockState netherrack = B.getState("NETHERRACK");
         PlatformBlockState blackstone = B.getState("BLACKSTONE");
-        map.put(Material.COAL_ORE, stone);
-        map.put(Material.COPPER_ORE, stone);
-        map.put(Material.IRON_ORE, stone);
-        map.put(Material.GOLD_ORE, stone);
-        map.put(Material.REDSTONE_ORE, stone);
-        map.put(Material.LAPIS_ORE, stone);
-        map.put(Material.DIAMOND_ORE, stone);
-        map.put(Material.EMERALD_ORE, stone);
-        map.put(Material.DEEPSLATE_COAL_ORE, deepslate);
-        map.put(Material.DEEPSLATE_COPPER_ORE, deepslate);
-        map.put(Material.DEEPSLATE_IRON_ORE, deepslate);
-        map.put(Material.DEEPSLATE_GOLD_ORE, deepslate);
-        map.put(Material.DEEPSLATE_REDSTONE_ORE, deepslate);
-        map.put(Material.DEEPSLATE_LAPIS_ORE, deepslate);
-        map.put(Material.DEEPSLATE_DIAMOND_ORE, deepslate);
-        map.put(Material.DEEPSLATE_EMERALD_ORE, deepslate);
-        map.put(Material.NETHER_GOLD_ORE, netherrack);
-        map.put(Material.NETHER_QUARTZ_ORE, netherrack);
-        map.put(Material.ANCIENT_DEBRIS, netherrack);
-        map.put(Material.GILDED_BLACKSTONE, blackstone);
+        map.put("minecraft:coal_ore", stone);
+        map.put("minecraft:copper_ore", stone);
+        map.put("minecraft:iron_ore", stone);
+        map.put("minecraft:gold_ore", stone);
+        map.put("minecraft:redstone_ore", stone);
+        map.put("minecraft:lapis_ore", stone);
+        map.put("minecraft:diamond_ore", stone);
+        map.put("minecraft:emerald_ore", stone);
+        map.put("minecraft:deepslate_coal_ore", deepslate);
+        map.put("minecraft:deepslate_copper_ore", deepslate);
+        map.put("minecraft:deepslate_iron_ore", deepslate);
+        map.put("minecraft:deepslate_gold_ore", deepslate);
+        map.put("minecraft:deepslate_redstone_ore", deepslate);
+        map.put("minecraft:deepslate_lapis_ore", deepslate);
+        map.put("minecraft:deepslate_diamond_ore", deepslate);
+        map.put("minecraft:deepslate_emerald_ore", deepslate);
+        map.put("minecraft:nether_gold_ore", netherrack);
+        map.put("minecraft:nether_quartz_ore", netherrack);
+        map.put("minecraft:ancient_debris", netherrack);
+        map.put("minecraft:gilded_blackstone", blackstone);
         return map;
+    }
+
+    private static String baseKey(PlatformBlockState state) {
+        String key = state.key();
+        int bracket = key.indexOf('[');
+        return bracket < 0 ? key : key.substring(0, bracket);
     }
 
     @Override
@@ -147,11 +154,11 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<PlatformBlock
                                 if (remove) {
                                     changed.set(true);
                                     changes.getAndIncrement();
-                                    output.set(finalI, k, j, AIR);
+                                    output.set(finalI, k, j, States.AIR);
 
                                     if (remove2) {
                                         changes.getAndIncrement();
-                                        output.set(finalI, k - 1, j, AIR);
+                                        output.set(finalI, k - 1, j, States.AIR);
                                     }
                                 }
                             }
@@ -176,7 +183,7 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<PlatformBlock
                         if (block == null) {
                             continue;
                         }
-                        PlatformBlockState base = ORE_BASES.get(((BlockData) block.nativeHandle()).getMaterial());
+                        PlatformBlockState base = States.ORE_BASES.get(baseKey(block));
                         if (base != null) {
                             output.set(finalI, k, j, base);
                         }

@@ -230,7 +230,7 @@ final class DecoratorCore {
             }
 
             if (bd.nativeHandle() instanceof PointedDripstone) {
-                bd = BukkitBlockState.of(dripstoneBlock(stack, i, BlockFace.UP));
+                bd = dripstoneBlock(stack, i, BlockFace.UP);
             }
 
             data.set(x, height + 1 + i, z, bd);
@@ -264,7 +264,7 @@ final class DecoratorCore {
                     : decorator.pickBlockData(rng, irisData, realX, realZ);
 
             if (bd != null && bd.nativeHandle() instanceof PointedDripstone) {
-                bd = BukkitBlockState.of(dripstoneBlock(stack, i, BlockFace.DOWN));
+                bd = dripstoneBlock(stack, i, BlockFace.DOWN);
             }
 
             if (opts.caveSkipFluid && BukkitBlockResolution.isFluid(unwrap(data.get(x, h, z)))) {
@@ -340,7 +340,8 @@ final class DecoratorCore {
         if (!BukkitBlockResolution.isVineBlock(rawB)) {
             return b;
         }
-        MultipleFacing data = (MultipleFacing) rawB.clone();
+        BlockData cloned = rawB.clone();
+        MultipleFacing data = (MultipleFacing) cloned;
         data.getFaces().forEach(f -> data.setFace(f, false));
 
         boolean found = false;
@@ -385,7 +386,7 @@ final class DecoratorCore {
                 data.setFace(fallback, true);
             }
         }
-        return BukkitBlockState.of(data);
+        return BukkitBlockState.of(cloned);
     }
 
     static boolean canGoOn(PlatformBlockState decorator, PlatformBlockState surface) {
@@ -407,28 +408,26 @@ final class DecoratorCore {
         return stack;
     }
 
-    // Lazily populated on first dripstone decoration — avoids Bukkit API at class-load time.
-    // Index: 0=TIP, 1=FRUSTUM, 2=BASE. Race on init is benign (only allocation cost, not correctness).
-    private static volatile BlockData[] dripstoneUp;
-    private static volatile BlockData[] dripstoneDown;
+    private static volatile PlatformBlockState[] dripstoneUp;
+    private static volatile PlatformBlockState[] dripstoneDown;
 
-    private static BlockData[] buildDripstoneArr(BlockFace direction) {
+    private static PlatformBlockState[] buildDripstoneArr(BlockFace direction) {
         PointedDripstone.Thickness[] order = {
             PointedDripstone.Thickness.TIP,
             PointedDripstone.Thickness.FRUSTUM,
             PointedDripstone.Thickness.BASE
         };
-        BlockData[] arr = new BlockData[3];
+        PlatformBlockState[] arr = new PlatformBlockState[3];
         for (int k = 0; k < 3; k++) {
             BlockData bd = Material.POINTED_DRIPSTONE.createBlockData();
             ((PointedDripstone) bd).setThickness(order[k]);
             ((PointedDripstone) bd).setVerticalDirection(direction);
-            arr[k] = bd;
+            arr[k] = BukkitBlockState.of(bd);
         }
         return arr;
     }
 
-    private static BlockData dripstoneBlock(int stack, int i, BlockFace direction) {
+    private static PlatformBlockState dripstoneBlock(int stack, int i, BlockFace direction) {
         int thIdx;
         if (i == stack - 1) {
             thIdx = 0;

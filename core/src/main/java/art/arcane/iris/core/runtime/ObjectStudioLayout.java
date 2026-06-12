@@ -23,7 +23,7 @@ import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.object.IrisObject;
 import art.arcane.volmlib.util.json.JSONArray;
 import art.arcane.volmlib.util.json.JSONObject;
-import org.bukkit.util.BlockVector;
+import art.arcane.iris.util.common.math.IrisBlockVector;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -96,7 +96,7 @@ public final class ObjectStudioLayout {
             if (file == null) {
                 continue;
             }
-            BlockVector size;
+            IrisBlockVector size;
             try {
                 size = IrisObject.sampleSize(file);
             } catch (Throwable e) {
