@@ -244,9 +244,8 @@ public class IrisEngine implements Engine {
             setupMode();
             IrisLogging.debug("[IrisEngine timing] setupMode=" + (M.ms() - t0) + "ms");
             t0 = M.ms();
-            IrisWorldManager manager = new IrisWorldManager(this);
+            EngineWorldManager manager = IrisServices.get(EngineWorldManagerProvider.class).create(this);
             worldManager = manager;
-            manager.startManager();
             IrisLogging.debug("[IrisEngine timing] IrisWorldManager=" + (M.ms() - t0) + "ms");
             J.a(this::computeBiomeMaxes);
             J.a(() -> {

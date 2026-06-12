@@ -18,6 +18,10 @@
 
 package art.arcane.iris;
 
+import art.arcane.iris.engine.IrisWorldManager;
+
+import art.arcane.iris.engine.framework.EngineWorldManagerProvider;
+
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
@@ -592,6 +596,11 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
         tickets = new ChunkTickets();
         linkMultiverseCore = new MultiverseCoreLink();
         IrisServices.register(MultiverseCoreLink.class, linkMultiverseCore);
+        IrisServices.register(EngineWorldManagerProvider.class, (EngineWorldManagerProvider) (Engine engine) -> {
+            IrisWorldManager manager = new IrisWorldManager(engine);
+            manager.startManager();
+            return manager;
+        });
         IrisServices.register(art.arcane.iris.core.runtime.WorldDeletionQueue.class, (art.arcane.iris.core.runtime.WorldDeletionQueue) Iris::queueWorldDeletionOnStartup);
         settingsFile = getDataFile("settings.json");
         configHotloadEngine = new ConfigHotloadEngine(
