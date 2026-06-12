@@ -18,30 +18,37 @@
 
 package art.arcane.iris.engine.decorator;
 
-import art.arcane.iris.platform.bukkit.BukkitBlockResolution;
-
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.mantle.EngineMantle;
 import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisDecorationPart;
 import art.arcane.iris.engine.object.IrisDecorator;
+import art.arcane.iris.engine.object.IrisProceduralBlocks;
 import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.PlatformBlockState;
+import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.volmlib.util.math.RNG;
-import org.bukkit.Material;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockSupport;
-import org.bukkit.block.data.Bisected;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.MultipleFacing;
-import org.bukkit.block.data.type.PointedDripstone;
 
 final class DecoratorCore {
 
     private static final long SEED_OFFSET = 29356788L;
     private static final long PART_FACTOR = 10439677L;
+    private static final boolean BUKKIT_PRESENT = detectBukkit();
+
+    private static boolean detectBukkit() {
+        try {
+            Class.forName("org.bukkit.Bukkit", false, DecoratorCore.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
 
     static final ThreadLocal<PlaceOpts> SCRATCH_OPTS = ThreadLocal.withInitial(PlaceOpts::new);
 
@@ -99,25 +106,29 @@ final class DecoratorCore {
             return;
         }
 
-        BlockData rawBd = (BlockData) bd.nativeHandle();
-        if (rawBd instanceof Bisected) {
-            BlockData top = rawBd.clone();
-            ((Bisected) top).setHalf(Bisected.Half.TOP);
+        String half = IrisProceduralBlocks.propertyValue(bd, "half");
+        if (half != null) {
             try {
-                if (!caveSkipFluid || !BukkitBlockResolution.isFluid(unwrap(data.get(x, height + 2, z)))) {
-                    data.set(x, height + 2, z, BukkitBlockState.of(top));
+                if (!caveSkipFluid || !B.isFluid(data.get(x, height + 2, z))) {
+                    data.set(x, height + 2, z, bd.withProperty("half", topHalfValue(half)));
                 }
             } catch (Throwable e) {
                 IrisLogging.reportError(e);
             }
-            BlockData bottom = rawBd.clone();
-            ((Bisected) bottom).setHalf(Bisected.Half.BOTTOM);
-            bd = BukkitBlockState.of(bottom);
+            bd = bd.withProperty("half", bottomHalfValue(half));
         }
 
-        if (BukkitBlockResolution.isAir(unwrap(data.get(x, height + 1, z)))) {
+        if (B.isAir(data.get(x, height + 1, z))) {
             data.set(x, height + 1, z, fixFacesForHunk(bd, data, x, z, realX, height + 1, realZ, mantle));
         }
+    }
+
+    private static String topHalfValue(String half) {
+        return half.equals("upper") || half.equals("lower") ? "upper" : "top";
+    }
+
+    private static String bottomHalfValue(String half) {
+        return half.equals("upper") || half.equals("lower") ? "lower" : "bottom";
     }
 
     static void placeSurfaceSingle(IrisDecorator decorator,
@@ -133,7 +144,7 @@ final class DecoratorCore {
         }
 
         if (decorator.getForceBlock() != null) {
-            if (caveSkipFluid && BukkitBlockResolution.isFluid(unwrap(bdx))) {
+            if (caveSkipFluid && B.isFluid(bdx)) {
                 return;
             }
             data.set(x, height, z, fixFacesForHunk(
@@ -152,23 +163,19 @@ final class DecoratorCore {
             }
         }
 
-        BlockData rawBd = bd == null ? null : (BlockData) bd.nativeHandle();
-        if (rawBd instanceof Bisected) {
-            BlockData top = rawBd.clone();
-            ((Bisected) top).setHalf(Bisected.Half.TOP);
+        String half = bd == null ? null : IrisProceduralBlocks.propertyValue(bd, "half");
+        if (half != null) {
             try {
-                if (!caveSkipFluid || !BukkitBlockResolution.isFluid(unwrap(data.get(x, height + 2, z)))) {
-                    data.set(x, height + 2, z, BukkitBlockState.of(top));
+                if (!caveSkipFluid || !B.isFluid(data.get(x, height + 2, z))) {
+                    data.set(x, height + 2, z, bd.withProperty("half", topHalfValue(half)));
                 }
             } catch (Throwable e) {
                 IrisLogging.reportError(e);
             }
-            BlockData bottom = rawBd.clone();
-            ((Bisected) bottom).setHalf(Bisected.Half.BOTTOM);
-            bd = BukkitBlockState.of(bottom);
+            bd = bd.withProperty("half", bottomHalfValue(half));
         }
 
-        if (BukkitBlockResolution.isAir(unwrap(data.get(x, height + 1, z)))) {
+        if (B.isAir(data.get(x, height + 1, z))) {
             data.set(x, height + 1, z, fixFacesForHunk(bd, data, x, z, realX, height + 1, realZ, mantle));
         }
     }
@@ -197,7 +204,7 @@ final class DecoratorCore {
         int stack = computeStack(decorator, rng, realX, realZ, irisData, effectiveMax);
 
         if (stack == 1) {
-            if (opts.caveSkipFluid && BukkitBlockResolution.isFluid(unwrap(data.get(x, height, z)))) {
+            if (opts.caveSkipFluid && B.isFluid(data.get(x, height, z))) {
                 return;
             }
             data.set(x, height, z, decorator.pickBlockDataTop(rng, irisData, realX, realZ));
@@ -225,12 +232,12 @@ final class DecoratorCore {
                 break;
             }
 
-            if (opts.caveSkipFluid && BukkitBlockResolution.isFluid(unwrap(data.get(x, height + 1 + i, z)))) {
+            if (opts.caveSkipFluid && B.isFluid(data.get(x, height + 1 + i, z))) {
                 break;
             }
 
-            if (bd.nativeHandle() instanceof PointedDripstone) {
-                bd = dripstoneBlock(stack, i, BlockFace.UP);
+            if (IrisProceduralBlocks.materialKey(bd).equals("minecraft:pointed_dripstone")) {
+                bd = dripstoneBlock(stack, i, "up");
             }
 
             data.set(x, height + 1 + i, z, bd);
@@ -243,7 +250,7 @@ final class DecoratorCore {
         int stack = computeStack(decorator, rng, realX, realZ, irisData, max);
 
         if (stack == 1) {
-            if (opts.caveSkipFluid && BukkitBlockResolution.isFluid(unwrap(data.get(x, height, z)))) {
+            if (opts.caveSkipFluid && B.isFluid(data.get(x, height, z))) {
                 return;
             }
             data.set(x, height, z, fixFacesForHunk(
@@ -263,11 +270,11 @@ final class DecoratorCore {
                     ? decorator.pickBlockDataTop(rng, irisData, realX, realZ)
                     : decorator.pickBlockData(rng, irisData, realX, realZ);
 
-            if (bd != null && bd.nativeHandle() instanceof PointedDripstone) {
-                bd = dripstoneBlock(stack, i, BlockFace.DOWN);
+            if (bd != null && IrisProceduralBlocks.materialKey(bd).equals("minecraft:pointed_dripstone")) {
+                bd = dripstoneBlock(stack, i, "down");
             }
 
-            if (opts.caveSkipFluid && BukkitBlockResolution.isFluid(unwrap(data.get(x, h, z)))) {
+            if (opts.caveSkipFluid && B.isFluid(data.get(x, h, z))) {
                 break;
             }
             data.set(x, h, z, fixFacesForHunk(bd, data, x, z, realX, h, realZ, mantle));
@@ -283,20 +290,16 @@ final class DecoratorCore {
             return;
         }
 
-        BlockData rawBd = (BlockData) bd.nativeHandle();
-        if (rawBd instanceof Bisected) {
-            BlockData top = rawBd.clone();
-            ((Bisected) top).setHalf(Bisected.Half.TOP);
+        String half = IrisProceduralBlocks.propertyValue(bd, "half");
+        if (half != null) {
             try {
                 if (max > 2) {
-                    data.set(xf, height + 2, zf, BukkitBlockState.of(top));
+                    data.set(xf, height + 2, zf, bd.withProperty("half", topHalfValue(half)));
                 }
             } catch (Throwable e) {
                 IrisLogging.reportError(e);
             }
-            BlockData bottom = rawBd.clone();
-            ((Bisected) bottom).setHalf(Bisected.Half.BOTTOM);
-            bd = BukkitBlockState.of(bottom);
+            bd = bd.withProperty("half", bottomHalfValue(half));
         }
 
         if (max > 1) {
@@ -336,10 +339,10 @@ final class DecoratorCore {
 
     static PlatformBlockState fixFacesForHunk(PlatformBlockState b, Hunk<PlatformBlockState> hunk, int rX, int rZ,
                                               int x, int y, int z, EngineMantle mantle) {
-        BlockData rawB = unwrap(b);
-        if (!BukkitBlockResolution.isVineBlock(rawB)) {
+        if (!BUKKIT_PRESENT || !B.isVineBlock(b)) {
             return b;
         }
+        BlockData rawB = (BlockData) b.nativeHandle();
         BlockData cloned = rawB.clone();
         MultipleFacing data = (MultipleFacing) cloned;
         data.getFaces().forEach(f -> data.setFace(f, false));
@@ -351,13 +354,11 @@ final class DecoratorCore {
             }
             int yy = y + f.getModY();
 
-            BlockData r = null;
+            PlatformBlockState rs = null;
             if (mantle != null) {
-                r = mantle.getMantle().get(x + f.getModX(), yy, z + f.getModZ(), BlockData.class);
+                rs = mantle.getMantle().get(x + f.getModX(), yy, z + f.getModZ(), PlatformBlockState.class);
             }
-            if (r == null) {
-                r = (BlockData) EngineMantle.AIR.nativeHandle();
-            }
+            BlockData r = rs == null ? (BlockData) EngineMantle.AIR.nativeHandle() : (BlockData) rs.nativeHandle();
             if (r.isFaceSturdy(f.getOppositeFace(), BlockSupport.FULL)) {
                 if (data.getAllowedFaces().contains(f)) {
                     found = true;
@@ -372,7 +373,7 @@ final class DecoratorCore {
                 continue;
             }
 
-            r = unwrap(hunk.get(xx, yy, zz));
+            r = (BlockData) hunk.get(xx, yy, zz).nativeHandle();
             if (r.isFaceSturdy(f.getOppositeFace(), BlockSupport.FULL)) {
                 if (data.getAllowedFaces().contains(f)) {
                     found = true;
@@ -390,11 +391,10 @@ final class DecoratorCore {
     }
 
     static boolean canGoOn(PlatformBlockState decorator, PlatformBlockState surface) {
+        if (!BUKKIT_PRESENT) {
+            return B.isSolid(surface);
+        }
         return ((BlockData) surface.nativeHandle()).isFaceSturdy(BlockFace.UP, BlockSupport.FULL);
-    }
-
-    private static BlockData unwrap(PlatformBlockState state) {
-        return state == null ? null : (BlockData) state.nativeHandle();
     }
 
     private static int computeStack(IrisDecorator decorator, RNG rng, double realX, double realZ,
@@ -411,23 +411,16 @@ final class DecoratorCore {
     private static volatile PlatformBlockState[] dripstoneUp;
     private static volatile PlatformBlockState[] dripstoneDown;
 
-    private static PlatformBlockState[] buildDripstoneArr(BlockFace direction) {
-        PointedDripstone.Thickness[] order = {
-            PointedDripstone.Thickness.TIP,
-            PointedDripstone.Thickness.FRUSTUM,
-            PointedDripstone.Thickness.BASE
-        };
+    private static PlatformBlockState[] buildDripstoneArr(String direction) {
+        String[] order = {"tip", "frustum", "base"};
         PlatformBlockState[] arr = new PlatformBlockState[3];
         for (int k = 0; k < 3; k++) {
-            BlockData bd = Material.POINTED_DRIPSTONE.createBlockData();
-            ((PointedDripstone) bd).setThickness(order[k]);
-            ((PointedDripstone) bd).setVerticalDirection(direction);
-            arr[k] = BukkitBlockState.of(bd);
+            arr[k] = B.getState("minecraft:pointed_dripstone[thickness=" + order[k] + ",vertical_direction=" + direction + "]");
         }
         return arr;
     }
 
-    private static PlatformBlockState dripstoneBlock(int stack, int i, BlockFace direction) {
+    private static PlatformBlockState dripstoneBlock(int stack, int i, String direction) {
         int thIdx;
         if (i == stack - 1) {
             thIdx = 0;
@@ -436,14 +429,14 @@ final class DecoratorCore {
         } else {
             thIdx = 2;
         }
-        if (direction == BlockFace.UP) {
+        if (direction.equals("up")) {
             if (dripstoneUp == null) {
-                dripstoneUp = buildDripstoneArr(BlockFace.UP);
+                dripstoneUp = buildDripstoneArr("up");
             }
             return dripstoneUp[thIdx];
         }
         if (dripstoneDown == null) {
-            dripstoneDown = buildDripstoneArr(BlockFace.DOWN);
+            dripstoneDown = buildDripstoneArr("down");
         }
         return dripstoneDown[thIdx];
     }

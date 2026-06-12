@@ -25,20 +25,19 @@ import art.arcane.iris.engine.object.IrisProceduralBlocks;
 import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.math.Vector3i;
 import art.arcane.volmlib.util.math.RNG;
-import org.bukkit.block.data.BlockData;
 
 public final class FormationBlockResolver {
     private FormationBlockResolver() {
     }
 
-    public static BlockData resolve(IrisFormation f, IrisData data, FormationCanvas.Role role, Vector3i raw) {
+    public static PlatformBlockState resolve(IrisFormation f, IrisData data, FormationCanvas.Role role, Vector3i raw) {
         int x = raw.getBlockX();
         int y = raw.getBlockY();
         int z = raw.getBlockZ();
         RNG paletteRng = new RNG(f.getSeed());
 
         if (role == FormationCanvas.Role.CAP && capDefined(f)) {
-            BlockData cap = IrisProceduralBlocks.resolve(f.getCapBlock(), f.getCapPalette(), data, x, y, z, paletteRng);
+            PlatformBlockState cap = IrisProceduralBlocks.resolve(f.getCapBlock(), f.getCapPalette(), data, x, y, z, paletteRng);
             if (cap != null) {
                 return cap;
             }
@@ -50,7 +49,7 @@ public final class FormationBlockResolver {
             int band = Math.floorDiv(y, thickness);
             PlatformBlockState strataState = strata.get(new RNG(f.getSeed() + (band * 31L)), x, band, z, data);
             if (strataState != null) {
-                return ((BlockData) strataState.nativeHandle()).clone();
+                return strataState;
             }
         }
 

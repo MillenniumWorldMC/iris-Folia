@@ -18,9 +18,9 @@
 
 package art.arcane.iris.engine.object.tree;
 
+import art.arcane.iris.engine.object.IrisProceduralBlocks;
 import art.arcane.iris.engine.object.IrisProceduralTree;
-import org.bukkit.block.data.BlockData;
-import org.bukkit.block.data.type.Leaves;
+import art.arcane.iris.spi.PlatformBlockState;
 
 import java.util.ArrayDeque;
 import java.util.HashMap;
@@ -37,12 +37,12 @@ public final class TreePlausibility {
     private TreePlausibility() {
     }
 
-    public static void apply(Map<TreeBlockCanvas.Vec, BlockData> resolved, Set<TreeBlockCanvas.Vec> trunkPositions,
+    public static void apply(Map<TreeBlockCanvas.Vec, PlatformBlockState> resolved, Set<TreeBlockCanvas.Vec> trunkPositions,
                              Set<TreeBlockCanvas.Vec> leafPositions, IrisProceduralTree tree) {
         Set<TreeBlockCanvas.Vec> realLeaves = new HashSet<>();
         for (TreeBlockCanvas.Vec v : leafPositions) {
-            BlockData bd = resolved.get(v);
-            if (bd instanceof Leaves) {
+            PlatformBlockState state = resolved.get(v);
+            if (state != null && IrisProceduralBlocks.hasProperty(state, "persistent") && IrisProceduralBlocks.hasProperty(state, "distance")) {
                 realLeaves.add(v);
             }
         }
@@ -53,18 +53,16 @@ public final class TreePlausibility {
         Map<TreeBlockCanvas.Vec, Integer> distance = computeDistances(trunkPositions, realLeaves);
 
         for (TreeBlockCanvas.Vec v : realLeaves) {
-            Leaves leaf = (Leaves) resolved.get(v);
+            PlatformBlockState leaf = resolved.get(v);
             Integer d = distance.get(v);
             if (!tree.isPlausible()) {
-                leaf.setPersistent(true);
-                leaf.setDistance(1);
+                leaf = leaf.withProperty("persistent", "true").withProperty("distance", "1");
             } else if (d != null && d < MAX_DISTANCE) {
-                leaf.setPersistent(false);
-                leaf.setDistance(Math.max(1, d));
+                leaf = leaf.withProperty("persistent", "false").withProperty("distance", String.valueOf(Math.max(1, d)));
             } else {
-                leaf.setPersistent(true);
-                leaf.setDistance(MAX_DISTANCE);
+                leaf = leaf.withProperty("persistent", "true").withProperty("distance", String.valueOf(MAX_DISTANCE));
             }
+            resolved.put(v, leaf);
         }
     }
 

@@ -39,6 +39,7 @@ public final class BukkitBlockState implements PlatformBlockState {
     private final String namespace;
     private volatile Boolean air;
     private volatile Boolean solid;
+    private volatile Boolean occluding;
     private volatile Boolean fluid;
     private volatile Boolean water;
     private volatile Boolean foliage;
@@ -140,6 +141,21 @@ public final class BukkitBlockState implements PlatformBlockState {
             solid = cached;
         }
         return cached;
+    }
+
+    @Override
+    public boolean isOccluding() {
+        Boolean cached = occluding;
+        if (cached == null) {
+            cached = data.getMaterial().isOccluding();
+            occluding = cached;
+        }
+        return cached;
+    }
+
+    @Override
+    public boolean isCustom() {
+        return data instanceof IrisCustomData;
     }
 
     @Override

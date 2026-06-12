@@ -18,8 +18,8 @@
 
 package art.arcane.iris.engine.mantle.components;
 
-import art.arcane.iris.platform.bukkit.BukkitBlockResolution;
 
+import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.data.cache.Cache;
@@ -37,9 +37,9 @@ import art.arcane.iris.engine.object.IrisObject;
 import art.arcane.iris.engine.object.IrisObjectPlacement;
 import art.arcane.iris.engine.object.IrisObjectRotation;
 import art.arcane.iris.engine.object.IrisObjectTranslate;
+import art.arcane.iris.engine.object.IrisProceduralBlocks;
 import art.arcane.iris.engine.object.ObjectPlaceMode;
 import art.arcane.iris.spi.IrisLogging;
-import art.arcane.iris.util.common.data.IrisCustomData;
 import art.arcane.iris.util.common.math.IrisBlockVector;
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.volmlib.util.collection.KList;
@@ -47,8 +47,6 @@ import art.arcane.volmlib.util.documentation.ChunkCoordinates;
 import art.arcane.volmlib.util.mantle.flag.ReservedFlag;
 import art.arcane.volmlib.util.math.RNG;
 import art.arcane.iris.spi.PlatformBlockState;
-import org.bukkit.Material;
-import org.bukkit.block.data.BlockData;
 
 import java.io.File;
 import java.util.HashSet;
@@ -451,12 +449,11 @@ public class MantleFloatingObjectComponent extends IrisMantleComponent {
         if (state == null) {
             return false;
         }
-        BlockData data = (BlockData) state.nativeHandle();
         PlatformBlockState existingState = placer.get(x, y, z);
-        BlockData existing = existingState == null ? null : (BlockData) existingState.nativeHandle();
-        boolean wouldReplace = existing != null && BukkitBlockResolution.isSolid(existing) && BukkitBlockResolution.isVineBlock(data);
-        boolean placesBlock = !data.getMaterial().equals(Material.AIR) && !data.getMaterial().equals(Material.CAVE_AIR) && !wouldReplace;
-        return data instanceof IrisCustomData || placesBlock;
+        boolean wouldReplace = B.isSolid(existingState) && B.isVineBlock(state);
+        String material = IrisProceduralBlocks.materialKey(state);
+        boolean placesBlock = !material.equals("minecraft:air") && !material.equals("minecraft:cave_air") && !wouldReplace;
+        return state.isCustom() || placesBlock;
     }
 
     private static boolean isFootprintFlat(FloatingObjectFootprint fp, int pickedXf, int pickedZf, int pickTopY, FloatingIslandSample[] samples, int tolerance) {

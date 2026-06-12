@@ -72,10 +72,10 @@ import static art.arcane.iris.util.common.data.registry.Particles.ITEM;
 public class IrisEntity extends IrisRegistrant {
     @Required
     @Desc("The type of entity to spawn. To spawn a mythic mob, set this type to unknown and define mythic type.")
-    private EntityType type = EntityType.UNKNOWN;
+    private EntityType type = null;
 
     @Desc("The SpawnReason to spawn the entity with.")
-    private CreatureSpawnEvent.SpawnReason reason = CreatureSpawnEvent.SpawnReason.NATURAL;
+    private CreatureSpawnEvent.SpawnReason reason = null;
 
     @Desc("The custom name of this entity")
     private String customName = "";
@@ -146,10 +146,10 @@ public class IrisEntity extends IrisRegistrant {
     private boolean spawnEffectRiseOutOfGround = false;
 
     @Desc("The main gene for a panda if the entity type is a panda")
-    private Gene pandaMainGene = Gene.NORMAL;
+    private Gene pandaMainGene = null;
 
     @Desc("The hidden gene for a panda if the entity type is a panda")
-    private Gene pandaHiddenGene = Gene.NORMAL;
+    private Gene pandaHiddenGene = null;
 
     @Desc("The this entity is ageable, set it's baby status")
     private boolean baby = false;
@@ -170,6 +170,22 @@ public class IrisEntity extends IrisRegistrant {
     @ArrayType(min = 1, type = IrisCommand.class)
     @Desc("Run raw commands when this entity is spawned. Use {x}, {y}, and {z} for location. /summon pig {x} {y} {z}")
     private KList<IrisCommand> rawCommands = new KList<>();
+
+    public EntityType getType() {
+        return type == null ? EntityType.UNKNOWN : type;
+    }
+
+    public CreatureSpawnEvent.SpawnReason getReason() {
+        return reason == null ? CreatureSpawnEvent.SpawnReason.NATURAL : reason;
+    }
+
+    public Gene getPandaMainGene() {
+        return pandaMainGene == null ? Gene.NORMAL : pandaMainGene;
+    }
+
+    public Gene getPandaHiddenGene() {
+        return pandaHiddenGene == null ? Gene.NORMAL : pandaHiddenGene;
+    }
 
     public Entity spawn(Engine gen, Location at) {
         return spawn(gen, at, new RNG(at.hashCode()));
@@ -385,11 +401,7 @@ public class IrisEntity extends IrisRegistrant {
             return null;
         }
 
-        if (type == null) {
-            return null;
-        }
-
-        if (EntityType.UNKNOWN.equals(type) && !isSpecialType()) {
+        if (EntityType.UNKNOWN.equals(getType()) && !isSpecialType()) {
             return null;
         }
 

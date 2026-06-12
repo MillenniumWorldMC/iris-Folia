@@ -23,10 +23,9 @@ import art.arcane.iris.engine.object.IrisCoral;
 import art.arcane.iris.engine.object.IrisObject;
 import art.arcane.iris.engine.object.IrisProceduralBlocks;
 import art.arcane.iris.engine.object.tree.TreeFunctions;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.math.Vector3i;
 import art.arcane.volmlib.util.math.RNG;
-import org.bukkit.block.data.BlockData;
-import org.bukkit.block.data.Waterlogged;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -52,7 +51,7 @@ public final class CoralGenerator {
             case TENDRIL -> buildTendril(canvas, coral, height, shapeSeed, rng);
         }
 
-        Map<Vector3i, BlockData> resolved = resolve(canvas, coral, data);
+        Map<Vector3i, PlatformBlockState> resolved = resolve(canvas, coral, data);
         return IrisProceduralBlocks.assemble(resolved);
     }
 
@@ -231,30 +230,33 @@ public final class CoralGenerator {
         };
     }
 
-    private static Map<Vector3i, BlockData> resolve(CoralCanvas canvas, IrisCoral coral, IrisData data) {
-        Map<Vector3i, BlockData> out = new HashMap<>();
+    private static Map<Vector3i, PlatformBlockState> resolve(CoralCanvas canvas, IrisCoral coral, IrisData data) {
+        Map<Vector3i, PlatformBlockState> out = new HashMap<>();
         RNG paletteRng = new RNG(coral.getSeed());
         for (Map.Entry<Long, CoralCanvas.Role> entry : canvas.getCells().entrySet()) {
             int[] xyz = CoralCanvas.decode(entry.getKey());
             int x = xyz[0];
             int y = xyz[1];
             int z = xyz[2];
-            BlockData bd;
+            PlatformBlockState state;
             if (entry.getValue() == CoralCanvas.Role.TIP) {
-                bd = IrisProceduralBlocks.resolve(coral.getTipBlock(), coral.getTipPalette(), data, x, y, z, paletteRng);
-                if (bd == null) {
-                    bd = IrisProceduralBlocks.resolve(coral.getBlock(), coral.getBlockPalette(), data, x, y, z, paletteRng);
+                state = IrisProceduralBlocks.resolve(coral.getTipBlock(), coral.getTipPalette(), data, x, y, z, paletteRng);
+                if (state == null) {
+                    state = IrisProceduralBlocks.resolve(coral.getBlock(), coral.getBlockPalette(), data, x, y, z, paletteRng);
                 }
             } else {
-                bd = IrisProceduralBlocks.resolve(coral.getBlock(), coral.getBlockPalette(), data, x, y, z, paletteRng);
+                state = IrisProceduralBlocks.resolve(coral.getBlock(), coral.getBlockPalette(), data, x, y, z, paletteRng);
             }
-            if (bd == null) {
+            if (state == null) {
                 continue;
             }
-            if (coral.isWaterlogged() && bd instanceof Waterlogged waterlogged) {
-                waterlogged.setWaterlogged(true);
+            if (coral.isWaterlogged() && IrisProceduralBlocks.hasProperty(state, "waterlogged")) {
+                try {
+                    state = state.withProperty("waterlogged", "true");
+                } catch (IllegalArgumentException ignored) {
+                }
             }
-            out.put(new Vector3i(x, y, z), bd);
+            out.put(new Vector3i(x, y, z), state);
         }
         return out;
     }

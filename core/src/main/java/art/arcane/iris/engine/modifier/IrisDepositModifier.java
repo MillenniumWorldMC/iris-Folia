@@ -18,8 +18,6 @@
 
 package art.arcane.iris.engine.modifier;
 
-import art.arcane.iris.platform.bukkit.BukkitBlockResolution;
-
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineAssignedModifier;
 import art.arcane.iris.engine.object.*;
@@ -31,10 +29,8 @@ import art.arcane.volmlib.util.math.RNG;
 import art.arcane.volmlib.util.matter.MatterCavern;
 import art.arcane.iris.util.common.parallel.BurstExecutor;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
-import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.spi.PlatformBlockState;
-import org.bukkit.Material;
-import org.bukkit.block.data.BlockData;
+import art.arcane.iris.util.common.data.B;
 
 public class IrisDepositModifier extends EngineAssignedModifier<PlatformBlockState> {
     private final RNG rng;
@@ -132,7 +128,7 @@ public class IrisDepositModifier extends EngineAssignedModifier<PlatformBlockSta
                 if (ny > height || nx > 15 || nx < 0 || ny > getEngine().getHeight() || ny < 0 || nz < 0 || nz > 15) {
                     continue;
                 }
-                if (!k.isReplaceBedrock() && ((BlockData) data.get(nx, ny, nz).nativeHandle()).getMaterial() == Material.BEDROCK) {
+                if (!k.isReplaceBedrock() && IrisProceduralBlocks.materialKey(data.get(nx, ny, nz)).equals("minecraft:bedrock")) {
                     continue;
                 }
 
@@ -141,7 +137,7 @@ public class IrisDepositModifier extends EngineAssignedModifier<PlatformBlockSta
                     PlatformBlockState remapped = resolveDepositVariant(cx, cz, nx, ny, nz, ore, dimension, context);
                     PlatformBlockState finalBlock = remapped != null
                             ? remapped
-                            : BukkitBlockState.of(BukkitBlockResolution.toDeepSlateOre(unwrap(data.get(nx, ny, nz)), unwrap(ore)));
+                            : B.toDeepSlateOre(data.get(nx, ny, nz), ore);
                     data.set(nx, ny, nz, finalBlock);
                 }
             }
@@ -195,9 +191,5 @@ public class IrisDepositModifier extends EngineAssignedModifier<PlatformBlockSta
         }
 
         return null;
-    }
-
-    private static BlockData unwrap(PlatformBlockState state) {
-        return state == null ? null : (BlockData) state.nativeHandle();
     }
 }

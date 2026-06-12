@@ -33,6 +33,7 @@ import art.arcane.iris.engine.mantle.components.MantleFluidBodyComponent;
 import art.arcane.iris.engine.mantle.components.MantleObjectComponent;
 import art.arcane.iris.engine.mantle.components.IrisStructureComponent;
 import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.project.matter.IrisMatterSupport;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
@@ -66,6 +67,7 @@ import java.util.Set;
 @EqualsAndHashCode(exclude = "engine")
 @ToString(exclude = "engine")
 public class IrisEngineMantle implements EngineMantle {
+    private static final boolean BUKKIT_PRESENT = IrisMatterSupport.isBukkitPresent();
     private final Engine engine;
     private final Mantle<Matter> mantle;
     @Getter(AccessLevel.NONE)
@@ -229,7 +231,13 @@ public class IrisEngineMantle implements EngineMantle {
 
             @Override
             public Class<?> classifyValue(Object value) {
-                return BukkitPlatform.classifyMantleValue(value);
+                if (value instanceof PlatformBlockState) {
+                    return PlatformBlockState.class;
+                }
+                if (BUKKIT_PRESENT) {
+                    return BukkitPlatform.classifyMantleValue(value);
+                }
+                return value.getClass();
             }
 
             @Override

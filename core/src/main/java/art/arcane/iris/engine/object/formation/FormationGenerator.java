@@ -22,9 +22,9 @@ import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.object.IrisFormation;
 import art.arcane.iris.engine.object.IrisObject;
 import art.arcane.iris.engine.object.IrisProceduralBlocks;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.math.Vector3i;
 import art.arcane.volmlib.util.math.RNG;
-import org.bukkit.block.data.BlockData;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -57,9 +57,9 @@ public final class FormationGenerator {
             return null;
         }
 
-        Map<Vector3i, BlockData> resolved = new HashMap<>();
+        Map<Vector3i, PlatformBlockState> resolved = new HashMap<>();
         for (Map.Entry<Vector3i, FormationCanvas.Role> entry : canvas.getCells().entrySet()) {
-            BlockData bd = FormationBlockResolver.resolve(f, data, entry.getValue(), entry.getKey());
+            PlatformBlockState bd = FormationBlockResolver.resolve(f, data, entry.getValue(), entry.getKey());
             if (bd == null) {
                 continue;
             }

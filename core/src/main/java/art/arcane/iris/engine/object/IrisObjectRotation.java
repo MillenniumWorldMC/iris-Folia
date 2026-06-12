@@ -47,6 +47,17 @@ import java.util.Map;
 @Desc("Configures rotation for iris")
 @Data
 public class IrisObjectRotation {
+    private static final boolean BUKKIT_PRESENT = detectBukkit();
+
+    private static boolean detectBukkit() {
+        try {
+            Class.forName("org.bukkit.Bukkit", false, IrisObjectRotation.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
     private static final class Faces {
         private static final List<BlockFace> WALL_FACES = List.of(BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST);
     }
@@ -264,6 +275,10 @@ public class IrisObjectRotation {
     public PlatformBlockState rotate(PlatformBlockState state, int spinx, int spiny, int spinz) {
         if (state == null) {
             return null;
+        }
+
+        if (!BUKKIT_PRESENT) {
+            return state;
         }
 
         BlockData raw = ((BlockData) state.nativeHandle()).clone();

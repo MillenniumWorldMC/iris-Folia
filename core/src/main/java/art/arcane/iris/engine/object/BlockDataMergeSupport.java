@@ -8,12 +8,44 @@ import org.bukkit.block.data.BlockData;
 import java.util.function.Function;
 
 final class BlockDataMergeSupport {
+    private static final boolean BUKKIT_PRESENT = detectBukkit();
+
     private BlockDataMergeSupport() {
     }
 
+    private static boolean detectBukkit() {
+        try {
+            Class.forName("org.bukkit.Bukkit", false, BlockDataMergeSupport.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
     static PlatformBlockState merge(PlatformBlockState base, PlatformBlockState update) {
+        if (!BUKKIT_PRESENT) {
+            return mergeByKey(base, update);
+        }
         BlockData merged = merge((BlockData) base.nativeHandle(), (BlockData) update.nativeHandle(), BukkitBlockResolution::get);
         return merged == null ? null : BukkitBlockState.of(merged);
+    }
+
+    private static PlatformBlockState mergeByKey(PlatformBlockState base, PlatformBlockState update) {
+        String key = update.key();
+        int bracket = key.indexOf('[');
+        if (bracket < 0) {
+            return base;
+        }
+        PlatformBlockState merged = base;
+        String body = key.substring(bracket + 1, key.lastIndexOf(']'));
+        for (String entry : body.split(",")) {
+            int equals = entry.indexOf('=');
+            if (equals < 0) {
+                continue;
+            }
+            merged = merged.withProperty(entry.substring(0, equals).trim(), entry.substring(equals + 1).trim());
+        }
+        return merged;
     }
 
     static BlockData merge(BlockData base, BlockData update, Function<String, BlockData> resolver) {

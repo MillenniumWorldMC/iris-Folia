@@ -30,6 +30,10 @@ public interface PlatformBlockState {
 
     boolean isSolid();
 
+    boolean isOccluding();
+
+    boolean isCustom();
+
     boolean isFluid();
 
     boolean isWater();

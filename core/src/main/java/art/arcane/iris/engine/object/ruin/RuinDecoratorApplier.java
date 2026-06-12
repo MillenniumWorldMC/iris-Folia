@@ -20,10 +20,10 @@ package art.arcane.iris.engine.object.ruin;
 
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.object.IrisProceduralBlocks;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.engine.object.IrisRuinDecorator;
 import art.arcane.iris.util.common.math.Vector3i;
 import art.arcane.volmlib.util.math.RNG;
-import org.bukkit.block.data.BlockData;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -48,7 +48,7 @@ final class RuinDecoratorApplier {
             if (!rng.chance(decorator.getChance())) {
                 continue;
             }
-            BlockData bd = IrisProceduralBlocks.resolve(decorator.getBlock(), decorator.getPalette(), data, v.getBlockX(), v.getBlockY(), v.getBlockZ(), paletteRng);
+            PlatformBlockState bd = IrisProceduralBlocks.resolve(decorator.getBlock(), decorator.getPalette(), data, v.getBlockX(), v.getBlockY(), v.getBlockZ(), paletteRng);
             if (bd != null) {
                 canvas.accent(v.getBlockX(), v.getBlockY(), v.getBlockZ(), bd);
             }

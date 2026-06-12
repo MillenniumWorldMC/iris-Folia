@@ -18,45 +18,87 @@
 
 package art.arcane.iris.engine.object;
 
-import art.arcane.iris.platform.bukkit.BukkitBlockResolution;
-
 import art.arcane.iris.core.loader.IrisData;
-import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.spi.PlatformBlockState;
+import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.common.math.IrisBlockVector;
 import art.arcane.iris.util.common.math.Vector3i;
 import art.arcane.volmlib.util.math.RNG;
-import org.bukkit.block.data.BlockData;
 
 import java.util.Map;
 
 /**
  * Shared low-level helpers for building procedural objects in memory: resolving a
- * single block id or a noise palette into BlockData, and assembling a raw block
- * map into a centered IrisObject anchored so its y=0 layer sits one block above
- * the terrain surface (same convention the tree generator uses).
+ * single block id or a noise palette into a platform block state, and assembling a
+ * raw block map into a centered IrisObject anchored so its y=0 layer sits one block
+ * above the terrain surface (same convention the tree generator uses).
  */
 public final class IrisProceduralBlocks {
+    public static final String[] FACE_PROPERTIES = {"north", "east", "south", "west", "up", "down"};
+
     private IrisProceduralBlocks() {
+    }
+
+    public static int[] faceOffset(String face) {
+        return switch (face) {
+            case "north" -> new int[]{0, 0, -1};
+            case "south" -> new int[]{0, 0, 1};
+            case "east" -> new int[]{1, 0, 0};
+            case "west" -> new int[]{-1, 0, 0};
+            case "up" -> new int[]{0, 1, 0};
+            default -> new int[]{0, -1, 0};
+        };
     }
 
     public static boolean paletteSet(IrisMaterialPalette palette) {
         return palette != null && palette.getPalette() != null && !palette.getPalette().isEmpty();
     }
 
-    public static BlockData resolve(String block, IrisMaterialPalette palette, IrisData data, int x, int y, int z, RNG paletteRng) {
+    public static PlatformBlockState resolve(String block, IrisMaterialPalette palette, IrisData data, int x, int y, int z, RNG paletteRng) {
         if (paletteSet(palette)) {
-            PlatformBlockState state = palette.get(paletteRng, x, y, z, data);
-            return state == null ? null : ((BlockData) state.nativeHandle()).clone();
+            return palette.get(paletteRng, x, y, z, data);
         }
         if (block != null && !block.isEmpty()) {
-            BlockData bd = BukkitBlockResolution.getOrNull(block, false);
-            return bd == null ? null : bd.clone();
+            return B.getStateOrNull(block, false);
         }
         return null;
     }
 
-    public static IrisObject assemble(Map<Vector3i, BlockData> blocks) {
+    public static boolean hasProperty(PlatformBlockState state, String property) {
+        return propertyValue(state, property) != null;
+    }
+
+    public static String materialKey(PlatformBlockState state) {
+        String key = state.key();
+        int bracket = key.indexOf('[');
+        return bracket < 0 ? key : key.substring(0, bracket);
+    }
+
+    public static String propertyValue(PlatformBlockState state, String property) {
+        String key = state.key();
+        int bracket = key.indexOf('[');
+        if (bracket < 0) {
+            return null;
+        }
+        int start = key.indexOf("[" + property + "=", bracket);
+        if (start < 0) {
+            start = key.indexOf("," + property + "=", bracket);
+        }
+        if (start < 0) {
+            return null;
+        }
+        int valueStart = key.indexOf('=', start) + 1;
+        int end = key.indexOf(',', valueStart);
+        if (end < 0) {
+            end = key.indexOf(']', valueStart);
+        }
+        if (end < 0) {
+            return null;
+        }
+        return key.substring(valueStart, end);
+    }
+
+    public static IrisObject assemble(Map<Vector3i, PlatformBlockState> blocks) {
         if (blocks == null || blocks.isEmpty()) {
             return null;
         }
@@ -84,12 +126,12 @@ public final class IrisProceduralBlocks {
         int cz = d / 2;
 
         IrisObject object = new IrisObject(w, h, d);
-        for (Map.Entry<Vector3i, BlockData> entry : blocks.entrySet()) {
+        for (Map.Entry<Vector3i, PlatformBlockState> entry : blocks.entrySet()) {
             Vector3i v = entry.getKey();
             int nx = v.getBlockX() - minX - cx;
             int ny = v.getBlockY() - cy + 1;
             int nz = v.getBlockZ() - minZ - cz;
-            object.getBlocks().put(new IrisBlockVector(nx, ny, nz), BukkitBlockState.of(entry.getValue()));
+            object.getBlocks().put(new IrisBlockVector(nx, ny, nz), entry.getValue());
         }
 
         return object;

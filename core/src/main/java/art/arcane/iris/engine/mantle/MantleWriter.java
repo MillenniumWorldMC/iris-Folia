@@ -18,7 +18,6 @@
 
 package art.arcane.iris.engine.mantle;
 
-import art.arcane.iris.platform.bukkit.BukkitBlockResolution;
 
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.util.project.matter.TileWrapper;
@@ -48,7 +47,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import lombok.Data;
 import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.spi.PlatformBlockState;
-import org.bukkit.block.data.BlockData;
+import art.arcane.iris.util.common.data.B;
 import org.bukkit.util.Vector;
 
 import java.util.*;
@@ -166,7 +165,7 @@ public class MantleWriter implements IObjectPlacer, AutoCloseable {
             return;
         }
 
-        if (y == 0 && t instanceof BlockData && engineMantle.getEngine().getDimension().isBedrock()) {
+        if (y == 0 && t instanceof PlatformBlockState && engineMantle.getEngine().getDimension().isBedrock()) {
             return;
         }
 
@@ -174,7 +173,8 @@ public class MantleWriter implements IObjectPlacer, AutoCloseable {
         if (chunk == null) return;
 
         Matter matter = chunk.getOrCreate(y >> 4);
-        matter.slice(matter.getClass(t)).set(x & 15, y & 15, z & 15, t);
+        Class<?> sliceType = t instanceof PlatformBlockState ? PlatformBlockState.class : matter.getClass(t);
+        matter.slice(sliceType).set(x & 15, y & 15, z & 15, t);
     }
 
     public boolean setDataIfAbsent(int x, int y, int z, MatterCavern value) {
@@ -220,7 +220,7 @@ public class MantleWriter implements IObjectPlacer, AutoCloseable {
         if (matter == null) {
             return;
         }
-        matter.<BlockData>slice(BlockData.class).set(x & 15, y & 15, z & 15, null);
+        matter.<PlatformBlockState>slice(PlatformBlockState.class).set(x & 15, y & 15, z & 15, null);
     }
 
     public <T> T getData(int x, int y, int z, Class<T> type) {
@@ -273,19 +273,20 @@ public class MantleWriter implements IObjectPlacer, AutoCloseable {
         if (s == null) {
             return;
         }
-        BlockData d = (BlockData) s.nativeHandle();
-        if (d instanceof IrisCustomData data) {
-            setData(x, y, z, data.getBase());
+        if (s.isCustom() && s.nativeHandle() instanceof IrisCustomData data) {
+            setData(x, y, z, BukkitBlockState.of(data.getBase()));
             setData(x, y, z, data.getCustom());
-        } else setData(x, y, z, d);
+            return;
+        }
+        setData(x, y, z, s);
     }
 
     @Override
     public PlatformBlockState get(int x, int y, int z) {
-        BlockData block = getData(x, y, z, BlockData.class);
+        PlatformBlockState block = getData(x, y, z, PlatformBlockState.class);
         if (block == null)
             return AIR;
-        return BukkitBlockState.of(block);
+        return block;
     }
 
     @Override
@@ -300,7 +301,7 @@ public class MantleWriter implements IObjectPlacer, AutoCloseable {
 
     @Override
     public boolean isSolid(int x, int y, int z) {
-        return BukkitBlockResolution.isSolid((BlockData) get(x, y, z).nativeHandle());
+        return B.isSolid(get(x, y, z));
     }
 
     @Override

@@ -18,8 +18,8 @@
 
 package art.arcane.iris.engine.object.ruin;
 
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.math.Vector3i;
-import org.bukkit.block.data.BlockData;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,7 +33,7 @@ final class RuinBlockCanvas {
     static final class Cell {
         private Role role;
         private boolean structural;
-        private BlockData accentData;
+        private PlatformBlockState accentData;
 
         Cell(Role role, boolean structural) {
             this.role = role;
@@ -48,7 +48,7 @@ final class RuinBlockCanvas {
             return structural;
         }
 
-        BlockData accentData() {
+        PlatformBlockState accentData() {
             return accentData;
         }
 
@@ -57,7 +57,7 @@ final class RuinBlockCanvas {
             this.structural = this.structural || structuralNext;
         }
 
-        void makeAccent(BlockData data) {
+        void makeAccent(PlatformBlockState data) {
             this.role = Role.ACCENT;
             this.structural = false;
             this.accentData = data;
@@ -80,14 +80,14 @@ final class RuinBlockCanvas {
         }
     }
 
-    void accent(int x, int y, int z, BlockData data) {
+    void accent(int x, int y, int z, PlatformBlockState data) {
         if (data == null) {
             return;
         }
         cells.put(new Vector3i(x, y, z), accentCell(data));
     }
 
-    private static Cell accentCell(BlockData data) {
+    private static Cell accentCell(PlatformBlockState data) {
         Cell cell = new Cell(Role.ACCENT, false);
         cell.makeAccent(data);
         return cell;

@@ -18,9 +18,9 @@
 
 package art.arcane.iris.engine.mantle.components;
 
-import art.arcane.iris.platform.bukkit.BukkitBlockResolution;
 
 import art.arcane.iris.core.IrisSettings;
+import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.engine.data.cache.Cache;
 import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.UpperDimensionContext;
@@ -50,7 +50,6 @@ import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.math.IrisBlockVector;
-import org.bukkit.block.data.BlockData;
 
 import java.io.IOException;
 import java.util.Locale;
@@ -584,7 +583,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
                             if (marker != null) {
                                 writer.setData(b.getX(), b.getY(), b.getZ(), marker);
                             }
-                            if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && BukkitBlockResolution.isStorageChest(unwrap(data))) {
+                            if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && B.isStorageChest(data)) {
                                 writer.setData(b.getX(), b.getY(), b.getZ(), MatterStructurePOI.BURIED_TREASURE);
                             }
                         }, null, getData());
@@ -599,7 +598,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
                             if (marker != null) {
                                 writer.setData(b.getX(), b.getY(), b.getZ(), marker);
                             }
-                            if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && BukkitBlockResolution.isStorageChest(unwrap(data))) {
+                            if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && B.isStorageChest(data)) {
                                 writer.setData(b.getX(), b.getY(), b.getZ(), MatterStructurePOI.BURIED_TREASURE);
                             }
                         }, null, getData());
@@ -611,7 +610,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
                         if (marker != null) {
                             writer.setData(b.getX(), b.getY(), b.getZ(), marker);
                         }
-                        if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && BukkitBlockResolution.isStorageChest(unwrap(data))) {
+                        if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && B.isStorageChest(data)) {
                             writer.setData(b.getX(), b.getY(), b.getZ(), MatterStructurePOI.BURIED_TREASURE);
                         }
                     }, null, getData());
@@ -808,7 +807,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
                     if (marker != null) {
                         writer.setData(b.getX(), b.getY(), b.getZ(), marker);
                     }
-                    if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && BukkitBlockResolution.isStorageChest(unwrap(data))) {
+                    if (effectivePlacement.isDolphinTarget() && effectivePlacement.isUnderwater() && B.isStorageChest(data)) {
                         writer.setData(b.getX(), b.getY(), b.getZ(), MatterStructurePOI.BURIED_TREASURE);
                     }
                 }, null, getData());
@@ -988,7 +987,7 @@ public class MantleObjectComponent extends IrisMantleComponent {
                 if (marker != null) {
                     writer.setData(b.getX(), b.getY(), b.getZ(), marker);
                 }
-                if (placement.isDolphinTarget() && placement.isUnderwater() && BukkitBlockResolution.isStorageChest(unwrap(data))) {
+                if (placement.isDolphinTarget() && placement.isUnderwater() && B.isStorageChest(data)) {
                     writer.setData(b.getX(), b.getY(), b.getZ(), MatterStructurePOI.BURIED_TREASURE);
                 }
             }, null, getData());
@@ -1496,10 +1495,6 @@ public class MantleObjectComponent extends IrisMantleComponent {
                 && IrisSettings.get().getGeneral().isDebug();
     }
 
-    private static BlockData unwrap(PlatformBlockState state) {
-        return state == null ? null : (BlockData) state.nativeHandle();
-    }
-
     private record ObjectPlacementSummary(
             int biomeSurfacePlacersChecked,
             int biomeSurfacePlacersTriggered,
@@ -1624,7 +1619,11 @@ public class MantleObjectComponent extends IrisMantleComponent {
             if (placement == null) {
                 continue;
             }
-            for (IrisObject variant : placement.getVariantObjects(getData())) {
+            KList<IrisObject> variants = placement.getVariantObjects(getData());
+            if (variants == null) {
+                continue;
+            }
+            for (IrisObject variant : variants) {
                 if (variant == null) {
                     continue;
                 }

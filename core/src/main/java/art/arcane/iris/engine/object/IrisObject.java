@@ -18,8 +18,6 @@
 
 package art.arcane.iris.engine.object;
 
-import art.arcane.iris.platform.bukkit.BukkitBlockResolution;
-
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.loader.IrisRegistrant;
 import art.arcane.iris.engine.data.cache.AtomicCache;
@@ -33,7 +31,6 @@ import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.iris.util.project.context.IrisContext;
 import art.arcane.iris.util.common.data.B;
-import art.arcane.iris.util.common.data.IrisCustomData;
 import art.arcane.iris.util.common.data.VectorMap;
 import art.arcane.volmlib.util.format.Form;
 import art.arcane.iris.util.project.interpolation.IrisInterpolation;
@@ -56,15 +53,8 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.BlockData;
-import org.bukkit.block.data.MultipleFacing;
-import org.bukkit.block.data.Waterlogged;
-import org.bukkit.block.data.type.Leaves;
-import org.bukkit.block.data.type.Slab;
-import org.bukkit.block.data.type.Stairs;
 
 import java.io.*;
 import java.util.*;
@@ -167,14 +157,18 @@ public class IrisObject extends IrisRegistrant {
     }
 
     private static boolean shouldStilt(PlatformBlockState state) {
-        BlockData data = (BlockData) state.nativeHandle();
-        if (!data.getMaterial().isOccluding()) {
+        if (!state.isOccluding()) {
             return false;
         }
-        if (data instanceof Stairs || data instanceof Slab) {
+        String material = materialKey(state);
+        if (material.endsWith("_stairs") || material.endsWith("_slab")) {
             return false;
         }
-        return data.getMaterial() != Material.DIRT_PATH;
+        return !material.equals("minecraft:dirt_path");
+    }
+
+    private static String materialKey(PlatformBlockState state) {
+        return IrisProceduralBlocks.materialKey(state);
     }
 
     public AxisAlignedBB getAABB() {
@@ -327,11 +321,11 @@ public class IrisObject extends IrisRegistrant {
 
         for (int i = 0; i < s; i++) {
             IrisBlockVector pos = new IrisBlockVector(din.readShort(), din.readShort(), din.readShort());
-            BlockData data = BukkitBlockResolution.get(din.readUTF());
+            PlatformBlockState data = B.getState(din.readUTF());
             if (isStructureMarker(data)) {
                 continue;
             }
-            blocks.put(pos, data == null ? null : BukkitBlockState.of(data));
+            blocks.put(pos, data);
         }
 
         if (din.available() == 0)
@@ -369,11 +363,11 @@ public class IrisObject extends IrisRegistrant {
 
         for (i = 0; i < s; i++) {
             IrisBlockVector pos = new IrisBlockVector(din.readShort(), din.readShort(), din.readShort());
-            BlockData data = BukkitBlockResolution.get(palette.get(din.readShort()));
+            PlatformBlockState data = B.getState(palette.get(din.readShort()));
             if (isStructureMarker(data)) {
                 continue;
             }
-            blocks.put(pos, data == null ? null : BukkitBlockState.of(data));
+            blocks.put(pos, data);
         }
 
         s = din.readInt();
@@ -383,12 +377,12 @@ public class IrisObject extends IrisRegistrant {
         }
     }
 
-    private static boolean isStructureMarker(BlockData data) {
+    private static boolean isStructureMarker(PlatformBlockState data) {
         if (data == null) {
             return false;
         }
-        Material m = data.getMaterial();
-        return m == Material.JIGSAW || m == Material.STRUCTURE_BLOCK || m == Material.STRUCTURE_VOID;
+        String material = materialKey(data);
+        return material.equals("minecraft:jigsaw") || material.equals("minecraft:structure_block") || material.equals("minecraft:structure_void");
     }
 
     public void write(OutputStream o) throws IOException {
@@ -1000,15 +994,16 @@ public class IrisObject extends IrisRegistrant {
                         }
 
                         PlatformBlockState data = blocks.get(i);
-                        BlockData rawData = data == null ? null : (BlockData) data.nativeHandle();
+                        if (data == null) {
+                            continue;
+                        }
 
                         for (PlatformBlockState k : j.getMark(rdata)) {
                             if (max <= 0) {
                                 break;
                             }
 
-                            BlockData rawMark = (BlockData) k.nativeHandle();
-                            if (j.isExact() ? rawMark.matches(rawData) : rawMark.getMaterial().equals(rawData.getMaterial())) {
+                            if (j.isExact() ? k.matches(data) : materialKey(k).equals(materialKey(data))) {
                                 boolean a = !blocks.containsKey((IrisBlockVector) i.clone().add(new IrisBlockVector(0, 1, 0)));
                                 boolean fff = !blocks.containsKey((IrisBlockVector) i.clone().add(new IrisBlockVector(0, 2, 0)));
 
@@ -1058,22 +1053,17 @@ public class IrisObject extends IrisRegistrant {
                     }
                 }
 
-                if (placer.isPreventingDecay() && ((BlockData) data.nativeHandle()) instanceof Leaves && !((Leaves) ((BlockData) data.nativeHandle())).isPersistent()) {
-                    BlockData leaves = ((BlockData) data.nativeHandle()).clone();
-                    ((Leaves) leaves).setPersistent(true);
-                    data = BukkitBlockState.of(leaves);
+                if (placer.isPreventingDecay() && IrisProceduralBlocks.hasProperty(data, "distance") && "false".equals(IrisProceduralBlocks.propertyValue(data, "persistent"))) {
+                    data = data.withProperty("persistent", "true");
                 }
 
                 for (IrisObjectReplace j : config.getEdit()) {
                     if (rng.chance(j.getChance())) {
                         for (PlatformBlockState k : j.getFind(rdata)) {
-                            BlockData rawFind = (BlockData) k.nativeHandle();
-                            BlockData rawData = (BlockData) data.nativeHandle();
-                            if (j.isExact() ? rawFind.matches(rawData) : rawFind.getMaterial().equals(rawData.getMaterial())) {
+                            if (j.isExact() ? k.matches(data) : materialKey(k).equals(materialKey(data))) {
                                 PlatformBlockState newData = j.getReplace(rng, i.getX() + x, i.getY() + y, i.getZ() + z, rdata);
-                                BlockData rawNew = (BlockData) newData.nativeHandle();
 
-                                if (rawNew.getMaterial() == rawData.getMaterial() && !(rawNew instanceof IrisCustomData || rawData instanceof IrisCustomData))
+                                if (materialKey(newData).equals(materialKey(data)) && !(newData.isCustom() || data.isCustom()))
                                     data = BlockDataMergeSupport.merge(data, newData);
                                 else
                                     data = newData;
@@ -1098,7 +1088,7 @@ public class IrisObject extends IrisRegistrant {
                     zz += config.warp(rng, i.getZ() + z, i.getY() + y, i.getX() + x, getLoader());
                 }
 
-                if (yv < 0 && (config.getMode().equals(ObjectPlaceMode.PAINT)) && !BukkitBlockResolution.isVineBlock((BlockData) data.nativeHandle())) {
+                if (yv < 0 && (config.getMode().equals(ObjectPlaceMode.PAINT)) && !B.isVineBlock(data)) {
                     yy = (int) Math.round(i.getY()) + Math.floorDiv(h, 2) + placer.getHighest(xx, zz, getLoader(), config.isUnderwater());
                 }
 
@@ -1118,27 +1108,12 @@ public class IrisObject extends IrisRegistrant {
                     continue;
                 }
 
-                if (((BlockData) data.nativeHandle()) instanceof Waterlogged && shouldAutoWaterlogBlock(placer, config, yv, xx, yy, zz)) {
-                    BlockData waterlogged = ((BlockData) data.nativeHandle()).clone();
-                    ((Waterlogged) waterlogged).setWaterlogged(true);
-                    data = BukkitBlockState.of(waterlogged);
+                if (IrisProceduralBlocks.hasProperty(data, "waterlogged") && shouldAutoWaterlogBlock(placer, config, yv, xx, yy, zz)) {
+                    data = data.withProperty("waterlogged", "true");
                 }
 
-                if (BukkitBlockResolution.isVineBlock((BlockData) data.nativeHandle())) {
-                    BlockData fData = ((BlockData) data.nativeHandle()).clone();
-                    MultipleFacing f = (MultipleFacing) fData;
-                    boolean facesChanged = false;
-                    for (BlockFace face : f.getAllowedFaces()) {
-                        PlatformBlockState facingState = placer.get(xx + face.getModX(), yy + face.getModY(), zz + face.getModZ());
-                        BlockData facingBlock = facingState == null ? null : (BlockData) facingState.nativeHandle();
-                        if (BukkitBlockResolution.isSolid(facingBlock) && !BukkitBlockResolution.isVineBlock(facingBlock)) {
-                            f.setFace(face, true);
-                            facesChanged = true;
-                        }
-                    }
-                    if (facesChanged) {
-                        data = BukkitBlockState.of(fData);
-                    }
+                if (B.isVineBlock(data)) {
+                    data = attachVineFaces(placer, data, xx, yy, zz);
                 }
 
                 if (listener != null) {
@@ -1150,12 +1125,11 @@ public class IrisObject extends IrisRegistrant {
                 }
 
                 PlatformBlockState existingState = placer.get(xx, yy, zz);
-                BlockData existingRaw = existingState == null ? null : (BlockData) existingState.nativeHandle();
-                BlockData rawData = (BlockData) data.nativeHandle();
-                boolean wouldReplace = BukkitBlockResolution.isSolid(existingRaw) && BukkitBlockResolution.isVineBlock(rawData);
-                boolean place = !rawData.getMaterial().equals(Material.AIR) && !rawData.getMaterial().equals(Material.CAVE_AIR) && !wouldReplace;
+                boolean wouldReplace = B.isSolid(existingState) && B.isVineBlock(data);
+                String material = materialKey(data);
+                boolean place = !material.equals("minecraft:air") && !material.equals("minecraft:cave_air") && !wouldReplace;
 
-                if (rawData instanceof IrisCustomData || place) {
+                if (data.isCustom() || place) {
                     placer.set(xx, yy, zz, data);
                     if (tile != null) {
                         placer.setTile(xx, yy, zz, tile);
@@ -1239,9 +1213,9 @@ public class IrisObject extends IrisRegistrant {
                 if (settings != null && settings.getPalette() != null) {
                     d = config.getStiltSettings().getPalette().get(rng, x, y, z, rdata);
                 } else {
-                    Material mat = ((BlockData) d.nativeHandle()).getMaterial();
-                    if (mat == Material.GRASS_BLOCK || mat == Material.MYCELIUM || mat == Material.PODZOL || mat == Material.DIRT_PATH) {
-                        d = BukkitBlockState.of(Material.DIRT.createBlockData());
+                    String mat = materialKey(d);
+                    if (mat.equals("minecraft:grass_block") || mat.equals("minecraft:mycelium") || mat.equals("minecraft:podzol") || mat.equals("minecraft:dirt_path")) {
+                        d = B.getState("minecraft:dirt");
                     }
                 }
 
@@ -1260,12 +1234,13 @@ public class IrisObject extends IrisRegistrant {
                 for (IrisObjectReplace j : config.getEdit()) {
                     if (rng.chance(j.getChance())) {
                         for (PlatformBlockState k : j.getFind(rdata)) {
-                            BlockData rawFind = (BlockData) k.nativeHandle();
-                            BlockData rawD = d == null ? null : (BlockData) d.nativeHandle();
-                            if (j.isExact() ? rawFind.matches(rawD) : rawFind.getMaterial().equals(rawD.getMaterial())) {
+                            if (d == null) {
+                                continue;
+                            }
+                            if (j.isExact() ? k.matches(d) : materialKey(k).equals(materialKey(d))) {
                                 PlatformBlockState newData = j.getReplace(rng, i.getX() + x, i.getY() + y, i.getZ() + z, rdata);
 
-                                if (((BlockData) newData.nativeHandle()).getMaterial() == rawD.getMaterial()) {
+                                if (materialKey(newData).equals(materialKey(d))) {
                                     d = BlockDataMergeSupport.merge(d, newData);
                                 } else {
                                     d = newData;
@@ -1275,7 +1250,7 @@ public class IrisObject extends IrisRegistrant {
                     }
                 }
 
-                if (d == null || !((BlockData) d.nativeHandle()).getMaterial().isOccluding())
+                if (d == null || !d.isOccluding())
                     continue;
 
                 xx = x + (int) Math.round(i.getX());
@@ -1344,10 +1319,8 @@ public class IrisObject extends IrisRegistrant {
 
                 int highest = placer.getHighest(xx, zz, getLoader(), true);
 
-                if (((BlockData) d.nativeHandle()) instanceof Waterlogged && shouldAutoWaterlogBlock(placer, config, yv, xx, highest, zz)) {
-                    BlockData waterlogged = ((BlockData) d.nativeHandle()).clone();
-                    ((Waterlogged) waterlogged).setWaterlogged(true);
-                    d = BukkitBlockState.of(waterlogged);
+                if (IrisProceduralBlocks.hasProperty(d, "waterlogged") && shouldAutoWaterlogBlock(placer, config, yv, xx, highest, zz)) {
+                    d = d.withProperty("waterlogged", "true");
                 }
 
                 int lowerBound = highest - 1;
@@ -1369,7 +1342,7 @@ public class IrisObject extends IrisRegistrant {
 
                 for (int j = lowest + y; j > lowerBound; j--) {
                     PlatformBlockState fluidState = placer.get(xx, j, zz);
-                    if (BukkitBlockResolution.isFluid(fluidState == null ? null : (BlockData) fluidState.nativeHandle())) {
+                    if (B.isFluid(fluidState)) {
                         break;
                     }
                     if (eroding) {
@@ -1385,21 +1358,8 @@ public class IrisObject extends IrisRegistrant {
                         }
                     }
 
-                    if (BukkitBlockResolution.isVineBlock((BlockData) d.nativeHandle())) {
-                        BlockData fData = ((BlockData) d.nativeHandle()).clone();
-                        MultipleFacing f = (MultipleFacing) fData;
-                        boolean facesChanged = false;
-                        for (BlockFace face : f.getAllowedFaces()) {
-                            PlatformBlockState facingState = placer.get(xx + face.getModX(), j + face.getModY(), zz + face.getModZ());
-                            BlockData facingBlock = facingState == null ? null : (BlockData) facingState.nativeHandle();
-                            if (BukkitBlockResolution.isSolid(facingBlock) && !BukkitBlockResolution.isVineBlock(facingBlock)) {
-                                f.setFace(face, true);
-                                facesChanged = true;
-                            }
-                        }
-                        if (facesChanged) {
-                            d = BukkitBlockState.of(fData);
-                        }
+                    if (B.isVineBlock(d)) {
+                        d = attachVineFaces(placer, d, xx, j, zz);
                     }
                     placer.set(xx, j, zz, d);
                 }
@@ -1499,7 +1459,7 @@ public class IrisObject extends IrisRegistrant {
                 targetY = Math.max(worldMin + 1, Math.min(worldMax, targetY));
                 if (targetY > origY) {
                     PlatformBlockState fill = complex != null ? complex.getRockStream().get(cx, cz) : null;
-                    if (fill == null || BukkitBlockResolution.isAir((BlockData) fill.nativeHandle())) {
+                    if (B.isAir(fill)) {
                         fill = States.STONE;
                     }
                     for (int yy = origY + 1; yy <= targetY; yy++) {
@@ -1569,8 +1529,22 @@ public class IrisObject extends IrisRegistrant {
             return false;
         }
 
-        BlockData raw = (BlockData) existing.nativeHandle();
-        return BukkitBlockResolution.isWater(raw) || BukkitBlockResolution.isWaterLogged(raw);
+        return B.isWater(existing) || B.isWaterLogged(existing);
+    }
+
+    private static PlatformBlockState attachVineFaces(IObjectPlacer placer, PlatformBlockState data, int x, int y, int z) {
+        PlatformBlockState result = data;
+        for (String face : IrisProceduralBlocks.FACE_PROPERTIES) {
+            if (!IrisProceduralBlocks.hasProperty(data, face)) {
+                continue;
+            }
+            int[] mod = IrisProceduralBlocks.faceOffset(face);
+            PlatformBlockState facing = placer.get(x + mod[0], y + mod[1], z + mod[2]);
+            if (B.isSolid(facing) && !B.isVineBlock(facing)) {
+                result = result.withProperty(face, "true");
+            }
+        }
+        return result;
     }
 
     public IrisObject rotateCopy(IrisObjectRotation rt) {
@@ -1709,7 +1683,7 @@ public class IrisObject extends IrisRegistrant {
                     if (IrisInterpolation.getTrilinear(x, y, z, rad, (xx, yy, zz) -> {
                         PlatformBlockState data = v.get(new IrisBlockVector((int) xx, (int) yy, (int) zz));
 
-                        if (data == null || ((BlockData) data.nativeHandle()).getMaterial().isAir()) {
+                        if (B.isAir(data)) {
                             return 0;
                         }
 
@@ -1740,7 +1714,7 @@ public class IrisObject extends IrisRegistrant {
                     if (IrisInterpolation.getTricubic(x, y, z, rad, (xx, yy, zz) -> {
                         PlatformBlockState data = v.get(new IrisBlockVector((int) xx, (int) yy, (int) zz));
 
-                        if (data == null || ((BlockData) data.nativeHandle()).getMaterial().isAir()) {
+                        if (B.isAir(data)) {
                             return 0;
                         }
 
@@ -1775,7 +1749,7 @@ public class IrisObject extends IrisRegistrant {
                     if (IrisInterpolation.getTrihermite(x, y, z, rad, (xx, yy, zz) -> {
                         PlatformBlockState data = v.get(new IrisBlockVector((int) xx, (int) yy, (int) zz));
 
-                        if (data == null || ((BlockData) data.nativeHandle()).getMaterial().isAir()) {
+                        if (B.isAir(data)) {
                             return 0;
                         }
 
@@ -1798,7 +1772,7 @@ public class IrisObject extends IrisRegistrant {
         readLock.lock();
         PlatformBlockState r = blocks.get(vv);
 
-        if (r != null && !((BlockData) r.nativeHandle()).getMaterial().isAir()) {
+        if (!B.isAir(r)) {
             return r;
         }
 
@@ -1807,7 +1781,7 @@ public class IrisObject extends IrisRegistrant {
         for (var entry : blocks) {
             PlatformBlockState dat = entry.getValue();
 
-            if (((BlockData) dat.nativeHandle()).getMaterial().isAir()) {
+            if (B.isAir(dat)) {
                 continue;
             }
 

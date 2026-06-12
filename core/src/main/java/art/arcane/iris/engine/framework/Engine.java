@@ -18,7 +18,6 @@
 
 package art.arcane.iris.engine.framework;
 
-import art.arcane.iris.platform.bukkit.BukkitBlockResolution;
 
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.engine.framework.render.RenderType;
@@ -42,7 +41,7 @@ import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.iris.util.project.context.IrisContext;
 import art.arcane.iris.util.common.data.DataProvider;
-import art.arcane.iris.util.common.data.IrisCustomData;
+import art.arcane.iris.util.common.data.B;
 import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.volmlib.util.documentation.ChunkCoordinates;
 import art.arcane.volmlib.util.function.Function2;
@@ -61,7 +60,6 @@ import art.arcane.volmlib.util.scheduling.ChronoLatch;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.iris.util.project.stream.ProceduralStream;
 import org.bukkit.World;
-import org.bukkit.block.data.BlockData;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.Color;
@@ -303,11 +301,10 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
             return;
         }
 
-        BlockData blockData = (BlockData) data.nativeHandle();
-        if (BukkitBlockResolution.isUpdatable(blockData)) {
+        if (B.isUpdatable(data)) {
             getMantle().updateBlock(x, y, z);
         }
-        if (blockData instanceof IrisCustomData) {
+        if (data.isCustom()) {
             getMantle().getMantle().flag(x >> 4, z >> 4, MantleFlag.CUSTOM_ACTIVE, true);
         }
     }

@@ -21,11 +21,11 @@ package art.arcane.iris.engine.object.ruin;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.object.IrisObject;
 import art.arcane.iris.engine.object.IrisProceduralBlocks;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.engine.object.IrisRuin;
 import art.arcane.iris.engine.object.tree.TreeFunctions;
 import art.arcane.iris.util.common.math.Vector3i;
 import art.arcane.volmlib.util.math.RNG;
-import org.bukkit.block.data.BlockData;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -148,11 +148,11 @@ public final class RuinGenerator {
         }
         int span = Math.max(1, maxY - minY);
 
-        Map<Vector3i, BlockData> blocks = new HashMap<>();
+        Map<Vector3i, PlatformBlockState> blocks = new HashMap<>();
         for (Map.Entry<Vector3i, RuinBlockCanvas.Cell> entry : canvas.cells().entrySet()) {
             Vector3i v = entry.getKey();
             RuinBlockCanvas.Cell cell = entry.getValue();
-            BlockData bd;
+            PlatformBlockState bd;
             if (cell.role() == RuinBlockCanvas.Role.ACCENT) {
                 bd = cell.accentData();
             } else {
@@ -166,7 +166,7 @@ public final class RuinGenerator {
         return IrisProceduralBlocks.assemble(blocks);
     }
 
-    private static BlockData structuralBlock(IrisRuin ruin, RuinBlockCanvas.Cell cell, Vector3i v, IrisData data, RNG paletteRng, double scale, double mossiness, long weatherSeed, int minY, int span) {
+    private static PlatformBlockState structuralBlock(IrisRuin ruin, RuinBlockCanvas.Cell cell, Vector3i v, IrisData data, RNG paletteRng, double scale, double mossiness, long weatherSeed, int minY, int span) {
         boolean weathered = false;
         if (mossiness > 0.0) {
             int sx = (int) Math.round(v.getBlockX() * scale);
@@ -179,7 +179,7 @@ public final class RuinGenerator {
         }
 
         if (weathered) {
-            BlockData wd = IrisProceduralBlocks.resolve(ruin.getWeatheredBlock(), ruin.getWeatheringPalette(), data, v.getBlockX(), v.getBlockY(), v.getBlockZ(), paletteRng);
+            PlatformBlockState wd = IrisProceduralBlocks.resolve(ruin.getWeatheredBlock(), ruin.getWeatheringPalette(), data, v.getBlockX(), v.getBlockY(), v.getBlockZ(), paletteRng);
             if (wd != null) {
                 return wd;
             }

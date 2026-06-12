@@ -23,6 +23,7 @@ import art.arcane.iris.engine.object.IrisObject;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.util.project.matter.slices.EntityMatter;
 import art.arcane.iris.util.project.matter.slices.IdentifierMatter;
+import art.arcane.iris.util.project.matter.slices.PlatformBlockMatter;
 import art.arcane.iris.util.project.matter.slices.SpawnerMatter;
 import art.arcane.iris.util.project.matter.slices.TileMatter;
 import art.arcane.volmlib.util.matter.IrisMatter;
@@ -59,6 +60,7 @@ public final class IrisMatterSupport {
 
         IrisMatter.registerSliceType(new EntityMatter());
         IrisMatter.registerSliceType(new IdentifierMatter());
+        IrisMatter.registerSliceType(new PlatformBlockMatter());
         IrisMatter.registerSliceType(new SpawnerMatter());
         IrisMatter.registerSliceType(new TileMatter());
         registered = true;

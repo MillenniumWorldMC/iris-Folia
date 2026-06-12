@@ -41,6 +41,10 @@ public class B {
         return state != null && state.isSolid();
     }
 
+    public static boolean isOccluding(PlatformBlockState state) {
+        return state != null && state.isOccluding();
+    }
+
     public static boolean isFluid(PlatformBlockState state) {
         return state != null && state.isFluid();
     }

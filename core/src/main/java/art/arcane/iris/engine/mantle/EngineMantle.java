@@ -45,9 +45,7 @@ import art.arcane.volmlib.util.matter.Matter;
 import art.arcane.volmlib.util.matter.slices.UpdateMatter;
 import art.arcane.iris.util.common.parallel.MultiBurst;
 import art.arcane.iris.util.common.scheduling.J;
-import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.spi.PlatformBlockState;
-import org.bukkit.block.data.BlockData;
 import org.jetbrains.annotations.UnmodifiableView;
 
 import java.util.List;
@@ -119,10 +117,10 @@ public interface EngineMantle extends MatterGenerator {
     }
 
     default PlatformBlockState get(int x, int y, int z) {
-        BlockData block = getMantle().get(x, y, z, BlockData.class);
+        PlatformBlockState block = getMantle().get(x, y, z, PlatformBlockState.class);
         if (block == null)
             return AIR;
-        return BukkitBlockState.of(block);
+        return block;
     }
 
     default boolean isPreventingDecay() {
@@ -209,14 +207,14 @@ public interface EngineMantle extends MatterGenerator {
                     int rawUpper = upperCtx.getUpperSurfaceY(worldX, worldZ);
                     upperYs[i] = Math.max(rawUpper, he + gap);
                 }
-                chunk.iterate(BlockData.class, (lx, y, lz, value) -> {
+                chunk.iterate(PlatformBlockState.class, (lx, y, lz, value) -> {
                     int colIdx = (lx << 4) | (lz & 15);
                     if (y < upperYs[colIdx]) {
-                        blocks.set(lx, y, lz, BukkitBlockState.of(value));
+                        blocks.set(lx, y, lz, value);
                     }
                 });
             } else {
-                chunk.iterate(BlockData.class, (lx, y, lz, value) -> blocks.set(lx, y, lz, BukkitBlockState.of(value)));
+                chunk.iterate(PlatformBlockState.class, (lx, y, lz, value) -> blocks.set(lx, y, lz, value));
             }
         } finally {
             chunk.release();
@@ -276,7 +274,7 @@ public interface EngineMantle extends MatterGenerator {
         MantleChunk<Matter> chunk = getMantle().getChunk(x, z).use();
         try {
             chunk.raiseFlagUnchecked(MantleFlag.CLEANED, () -> {
-                chunk.deleteSlices(BlockData.class);
+                chunk.deleteSlices(PlatformBlockState.class);
                 chunk.deleteSlices(String.class);
                 chunk.deleteSlices(TileWrapper.class);
                 chunk.deleteSlices(Identifier.class);
@@ -295,7 +293,7 @@ public interface EngineMantle extends MatterGenerator {
         MantleChunk<Matter> chunk = getMantle().getChunk(x, z).use();
         try {
             chunk.raiseFlagUnchecked(MantleFlag.CLEANED, () -> {
-                chunk.deleteSlices(BlockData.class);
+                chunk.deleteSlices(PlatformBlockState.class);
                 chunk.deleteSlices(TileWrapper.class);
                 chunk.deleteSlices(Identifier.class);
                 chunk.deleteSlices(UpdateMatter.class);

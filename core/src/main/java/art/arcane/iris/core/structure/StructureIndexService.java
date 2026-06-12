@@ -21,6 +21,7 @@ package art.arcane.iris.core.structure;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.nms.INMS;
+import art.arcane.iris.util.project.matter.IrisMatterSupport;
 import art.arcane.volmlib.util.collection.KList;
 import com.google.gson.GsonBuilder;
 
@@ -37,12 +38,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class StructureIndexService {
     private static final Set<String> GENERATED = ConcurrentHashMap.newKeySet();
+    private static final boolean BUKKIT_PRESENT = IrisMatterSupport.isBukkitPresent();
 
     private StructureIndexService() {
     }
 
     public static File writeOnce(IrisData data) {
-        if (data == null) {
+        if (!BUKKIT_PRESENT || data == null) {
             return null;
         }
 

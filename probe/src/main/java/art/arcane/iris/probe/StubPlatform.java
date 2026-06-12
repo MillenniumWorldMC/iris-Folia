@@ -89,6 +89,16 @@ public final class StubPlatform implements IrisPlatform {
         }
 
         @Override
+        public boolean isOccluding() {
+            return isSolid();
+        }
+
+        @Override
+        public boolean isCustom() {
+            return false;
+        }
+
+        @Override
         public boolean isFluid() {
             return false;
         }

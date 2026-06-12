@@ -21,10 +21,9 @@ package art.arcane.iris.engine.object.tree;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.object.IrisObject;
 import art.arcane.iris.engine.object.IrisProceduralTree;
-import art.arcane.iris.platform.bukkit.BukkitBlockState;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.math.IrisBlockVector;
 import art.arcane.volmlib.util.math.RNG;
-import org.bukkit.block.data.BlockData;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -64,16 +63,16 @@ public final class ProceduralTreeGenerator {
             TreeSupport.ensureLeavesSupported(canvas, 24);
         }
 
-        Map<TreeBlockCanvas.Vec, BlockData> resolved = new HashMap<>();
+        Map<TreeBlockCanvas.Vec, PlatformBlockState> resolved = new HashMap<>();
         Set<TreeBlockCanvas.Vec> trunkPositions = new HashSet<>();
         Set<TreeBlockCanvas.Vec> leafPositions = new HashSet<>();
         for (Map.Entry<TreeBlockCanvas.Vec, TreeBlockCanvas.Cell> entry : canvas.getCells().entrySet()) {
             TreeBlockCanvas.Cell cell = entry.getValue();
-            BlockData bd = TreeBlockResolver.resolve(tree, data, cell, entry.getKey());
-            if (bd == null) {
+            PlatformBlockState state = TreeBlockResolver.resolve(tree, data, cell, entry.getKey());
+            if (state == null) {
                 continue;
             }
-            resolved.put(entry.getKey(), bd);
+            resolved.put(entry.getKey(), state);
             if (cell.role() == TreeBlockCanvas.Role.TRUNK || cell.role() == TreeBlockCanvas.Role.SECONDARY_TRUNK) {
                 trunkPositions.add(entry.getKey());
             } else if (cell.role() == TreeBlockCanvas.Role.LEAF || cell.role() == TreeBlockCanvas.Role.SECONDARY_LEAF) {
@@ -86,7 +85,7 @@ public final class ProceduralTreeGenerator {
         return assemble(resolved);
     }
 
-    private static IrisObject assemble(Map<TreeBlockCanvas.Vec, BlockData> resolved) {
+    private static IrisObject assemble(Map<TreeBlockCanvas.Vec, PlatformBlockState> resolved) {
         if (resolved.isEmpty()) {
             return null;
         }
@@ -114,12 +113,12 @@ public final class ProceduralTreeGenerator {
         int cz = d / 2;
 
         IrisObject object = new IrisObject(w, h, d);
-        for (Map.Entry<TreeBlockCanvas.Vec, BlockData> entry : resolved.entrySet()) {
+        for (Map.Entry<TreeBlockCanvas.Vec, PlatformBlockState> entry : resolved.entrySet()) {
             TreeBlockCanvas.Vec v = entry.getKey();
             int nx = v.x() - minX - cx;
             int ny = v.y() - cy + 1;
             int nz = v.z() - minZ - cz;
-            object.getBlocks().put(new IrisBlockVector(nx, ny, nz), BukkitBlockState.of(entry.getValue()));
+            object.getBlocks().put(new IrisBlockVector(nx, ny, nz), entry.getValue());
         }
 
         return object;

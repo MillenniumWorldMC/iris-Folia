@@ -187,7 +187,7 @@ public class IrisCrystal implements IrisProceduralPlacement {
 
     public IrisObject getVariantObject(IrisData data, RNG rng) {
         KList<IrisObject> baked = getVariantObjects(data);
-        if (baked.isEmpty()) {
+        if (baked == null || baked.isEmpty()) {
             return null;
         }
         return baked.get(rng.i(baked.size()));

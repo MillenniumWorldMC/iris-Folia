@@ -18,8 +18,6 @@
 
 package art.arcane.iris.engine.object;
 
-import art.arcane.iris.platform.bukkit.BukkitBlockResolution;
-
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.object.annotations.Desc;
@@ -31,11 +29,9 @@ import art.arcane.volmlib.util.collection.KMap;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.spi.PlatformBlockState;
+import art.arcane.iris.util.common.data.B;
 import lombok.experimental.Accessors;
-import org.bukkit.Material;
-import org.bukkit.block.data.BlockData;
 
 @Snippet("deposit-variant")
 @Accessors(chain = true)
@@ -44,7 +40,7 @@ import org.bukkit.block.data.BlockData;
 @Desc("Remaps ore block ids to alternate block ids within a vertical band. Ores declared at dimension, region, and biome scope can be rewritten at placement time (for example, iron_ore -> deepslate_iron_ore inside a deep carving band, or yourmod:iron -> yourmod:moon_iron inside a lunar biome).")
 @Data
 public class IrisDepositVariant {
-    private final transient AtomicCache<KMap<Material, BlockData>> resolved = new AtomicCache<>();
+    private final transient AtomicCache<KMap<String, PlatformBlockState>> resolved = new AtomicCache<>();
 
     @Required
     @MinNumber(-2048)
@@ -67,23 +63,22 @@ public class IrisDepositVariant {
             return null;
         }
 
-        KMap<Material, BlockData> map = resolved.aquire(() -> buildResolved(rdata));
-        BlockData target = map.get(((BlockData) ore.nativeHandle()).getMaterial());
-        return target == null ? null : BukkitBlockState.of(target);
+        KMap<String, PlatformBlockState> map = resolved.aquire(() -> buildResolved(rdata));
+        return map.get(IrisProceduralBlocks.materialKey(ore));
     }
 
-    private KMap<Material, BlockData> buildResolved(IrisData rdata) {
-        KMap<Material, BlockData> out = new KMap<>();
+    private KMap<String, PlatformBlockState> buildResolved(IrisData rdata) {
+        KMap<String, PlatformBlockState> out = new KMap<>();
 
         for (java.util.Map.Entry<String, String> entry : remap.entrySet()) {
-            BlockData source = BukkitBlockResolution.getOrNull(entry.getKey(), false);
-            BlockData target = BukkitBlockResolution.getOrNull(entry.getValue(), true);
+            PlatformBlockState source = B.getStateOrNull(entry.getKey(), false);
+            PlatformBlockState target = B.getStateOrNull(entry.getValue(), true);
 
             if (source == null || target == null) {
                 continue;
             }
 
-            out.put(source.getMaterial(), target);
+            out.put(IrisProceduralBlocks.materialKey(source), target);
         }
 
         return out;

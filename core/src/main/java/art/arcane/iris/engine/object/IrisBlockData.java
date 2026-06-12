@@ -146,18 +146,13 @@ public class IrisBlockData extends IrisRegistrant {
     public PlatformBlockState getBlockData(IrisData data) {
         return blockdata.aquire(() ->
         {
-            BlockData b = null;
-
             IrisBlockData customData = data.getBlockLoader().load(getBlock(), false);
 
             if (customData != null) {
                 PlatformBlockState customState = customData.getBlockData(data);
-                b = customState == null ? null : (BlockData) customState.nativeHandle();
 
-                if (b != null) {
-                    b = b.clone();
-
-                    String st = b.getAsString(true);
+                if (customState != null) {
+                    String st = customState.key();
 
                     if (st.contains("[")) {
                         st = st.split("\\Q[\\E")[0];
@@ -175,27 +170,25 @@ public class IrisBlockData extends IrisRegistrant {
                         IrisLogging.debug("Block Data used " + sx + " (CUSTOM)");
                     }
 
-                    BlockData bx = BukkitBlockResolution.get(sx);
+                    PlatformBlockState bx = B.getState(sx);
 
                     if (bx != null) {
-                        return BukkitBlockState.of(bx);
+                        return bx;
                     }
 
-                    if (b != null) {
-                        return BukkitBlockState.of(b);
-                    }
+                    return customState;
                 }
             }
 
             String ss = keyify(getBlock()) + computeProperties();
-            b = BukkitBlockResolution.get(ss);
+            PlatformBlockState resolved = B.getState(ss);
 
             if (debug) {
                 IrisLogging.debug("Block Data used " + ss);
             }
 
-            if (b != null) {
-                return BukkitBlockState.of(b);
+            if (resolved != null) {
+                return resolved;
             }
 
             if (backup != null) {

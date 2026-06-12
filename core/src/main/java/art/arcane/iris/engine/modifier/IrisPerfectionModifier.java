@@ -18,18 +18,15 @@
 
 package art.arcane.iris.engine.modifier;
 
-import art.arcane.iris.platform.bukkit.BukkitBlockResolution;
-
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineAssignedModifier;
+import art.arcane.iris.engine.object.IrisProceduralBlocks;
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.iris.util.common.parallel.BurstExecutor;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
 import art.arcane.iris.spi.PlatformBlockState;
-import org.bukkit.block.data.Bisected;
-import org.bukkit.block.data.BlockData;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -111,8 +108,7 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<PlatformBlock
 
                         for (int k = top; k >= 0; k--) {
                             PlatformBlockState b = output.get(finalI, k, j);
-                            BlockData rawB = unwrap(b);
-                            boolean now = b != null && !(BukkitBlockResolution.isAir(rawB) || BukkitBlockResolution.isFluid(rawB));
+                            boolean now = b != null && !(B.isAir(b) || B.isFluid(b));
 
                             if (now != inside) {
                                 inside = now;
@@ -135,17 +131,16 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<PlatformBlock
                             boolean remove = false;
                             boolean remove2 = false;
 
-                            BlockData rawTip = (BlockData) tip.nativeHandle();
-                            if (BukkitBlockResolution.isDecorant(rawTip)) {
-                                BlockData bel = unwrap(output.get(finalI, k - 1, j));
+                            if (B.isDecorant(tip)) {
+                                PlatformBlockState bel = output.get(finalI, k - 1, j);
 
                                 if (bel == null) {
                                     remove = true;
-                                } else if (!BukkitBlockResolution.canPlaceOnto(rawTip.getMaterial(), bel.getMaterial())) {
+                                } else if (!B.canPlaceOnto(tip, bel)) {
                                     remove = true;
-                                } else if (bel instanceof Bisected) {
-                                    BlockData bb = unwrap(output.get(finalI, k - 2, j));
-                                    if (bb == null || !BukkitBlockResolution.canPlaceOnto(bel.getMaterial(), bb.getMaterial())) {
+                                } else if (IrisProceduralBlocks.hasProperty(bel, "half")) {
+                                    PlatformBlockState bb = output.get(finalI, k - 2, j);
+                                    if (bb == null || !B.canPlaceOnto(bel, bb)) {
                                         remove = true;
                                         remove2 = true;
                                     }
@@ -199,17 +194,12 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<PlatformBlock
             PlatformBlockState b = output.get(x, i, z);
 
             if (b != null) {
-                BlockData rawB = (BlockData) b.nativeHandle();
-                if (!BukkitBlockResolution.isAir(rawB) && !BukkitBlockResolution.isFluid(rawB)) {
+                if (!B.isAir(b) && !B.isFluid(b)) {
                     return i;
                 }
             }
         }
 
         return 0;
-    }
-
-    private static BlockData unwrap(PlatformBlockState state) {
-        return state == null ? null : (BlockData) state.nativeHandle();
     }
 }
