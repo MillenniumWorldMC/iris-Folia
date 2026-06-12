@@ -66,6 +66,7 @@ public final class ModdedObjectCommands {
     private static final double TARGET_RANGE = 256.0D;
 
     private static final SuggestionProvider<CommandSourceStack> OBJECT_KEYS = (CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) -> {
+        ModdedCommandFeedback.tab(context.getSource());
         try {
             Engine engine = IrisModdedCommands.engineFor(context.getSource().getLevel());
             if (engine != null) {
@@ -88,13 +89,17 @@ public final class ModdedObjectCommands {
         SHIFT
     }
 
-    public static LiteralArgumentBuilder<CommandSourceStack> tree() {
+    public static LiteralArgumentBuilder<CommandSourceStack> tree(String name) {
         ModdedObjectUndo.init();
-        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("object").requires(GATE);
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal(name).requires(GATE);
+
+        root.executes((CommandContext<CommandSourceStack> context) -> ModdedCommandHelp.send(context.getSource(), name));
 
         root.then(Commands.literal("wand")
                 .executes((CommandContext<CommandSourceStack> context) -> giveWand(context.getSource())));
         root.then(Commands.literal("dust")
+                .executes((CommandContext<CommandSourceStack> context) -> giveDust(context.getSource())));
+        root.then(Commands.literal("d")
                 .executes((CommandContext<CommandSourceStack> context) -> giveDust(context.getSource())));
 
         root.then(Commands.literal("save")
@@ -108,6 +113,7 @@ public final class ModdedObjectCommands {
 
         root.then(resizeTree("expand", ResizeOp.EXPAND));
         root.then(resizeTree("contract", ResizeOp.CONTRACT));
+        root.then(resizeTree("-", ResizeOp.CONTRACT));
         root.then(resizeTree("shift", ResizeOp.SHIFT));
 
         root.then(Commands.literal("xpy")
@@ -120,7 +126,9 @@ public final class ModdedObjectCommands {
                 .executes((CommandContext<CommandSourceStack> context) -> autoSelect(context.getSource(), true)));
 
         root.then(positionTree("position1", true));
+        root.then(positionTree("p1", true));
         root.then(positionTree("position2", false));
+        root.then(positionTree("p2", false));
 
         root.then(Commands.literal("analyze")
                 .then(Commands.argument("key", StringArgumentType.greedyString()).suggests(OBJECT_KEYS)
@@ -131,6 +139,10 @@ public final class ModdedObjectCommands {
                         .executes((CommandContext<CommandSourceStack> context) -> shrink(context.getSource(), StringArgumentType.getString(context, "key")))));
 
         root.then(Commands.literal("undo")
+                .executes((CommandContext<CommandSourceStack> context) -> undo(context.getSource(), 1))
+                .then(Commands.argument("amount", IntegerArgumentType.integer(1, 32))
+                        .executes((CommandContext<CommandSourceStack> context) -> undo(context.getSource(), IntegerArgumentType.getInteger(context, "amount")))));
+        root.then(Commands.literal("u")
                 .executes((CommandContext<CommandSourceStack> context) -> undo(context.getSource(), 1))
                 .then(Commands.argument("amount", IntegerArgumentType.integer(1, 32))
                         .executes((CommandContext<CommandSourceStack> context) -> undo(context.getSource(), IntegerArgumentType.getInteger(context, "amount")))));

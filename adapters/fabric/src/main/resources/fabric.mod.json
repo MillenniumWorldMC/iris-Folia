@@ -3,7 +3,7 @@
   "id": "irisworldgen",
   "version": "${version}",
   "name": "Iris",
-  "description": "Iris World Generation Engine (Fabric adapter - native chunk generator, overworld override datapack, engine lifecycle)",
+  "description": "Iris World Generation Engine (Fabric adapter - native chunk generator, explicit Iris world datapack workflow, engine lifecycle)",
   "authors": ["Arcane Arts (Volmit Software)"],
   "contact": {
     "sources": "https://github.com/VolmitSoftware/Iris"

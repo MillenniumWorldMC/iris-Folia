@@ -22,6 +22,7 @@ import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineAssignedActuator;
 import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisBiomeCustom;
+import art.arcane.iris.platform.bukkit.BukkitBiome;
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.iris.util.project.hunk.Hunk;
@@ -53,13 +54,25 @@ public class IrisBiomeActuator extends EngineAssignedActuator<PlatformBiome> {
                 for (int zf = 0; zf < h.getDepth(); zf++) {
                     ib = context.getBiome().get(xf, zf);
                     MatterBiomeInject matter;
+                    PlatformBiome biome;
 
                     if (ib.isCustom()) {
                         IrisBiomeCustom custom = ib.getCustomBiome(rng, x, 0, z);
-                        matter = BiomeInjectMatter.get(IrisPlatforms.get().biomeWriter().biomeIdFor(getDimension().getLoadKey() + ":" + custom.getId()));
+                        String key = getDimension().getLoadKey() + ":" + custom.getId();
+                        biome = IrisPlatforms.get().registries().biome(key);
+                        matter = BiomeInjectMatter.get(IrisPlatforms.get().biomeWriter().biomeIdFor(key));
                     } else {
                         Biome v = ib.getSkyBiome(rng, x, 0, z);
+                        PlatformBiome fallback = BukkitBiome.of(v);
+                        PlatformBiome resolved = IrisPlatforms.get().registries().biome(fallback.key());
+                        biome = resolved == null ? fallback : resolved;
                         matter = BiomeInjectMatter.get(v);
+                    }
+
+                    if (biome != null) {
+                        for (int yf = 0; yf < h.getHeight(); yf++) {
+                            h.set(xf, yf, zf, biome);
+                        }
                     }
 
                     getEngine().getMantle().getMantle().set(x + xf, 0, z + zf, matter);

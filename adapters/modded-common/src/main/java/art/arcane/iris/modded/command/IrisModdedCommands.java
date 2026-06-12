@@ -38,12 +38,12 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -74,14 +74,24 @@ public final class IrisModdedCommands {
     private static final SuggestionProvider<CommandSourceStack> OBJECT_KEYS = (CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) -> suggestObjectKeys(context, builder);
     private static final SuggestionProvider<CommandSourceStack> STRUCTURE_KEYS = (CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) -> suggestStructureKeys(context, builder);
     private static final SuggestionProvider<CommandSourceStack> POI_TYPES = (CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) -> SharedSuggestionProvider.suggest(List.of("buried_treasure"), builder);
-    static final SuggestionProvider<CommandSourceStack> PACK_NAMES = (CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) -> suggestPackNames(builder);
+    static final SuggestionProvider<CommandSourceStack> PACK_NAMES = (CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) -> suggestPackNames(context, builder);
     private static final SuggestionProvider<CommandSourceStack> DIMENSION_NAMES = (CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) -> suggestDimensionNames(context, builder);
 
     private IrisModdedCommands() {
     }
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        LiteralCommandNode<CommandSourceStack> root = dispatcher.register(rootTree());
+        dispatcher.register(Commands.literal("ir").redirect(root));
+        dispatcher.register(Commands.literal("irs").redirect(root));
+        LOGGER.info("Iris /iris command tree registered");
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> rootTree() {
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("iris");
+
+        root.executes((CommandContext<CommandSourceStack> context) -> ModdedCommandHelp.send(context.getSource(), ""));
+        root.then(helpTree());
 
         root.then(Commands.literal("version")
                 .executes((CommandContext<CommandSourceStack> context) -> version(context.getSource())));
@@ -100,40 +110,74 @@ public final class IrisModdedCommands {
         root.then(Commands.literal("seed").requires(GATE)
                 .executes((CommandContext<CommandSourceStack> context) -> seed(context.getSource())));
 
-        root.then(goldenhashTree());
+        root.then(goldenhashTree("goldenhash"));
+        root.then(goldenhashTree("gold"));
 
-        root.then(Commands.literal("download").requires(GATE)
-                .then(Commands.argument("pack", StringArgumentType.word()).suggests(PACK_NAMES)
-                        .executes((CommandContext<CommandSourceStack> context) -> download(context.getSource(), StringArgumentType.getString(context, "pack"), "master"))
-                        .then(Commands.argument("branch", StringArgumentType.word())
-                                .executes((CommandContext<CommandSourceStack> context) -> download(context.getSource(), StringArgumentType.getString(context, "pack"), StringArgumentType.getString(context, "branch"))))));
+        root.then(downloadTree("download"));
+        root.then(downloadTree("dl"));
 
-        root.then(Commands.literal("metrics").requires(GATE)
-                .executes((CommandContext<CommandSourceStack> context) -> metrics(context.getSource())));
+        root.then(metricsTree("metrics"));
+        root.then(metricsTree("measure"));
 
-        root.then(Commands.literal("regen").requires(GATE)
-                .executes((CommandContext<CommandSourceStack> context) -> regen(context.getSource(), 0))
-                .then(Commands.argument("radius", IntegerArgumentType.integer(0, 64))
-                        .executes((CommandContext<CommandSourceStack> context) -> regen(context.getSource(), IntegerArgumentType.getInteger(context, "radius")))));
+        root.then(regenTree("regen"));
+        root.then(regenTree("rg"));
 
-        root.then(pregenTree());
+        root.then(pregenTree("pregen"));
+        root.then(pregenTree("pregenerate"));
 
         root.then(Commands.literal("wand").requires(GATE)
                 .executes((CommandContext<CommandSourceStack> context) -> ModdedObjectCommands.giveWand(context.getSource())));
-        root.then(ModdedObjectCommands.tree());
+        root.then(ModdedObjectCommands.tree("object"));
+        root.then(ModdedObjectCommands.tree("o"));
         root.then(editTree());
 
-        root.then(ModdedStudioCommands.tree());
-        root.then(ModdedPackCommands.tree());
-        root.then(ModdedDatapackCommands.tree());
-        root.then(ModdedStructureCommands.tree());
+        root.then(ModdedStudioCommands.tree("studio"));
+        root.then(ModdedStudioCommands.tree("std"));
+        root.then(ModdedStudioCommands.tree("s"));
+        root.then(ModdedPackCommands.tree("pack"));
+        root.then(ModdedPackCommands.tree("pk"));
+        root.then(ModdedWorldCommands.tree("world"));
+        root.then(ModdedWorldCommands.tree("w"));
+        root.then(ModdedDatapackCommands.tree("datapack"));
+        root.then(ModdedDatapackCommands.tree("datapacks"));
+        root.then(ModdedDatapackCommands.tree("dp"));
+        root.then(ModdedStructureCommands.tree("structure"));
+        root.then(ModdedStructureCommands.tree("struct"));
+        root.then(ModdedStructureCommands.tree("str"));
 
-        dispatcher.register(root);
-        LOGGER.info("Iris /iris command tree registered");
+        return root;
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> helpTree() {
+        return Commands.literal("help")
+                .executes((CommandContext<CommandSourceStack> context) -> ModdedCommandHelp.send(context.getSource(), ""))
+                .then(Commands.argument("section", StringArgumentType.greedyString())
+                        .executes((CommandContext<CommandSourceStack> context) -> ModdedCommandHelp.send(context.getSource(), StringArgumentType.getString(context, "section"))));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> downloadTree(String name) {
+        return Commands.literal(name).requires(GATE)
+                .then(Commands.argument("pack", StringArgumentType.word()).suggests(PACK_NAMES)
+                        .executes((CommandContext<CommandSourceStack> context) -> download(context.getSource(), StringArgumentType.getString(context, "pack"), "stable"))
+                        .then(Commands.argument("branch", StringArgumentType.word())
+                                .executes((CommandContext<CommandSourceStack> context) -> download(context.getSource(), StringArgumentType.getString(context, "pack"), StringArgumentType.getString(context, "branch")))));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> metricsTree(String name) {
+        return Commands.literal(name).requires(GATE)
+                .executes((CommandContext<CommandSourceStack> context) -> metrics(context.getSource()));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> regenTree(String name) {
+        return Commands.literal(name).requires(GATE)
+                .executes((CommandContext<CommandSourceStack> context) -> regen(context.getSource(), 0))
+                .then(Commands.argument("radius", IntegerArgumentType.integer(0, 64))
+                        .executes((CommandContext<CommandSourceStack> context) -> regen(context.getSource(), IntegerArgumentType.getInteger(context, "radius"))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> gotoTree(String name) {
         return Commands.literal(name).requires(GATE)
+                .executes((CommandContext<CommandSourceStack> context) -> ModdedCommandHelp.send(context.getSource(), name))
                 .then(Commands.literal("biome")
                         .then(Commands.argument("key", StringArgumentType.greedyString()).suggests(BIOME_KEYS)
                                 .executes((CommandContext<CommandSourceStack> context) -> gotoBiome(context.getSource(), StringArgumentType.getString(context, "key")))))
@@ -151,8 +195,9 @@ public final class IrisModdedCommands {
                                 .executes((CommandContext<CommandSourceStack> context) -> gotoPoi(context.getSource(), StringArgumentType.getString(context, "type")))));
     }
 
-    private static LiteralArgumentBuilder<CommandSourceStack> pregenTree() {
-        return Commands.literal("pregen").requires(GATE)
+    private static LiteralArgumentBuilder<CommandSourceStack> pregenTree(String name) {
+        return Commands.literal(name).requires(GATE)
+                .executes((CommandContext<CommandSourceStack> context) -> ModdedCommandHelp.send(context.getSource(), name))
                 .then(Commands.literal("start")
                         .then(Commands.argument("radius", IntegerArgumentType.integer(1, 100000))
                                 .executes((CommandContext<CommandSourceStack> context) -> pregenStart(context.getSource(), IntegerArgumentType.getInteger(context, "radius"), 0, 0))
@@ -164,14 +209,18 @@ public final class IrisModdedCommands {
                                                         IntegerArgumentType.getInteger(context, "z")))))))
                 .then(Commands.literal("stop")
                         .executes((CommandContext<CommandSourceStack> context) -> pregenStop(context.getSource())))
+                .then(Commands.literal("x")
+                        .executes((CommandContext<CommandSourceStack> context) -> pregenStop(context.getSource())))
                 .then(Commands.literal("pause")
+                        .executes((CommandContext<CommandSourceStack> context) -> pregenPause(context.getSource())))
+                .then(Commands.literal("resume")
                         .executes((CommandContext<CommandSourceStack> context) -> pregenPause(context.getSource())))
                 .then(Commands.literal("status")
                         .executes((CommandContext<CommandSourceStack> context) -> pregenStatus(context.getSource())));
     }
 
-    private static LiteralArgumentBuilder<CommandSourceStack> goldenhashTree() {
-        LiteralArgumentBuilder<CommandSourceStack> radiusAndThreads = Commands.literal("goldenhash").requires(GATE)
+    private static LiteralArgumentBuilder<CommandSourceStack> goldenhashTree(String name) {
+        LiteralArgumentBuilder<CommandSourceStack> radiusAndThreads = Commands.literal(name).requires(GATE)
                 .executes((CommandContext<CommandSourceStack> context) -> goldenhash(context.getSource(), 8, 8, ModdedGoldenHash.Mode.AUTO));
         attachModes(radiusAndThreads, (CommandContext<CommandSourceStack> context) -> 8, (CommandContext<CommandSourceStack> context) -> 8);
 
@@ -617,6 +666,7 @@ public final class IrisModdedCommands {
     }
 
     private static CompletableFuture<Suggestions> suggestBiomeKeys(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        ModdedCommandFeedback.tab(context.getSource());
         try {
             Engine engine = engineFor(context.getSource().getLevel());
             if (engine != null) {
@@ -628,6 +678,7 @@ public final class IrisModdedCommands {
     }
 
     private static CompletableFuture<Suggestions> suggestRegionKeys(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        ModdedCommandFeedback.tab(context.getSource());
         try {
             Engine engine = engineFor(context.getSource().getLevel());
             if (engine != null) {
@@ -639,6 +690,7 @@ public final class IrisModdedCommands {
     }
 
     private static CompletableFuture<Suggestions> suggestObjectKeys(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        ModdedCommandFeedback.tab(context.getSource());
         try {
             Engine engine = engineFor(context.getSource().getLevel());
             if (engine != null) {
@@ -650,6 +702,7 @@ public final class IrisModdedCommands {
     }
 
     private static CompletableFuture<Suggestions> suggestStructureKeys(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        ModdedCommandFeedback.tab(context.getSource());
         try {
             Engine engine = engineFor(context.getSource().getLevel());
             if (engine != null) {
@@ -660,7 +713,8 @@ public final class IrisModdedCommands {
         return builder.buildFuture();
     }
 
-    private static CompletableFuture<Suggestions> suggestPackNames(SuggestionsBuilder builder) {
+    private static CompletableFuture<Suggestions> suggestPackNames(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        ModdedCommandFeedback.tab(context.getSource());
         List<String> names = new ArrayList<>();
         names.add("overworld");
         try {
@@ -679,6 +733,7 @@ public final class IrisModdedCommands {
     }
 
     private static CompletableFuture<Suggestions> suggestDimensionNames(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        ModdedCommandFeedback.tab(context.getSource());
         List<String> names = new ArrayList<>();
         for (ServerLevel level : context.getSource().getServer().getAllLevels()) {
             if (level.getChunkSource().getGenerator() instanceof IrisModdedChunkGenerator) {
@@ -689,10 +744,10 @@ public final class IrisModdedCommands {
     }
 
     static void ok(CommandSourceStack source, String message) {
-        source.sendSuccess(() -> Component.literal(message), false);
+        ModdedCommandFeedback.ok(source, message);
     }
 
     static void fail(CommandSourceStack source, String message) {
-        source.sendFailure(Component.literal(message));
+        ModdedCommandFeedback.fail(source, message);
     }
 }

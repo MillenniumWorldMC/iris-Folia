@@ -51,7 +51,6 @@ public final class IrisForgeBootstrap {
 
     public IrisForgeBootstrap(FMLJavaModLoadingContext context) {
         ModdedEngineBootstrap.initialize(new ForgeModdedLoader());
-        art.arcane.iris.modded.ModdedPackInstaller.ensureDefaultPack(ModdedEngineBootstrap.loader().configDir());
         String modVersion = ModList.getModContainerById("irisworldgen")
             .map((ModContainer container) -> container.getModInfo().getVersion().toString())
             .orElse("unknown");

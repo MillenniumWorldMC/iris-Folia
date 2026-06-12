@@ -72,7 +72,7 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
     private static final Logger LOGGER = LoggerFactory.getLogger("Iris");
     public static final MapCodec<IrisModdedChunkGenerator> CODEC = RecordCodecBuilder.mapCodec((RecordCodecBuilder.Instance<IrisModdedChunkGenerator> instance) -> instance.group(
             BiomeSource.CODEC.fieldOf("biome_source").forGetter((IrisModdedChunkGenerator generator) -> generator.biomeSource),
-            Codec.STRING.optionalFieldOf("dimension", "overworld").forGetter((IrisModdedChunkGenerator generator) -> generator.dimensionKey)
+            Codec.STRING.fieldOf("dimension").forGetter((IrisModdedChunkGenerator generator) -> generator.dimensionKey)
     ).apply(instance, IrisModdedChunkGenerator::new));
 
     private final String dimensionKey;

@@ -86,16 +86,22 @@ public final class ModdedWorldCheck {
     }
 
     private static boolean run(MinecraftServer server) {
-        ServerLevel overworld = server.overworld();
-        String generatorClass = overworld.getChunkSource().getGenerator().getClass().getName();
-        LOGGER.info("[worldcheck] overworld generator: {}", generatorClass);
-        boolean irisGenerator = overworld.getChunkSource().getGenerator() instanceof IrisModdedChunkGenerator;
-        if (!irisGenerator) {
-            LOGGER.error("[worldcheck] overworld is NOT using IrisModdedChunkGenerator");
+        ServerLevel level = targetLevel(server);
+        if (level == null) {
+            LOGGER.error("[worldcheck] no Iris dimension is loaded");
+            return false;
         }
 
-        BlockPos spawn = overworld.getRespawnData().pos();
-        LOGGER.info("[worldcheck] spawn: {} {} {} (minY={} height={})", spawn.getX(), spawn.getY(), spawn.getZ(), overworld.getMinY(), overworld.getHeight());
+        String levelId = level.dimension().identifier().toString();
+        String generatorClass = level.getChunkSource().getGenerator().getClass().getName();
+        LOGGER.info("[worldcheck] {} generator: {}", levelId, generatorClass);
+        boolean irisGenerator = level.getChunkSource().getGenerator() instanceof IrisModdedChunkGenerator;
+        if (!irisGenerator) {
+            LOGGER.error("[worldcheck] {} is NOT using IrisModdedChunkGenerator", levelId);
+        }
+
+        BlockPos spawn = level.getRespawnData().pos();
+        LOGGER.info("[worldcheck] spawn: {} {} {} (minY={} height={})", spawn.getX(), spawn.getY(), spawn.getZ(), level.getMinY(), level.getHeight());
 
         MessageDigest digest = sha256();
         List<String> samples = new ArrayList<>();
@@ -104,9 +110,9 @@ public final class ModdedWorldCheck {
             for (int dz = 0; dz < 4; dz++) {
                 int x = spawn.getX() + (dx - 2) * 16 + 8;
                 int z = spawn.getZ() + (dz - 2) * 16 + 8;
-                overworld.getChunk(x >> 4, z >> 4);
-                int y = overworld.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
-                BlockState surface = overworld.getBlockState(new BlockPos(x, y - 1, z));
+                level.getChunk(x >> 4, z >> 4);
+                int y = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
+                BlockState surface = level.getBlockState(new BlockPos(x, y - 1, z));
                 String key = BuiltInRegistries.BLOCK.getKey(surface.getBlock()).toString();
                 String line = x + " " + (y - 1) + " " + z + " " + key;
                 samples.add(line);
@@ -121,7 +127,7 @@ public final class ModdedWorldCheck {
         LOGGER.info("[worldcheck] surface digest: {} ({} columns, {} distinct surface blocks: {})",
                 HexFormat.of().formatHex(digest.digest()).substring(0, 12), samples.size(), surfaceKeys.size(), surfaceKeys);
 
-        ChunkAccess zeroChunk = overworld.getChunk(0, 0);
+        ChunkAccess zeroChunk = level.getChunk(0, 0);
         int nonEmptySections = 0;
         for (LevelChunkSection section : zeroChunk.getSections()) {
             if (!section.hasOnlyAir()) {
@@ -129,8 +135,8 @@ public final class ModdedWorldCheck {
             }
         }
         Set<String> columnKeys = new LinkedHashSet<>();
-        int surfaceY = overworld.getHeight(Heightmap.Types.WORLD_SURFACE, 8, 8);
-        for (int y = overworld.getMinY(); y < surfaceY; y += 16) {
+        int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, 8, 8);
+        for (int y = level.getMinY(); y < surfaceY; y += 16) {
             BlockState state = zeroChunk.getBlockState(new BlockPos(8, y, 8));
             if (!state.isAir()) {
                 columnKeys.add(BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString());
@@ -151,6 +157,26 @@ public final class ModdedWorldCheck {
         boolean pass = irisGenerator && sectionsOk && varietyOk;
         LOGGER.info("[worldcheck] {}", pass ? "PASS" : "FAIL");
         return pass;
+    }
+
+    private static ServerLevel targetLevel(MinecraftServer server) {
+        String target = System.getProperty("iris.worldcheck.dimension");
+        if (target != null && !target.isBlank()) {
+            for (ServerLevel level : server.getAllLevels()) {
+                if (level.dimension().identifier().toString().equals(target.trim())) {
+                    return level;
+                }
+            }
+            LOGGER.error("[worldcheck] requested dimension '{}' is not loaded", target);
+            return null;
+        }
+
+        for (ServerLevel level : server.getAllLevels()) {
+            if (level.getChunkSource().getGenerator() instanceof IrisModdedChunkGenerator) {
+                return level;
+            }
+        }
+        return null;
     }
 
     private static MessageDigest sha256() {

@@ -48,13 +48,15 @@ import java.util.function.Predicate;
 public final class ModdedDatapackCommands {
     private static final Logger LOGGER = LoggerFactory.getLogger("Iris");
     private static final Predicate<CommandSourceStack> GATE = Commands.hasPermission(Commands.LEVEL_GAMEMASTERS);
-    private static final String WORLD_PACK_NAME = "iris";
+    private static final String WORLD_PACK_NAME = ModdedWorldDatapackWriter.WORLD_PACK_NAME;
 
     private ModdedDatapackCommands() {
     }
 
-    public static LiteralArgumentBuilder<CommandSourceStack> tree() {
-        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("datapack").requires(GATE);
+    public static LiteralArgumentBuilder<CommandSourceStack> tree(String name) {
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal(name).requires(GATE);
+
+        root.executes((CommandContext<CommandSourceStack> context) -> ModdedCommandHelp.send(context.getSource(), name));
 
         root.then(Commands.literal("status")
                 .executes((CommandContext<CommandSourceStack> context) -> status(context.getSource())));
@@ -64,10 +66,14 @@ public final class ModdedDatapackCommands {
 
         root.then(Commands.literal("list")
                 .executes((CommandContext<CommandSourceStack> context) -> list(context.getSource())));
+        root.then(Commands.literal("ls")
+                .executes((CommandContext<CommandSourceStack> context) -> list(context.getSource())));
 
         root.then(message("ingest", "Modrinth datapack ingest requires the Bukkit plugin: its post-restart structure import into editable Iris resources uses Bukkit registries, and Iris modded dimensions do not run vanilla structure placement, so ingested structure datapacks would not generate. Drop datapacks into world/datapacks manually for non-structure content."));
+        root.then(message("pull", "Modrinth datapack ingest requires the Bukkit plugin: its post-restart structure import into editable Iris resources uses Bukkit registries, and Iris modded dimensions do not run vanilla structure placement, so ingested structure datapacks would not generate. Drop datapacks into world/datapacks manually for non-structure content."));
 
         root.then(message("remove", "Datapack removal manages the Bukkit ingest manifest. On modded servers delete the datapack folder from world/datapacks and restart."));
+        root.then(message("rm", "Datapack removal manages the Bukkit ingest manifest. On modded servers delete the datapack folder from world/datapacks and restart."));
 
         return root;
     }
@@ -130,7 +136,7 @@ public final class ModdedDatapackCommands {
             if (!matches) {
                 mismatches++;
                 IrisModdedCommands.fail(source, "  WARNING: the active dimension type does not match the pack. Terrain outside "
-                        + activeMin + ".." + activeMax + " will be clipped. Run /iris datapack install and restart the server.");
+                        + activeMin + ".." + activeMax + " will be clipped. Run /iris world enable <dimension> <pack> for new worlds, or /iris datapack install for already-loaded Iris dimensions, then restart.");
             }
         }
         if (irisLevels == 0) {
@@ -202,7 +208,7 @@ public final class ModdedDatapackCommands {
         for (String path : written) {
             IrisModdedCommands.ok(source, "Wrote " + path);
         }
-        IrisModdedCommands.ok(source, "World datapack '" + WORLD_PACK_NAME + "' installed. Restart the server for the dimension types to apply (world datapacks override mod-provided data).");
+        IrisModdedCommands.ok(source, "World datapack '" + WORLD_PACK_NAME + "' dimension type overrides installed. Restart the server for the dimension types to apply.");
         return 1;
     }
 

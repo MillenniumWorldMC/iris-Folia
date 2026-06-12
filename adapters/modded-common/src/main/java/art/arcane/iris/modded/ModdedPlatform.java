@@ -49,7 +49,7 @@ public final class ModdedPlatform implements IrisPlatform {
         this.scheduler = new ModdedScheduler();
         this.capabilities = new ModdedCapabilities();
         this.structureHooks = new ModdedStructureHooks(loader::currentServer);
-        this.biomeWriter = new ModdedBiomeWriter();
+        this.biomeWriter = new ModdedBiomeWriter(loader::currentServer);
     }
 
     public static void errorSink(Consumer<Throwable> sink) {

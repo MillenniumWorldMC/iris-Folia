@@ -90,12 +90,21 @@ public class DataFixerV1217 extends DataFixerV1213 {
     @Override
     public JSONObject fixCustomBiome(IrisBiomeCustom biome, JSONObject json) {
         json = super.fixCustomBiome(biome, json);
-        var effects = json.getJSONObject("effects");
-        var attributes = new JSONObject();
+        JSONObject effects = json.getJSONObject("effects");
+        JSONObject attributes = new JSONObject();
 
         attributes.put("minecraft:visual/fog_color", effects.remove("fog_color"));
         attributes.put("minecraft:visual/sky_color", effects.remove("sky_color"));
+        attributes.put("minecraft:visual/water_color", effects.remove("water_color"));
         attributes.put("minecraft:visual/water_fog_color", effects.remove("water_fog_color"));
+        Object grassColor = effects.remove("grass_color");
+        if (grassColor != null) {
+            attributes.put("minecraft:visual/grass_color", grassColor);
+        }
+        Object foliageColor = effects.remove("foliage_color");
+        if (foliageColor != null) {
+            attributes.put("minecraft:visual/foliage_color", foliageColor);
+        }
 
         JSONObject particle = (JSONObject) effects.remove("particle");
         if (particle != null) {
@@ -112,7 +121,7 @@ public class DataFixerV1217 extends DataFixerV1213 {
     public void fixDimension(Dimension dimension, JSONObject json) {
         super.fixDimension(dimension, json);
 
-        var attributes = new JSONObject();
+        JSONObject attributes = new JSONObject();
         if ((Boolean) json.remove("ultrawarm")) {
             attributes.put("minecraft:gameplay/water_evaporates", true);
             attributes.put("minecraft:gameplay/fast_lava", true);
@@ -138,8 +147,10 @@ public class DataFixerV1217 extends DataFixerV1213 {
         attributes.put("minecraft:gameplay/piglins_zombify", !(Boolean) json.remove("piglin_safe"));
         attributes.put("minecraft:gameplay/can_start_raid", json.remove("has_raids"));
 
-        var cloud_height = json.remove("cloud_height");
-        if (cloud_height != null) attributes.put("minecraft:visual/cloud_height", cloud_height);
+        Object cloudHeight = json.remove("cloud_height");
+        if (cloudHeight != null) {
+            attributes.put("minecraft:visual/cloud_height", cloudHeight);
+        }
 
         boolean natural = (Boolean) json.remove("natural");
         attributes.put("minecraft:gameplay/nether_portal_spawns_piglin", natural);
@@ -152,7 +163,7 @@ public class DataFixerV1217 extends DataFixerV1213 {
         json.put("attributes", attributes);
 
         json.remove("effects");
-        var defaults = new JSONObject(DIMENSIONS.get(dimension));
+        JSONObject defaults = new JSONObject(DIMENSIONS.get(dimension));
         merge(json, defaults);
     }
 

@@ -48,9 +48,28 @@ project(':core') {
     version = rootProject.version
 }
 String minecraftVersion = providers.gradleProperty('minecraftVersion').getOrElse('26.1.2')
+String fabricLoaderVersion = providers.gradleProperty('fabricLoaderVersion').getOrElse('0.19.3')
+String forgeVersion = providers.gradleProperty('forgeVersion').getOrElse('26.1.2-64.0.9')
+String neoForgeVersion = providers.gradleProperty('neoForgeVersion').getOrElse('26.1.2.75')
 String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')
     .orElse('com.github.VolmitSoftware:VolmLib:master-SNAPSHOT')
     .get()
+Closure<String> loaderDisplayVersion = { String loaderVersion ->
+    String coordinatePrefix = "${minecraftVersion}-"
+    if (loaderVersion.startsWith(coordinatePrefix)) {
+        return loaderVersion.substring(coordinatePrefix.length())
+    }
+
+    return loaderVersion
+}
+Closure<String> irisArtifactName = { String platform, String targetVersion ->
+    return "Iris v${project.version} [${platform}] ${targetVersion}.jar"
+}
+String bukkitArtifactName = irisArtifactName('CraftBukkit', minecraftVersion)
+String fabricArtifactName = irisArtifactName('Fabric', "${minecraftVersion}+${loaderDisplayVersion(fabricLoaderVersion)}")
+String forgeArtifactName = irisArtifactName('Forge', "${minecraftVersion}+${loaderDisplayVersion(forgeVersion)}")
+String neoForgeArtifactName = irisArtifactName('NeoForge', "${minecraftVersion}+${loaderDisplayVersion(neoForgeVersion)}")
+extensions.extraProperties.set('bukkitArtifactName', bukkitArtifactName)
 
 apply plugin: ApiGenerator
 
@@ -115,64 +134,102 @@ tasks.named('jar', Jar).configure {
     inputs.files(included)
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(jarJar, provider { included.resolve().collect { zipTree(it) } })
-    archiveFileName.set("Iris-${project.version}.jar")
+    doFirst {
+        delete(layout.buildDirectory.file("libs/Iris-${project.version}.jar"))
+    }
+    archiveFileName.set(bukkitArtifactName)
 }
 
 tasks.register('iris', Copy) {
     group = 'iris'
     dependsOn('jar')
-    from(layout.buildDirectory.file("libs/Iris-${project.version}.jar"))
+    from(layout.buildDirectory.file("libs/${bukkitArtifactName}"))
     into(layout.buildDirectory)
+    doFirst {
+        delete(layout.buildDirectory.file("Iris-${project.version}.jar"))
+    }
 }
 
 tasks.register('buildBukkit', Copy) {
     group = 'iris'
     dependsOn('jar')
-    from(layout.buildDirectory.file("libs/Iris-${project.version}.jar"))
-    rename { "Iris-${project.version}+mc${minecraftVersion}.jar" }
+    from(layout.buildDirectory.file("libs/${bukkitArtifactName}"))
     into(layout.projectDirectory.dir('dist'))
+    doFirst {
+        delete(layout.projectDirectory.file("dist/Iris-${project.version}+mc${minecraftVersion}.jar"))
+    }
 }
 
 tasks.register('fabricJar', Exec) {
     group = 'iris'
     workingDir = layout.projectDirectory.dir('adapters/fabric').asFile
     String wrapperScript = System.getProperty('os.name').toLowerCase().contains('windows') ? 'gradlew.bat' : 'gradlew'
-    commandLine(layout.projectDirectory.file(wrapperScript).asFile.absolutePath, 'shadowJar', '--console=plain')
+    commandLine(
+        layout.projectDirectory.file(wrapperScript).asFile.absolutePath,
+        'shadowJar',
+        '--console=plain',
+        "-PirisVersion=${project.version}",
+        "-PminecraftVersion=${minecraftVersion}",
+        "-PfabricLoaderVersion=${fabricLoaderVersion}"
+    )
 }
 
 tasks.register('buildFabric', Copy) {
     group = 'iris'
     dependsOn('fabricJar')
-    from(layout.projectDirectory.file("adapters/fabric/build/libs/Iris-${project.version}+mc${minecraftVersion}-fabric.jar"))
+    from(layout.projectDirectory.file("adapters/fabric/build/libs/${fabricArtifactName}"))
     into(layout.projectDirectory.dir('dist'))
+    doFirst {
+        delete(layout.projectDirectory.file("dist/Iris-${project.version}+mc${minecraftVersion}-fabric.jar"))
+    }
 }
 
 tasks.register('forgeJar', Exec) {
     group = 'iris'
     workingDir = layout.projectDirectory.dir('adapters/forge').asFile
     String wrapperScript = System.getProperty('os.name').toLowerCase().contains('windows') ? 'gradlew.bat' : 'gradlew'
-    commandLine(layout.projectDirectory.file(wrapperScript).asFile.absolutePath, 'shadowJar', '--console=plain')
+    commandLine(
+        layout.projectDirectory.file(wrapperScript).asFile.absolutePath,
+        'shadowJar',
+        '--console=plain',
+        "-PirisVersion=${project.version}",
+        "-PminecraftVersion=${minecraftVersion}",
+        "-PforgeVersion=${forgeVersion}"
+    )
 }
 
 tasks.register('buildForge', Copy) {
     group = 'iris'
     dependsOn('forgeJar')
-    from(layout.projectDirectory.file("adapters/forge/build/libs/Iris-${project.version}+mc${minecraftVersion}-forge.jar"))
+    from(layout.projectDirectory.file("adapters/forge/build/libs/${forgeArtifactName}"))
     into(layout.projectDirectory.dir('dist'))
+    doFirst {
+        delete(layout.projectDirectory.file("dist/Iris-${project.version}+mc${minecraftVersion}-forge.jar"))
+    }
 }
 
 tasks.register('neoforgeJar', Exec) {
     group = 'iris'
     workingDir = layout.projectDirectory.dir('adapters/neoforge').asFile
     String wrapperScript = System.getProperty('os.name').toLowerCase().contains('windows') ? 'gradlew.bat' : 'gradlew'
-    commandLine(layout.projectDirectory.file(wrapperScript).asFile.absolutePath, 'shadowJar', '--console=plain')
+    commandLine(
+        layout.projectDirectory.file(wrapperScript).asFile.absolutePath,
+        'shadowJar',
+        '--console=plain',
+        "-PirisVersion=${project.version}",
+        "-PminecraftVersion=${minecraftVersion}",
+        "-PneoForgeVersion=${neoForgeVersion}"
+    )
 }
 
 tasks.register('buildNeoforge', Copy) {
     group = 'iris'
     dependsOn('neoforgeJar')
-    from(layout.projectDirectory.file("adapters/neoforge/build/libs/Iris-${project.version}+mc${minecraftVersion}-neoforge.jar"))
+    from(layout.projectDirectory.file("adapters/neoforge/build/libs/${neoForgeArtifactName}"))
     into(layout.projectDirectory.dir('dist'))
+    doFirst {
+        delete(layout.projectDirectory.file("dist/Iris-${project.version}+mc${minecraftVersion}-neoforge.jar"))
+    }
 }
 
 tasks.register('buildAll') {
@@ -322,7 +379,7 @@ void registerCustomOutputTask(String name, String path) {
         group = 'development'
         outputs.upToDateWhen { false }
         dependsOn('iris')
-        from(layout.buildDirectory.file("Iris-${project.version}.jar"))
+        from(layout.buildDirectory.file((String) project.ext.bukkitArtifactName))
         into(file(path))
         rename { String ignored -> 'Iris.jar' }
     }
@@ -337,7 +394,7 @@ void registerCustomOutputTaskUnix(String name, String path) {
         group = 'development'
         outputs.upToDateWhen { false }
         dependsOn('iris')
-        from(layout.buildDirectory.file("Iris-${project.version}.jar"))
+        from(layout.buildDirectory.file((String) project.ext.bukkitArtifactName))
         into(file(path))
         rename { String ignored -> 'Iris.jar' }
     }

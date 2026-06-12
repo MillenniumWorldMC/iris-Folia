@@ -51,7 +51,6 @@ public final class IrisNeoForgeBootstrap {
 
     public IrisNeoForgeBootstrap(IEventBus modBus) {
         ModdedEngineBootstrap.initialize(new NeoForgeModdedLoader());
-        art.arcane.iris.modded.ModdedPackInstaller.ensureDefaultPack(ModdedEngineBootstrap.loader().configDir());
         String modVersion = ModList.get().getModContainerById("irisworldgen")
             .map((ModContainer container) -> container.getModInfo().getVersion().toString())
             .orElse("unknown");

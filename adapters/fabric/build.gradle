@@ -30,7 +30,10 @@ Properties rootProperties = new Properties()
 file('../../gradle.properties').withInputStream { InputStream stream -> rootProperties.load(stream) }
 String irisVersion = providers.gradleProperty('irisVersion').getOrElse(rootProperties.getProperty('irisVersion', '4.0.0-26.1'))
 String minecraftVersion = providers.gradleProperty('minecraftVersion').getOrElse(rootProperties.getProperty('minecraftVersion', '26.1.2'))
-String fabricLoaderVersion = providers.gradleProperty('fabricLoaderVersion').getOrElse('0.19.3')
+String fabricLoaderVersion = providers.gradleProperty('fabricLoaderVersion').getOrElse(rootProperties.getProperty('fabricLoaderVersion', '0.19.3'))
+Closure<String> irisArtifactName = { String platform, String targetVersion ->
+    return "Iris v${project.version} [${platform}] ${targetVersion}.jar"
+}
 
 group = 'art.arcane'
 version = irisVersion
@@ -177,7 +180,10 @@ processResources {
 }
 
 tasks.named('shadowJar', ShadowJar).configure {
-    archiveFileName.set("Iris-${project.version}+mc${minecraftVersion}-fabric.jar")
+    doFirst {
+        delete(layout.buildDirectory.file("libs/Iris-${project.version}+mc${minecraftVersion}-fabric.jar"))
+    }
+    archiveFileName.set(irisArtifactName('Fabric', "${minecraftVersion}+${fabricLoaderVersion}"))
     configurations = [project.configurations.named('bundle').get()]
     mergeServiceFiles()
     exclude('META-INF/maven/**')

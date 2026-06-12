@@ -58,7 +58,6 @@ public final class IrisFabricBootstrap implements ModInitializer {
     @Override
     public void onInitialize() {
         ModdedEngineBootstrap.initialize(new FabricModdedLoader());
-        art.arcane.iris.modded.ModdedPackInstaller.ensureDefaultPack(ModdedEngineBootstrap.loader().configDir());
         FabricLoader loader = FabricLoader.getInstance();
         String modVersion = loader.getModContainer("irisworldgen")
             .map((ModContainer container) -> container.getMetadata().getVersion().getFriendlyString())

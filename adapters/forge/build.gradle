@@ -30,7 +30,18 @@ Properties rootProperties = new Properties()
 file('../../gradle.properties').withInputStream { InputStream stream -> rootProperties.load(stream) }
 String irisVersion = providers.gradleProperty('irisVersion').getOrElse(rootProperties.getProperty('irisVersion', '4.0.0-26.1'))
 String minecraftVersion = providers.gradleProperty('minecraftVersion').getOrElse(rootProperties.getProperty('minecraftVersion', '26.1.2'))
-String forgeVersion = providers.gradleProperty('forgeVersion').getOrElse('26.1.2-64.0.9')
+String forgeVersion = providers.gradleProperty('forgeVersion').getOrElse(rootProperties.getProperty('forgeVersion', '26.1.2-64.0.9'))
+Closure<String> loaderDisplayVersion = { String loaderVersion ->
+    String coordinatePrefix = "${minecraftVersion}-"
+    if (loaderVersion.startsWith(coordinatePrefix)) {
+        return loaderVersion.substring(coordinatePrefix.length())
+    }
+
+    return loaderVersion
+}
+Closure<String> irisArtifactName = { String platform, String targetVersion ->
+    return "Iris v${project.version} [${platform}] ${targetVersion}.jar"
+}
 
 group = 'art.arcane'
 version = irisVersion
@@ -198,7 +209,10 @@ processResources {
 }
 
 tasks.named('shadowJar', ShadowJar).configure {
-    archiveFileName.set("Iris-${project.version}+mc${minecraftVersion}-forge.jar")
+    doFirst {
+        delete(layout.buildDirectory.file("libs/Iris-${project.version}+mc${minecraftVersion}-forge.jar"))
+    }
+    archiveFileName.set(irisArtifactName('Forge', "${minecraftVersion}+${loaderDisplayVersion(forgeVersion)}"))
     configurations = [project.configurations.named('bundle').get()]
     mergeServiceFiles()
     exclude('META-INF/maven/**')

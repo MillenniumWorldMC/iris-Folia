@@ -56,10 +56,14 @@ public final class ModdedStructureCommands {
     private ModdedStructureCommands() {
     }
 
-    public static LiteralArgumentBuilder<CommandSourceStack> tree() {
-        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("structure").requires(GATE);
+    public static LiteralArgumentBuilder<CommandSourceStack> tree(String name) {
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal(name).requires(GATE);
+
+        root.executes((CommandContext<CommandSourceStack> context) -> ModdedCommandHelp.send(context.getSource(), name));
 
         root.then(Commands.literal("list")
+                .executes((CommandContext<CommandSourceStack> context) -> list(context.getSource())));
+        root.then(Commands.literal("ls")
                 .executes((CommandContext<CommandSourceStack> context) -> list(context.getSource())));
 
         root.then(Commands.literal("info")
@@ -69,10 +73,19 @@ public final class ModdedStructureCommands {
         root.then(Commands.literal("place")
                 .then(Commands.argument("key", StringArgumentType.greedyString()).suggests(IRIS_STRUCTURE_KEYS)
                         .executes((CommandContext<CommandSourceStack> context) -> place(context.getSource(), StringArgumentType.getString(context, "key")))));
+        root.then(Commands.literal("p")
+                .then(Commands.argument("key", StringArgumentType.greedyString()).suggests(IRIS_STRUCTURE_KEYS)
+                        .executes((CommandContext<CommandSourceStack> context) -> place(context.getSource(), StringArgumentType.getString(context, "key")))));
 
         root.then(message("import", "Structure import rebuilds vanilla & datapack structures as editable Iris resources through Bukkit/NMS template managers; run /iris structure import on a Bukkit server against this pack, then copy the pack folder over."));
+        root.then(message("import-all", "Structure import rebuilds vanilla & datapack structures as editable Iris resources through Bukkit/NMS template managers; run /iris structure import on a Bukkit server against this pack, then copy the pack folder over."));
+        root.then(message("reimport", "Structure import rebuilds vanilla & datapack structures as editable Iris resources through Bukkit/NMS template managers; run /iris structure import on a Bukkit server against this pack, then copy the pack folder over."));
+        root.then(message("imp", "Structure import rebuilds vanilla & datapack structures as editable Iris resources through Bukkit/NMS template managers; run /iris structure import on a Bukkit server against this pack, then copy the pack folder over."));
+        root.then(message("all", "Structure import rebuilds vanilla & datapack structures as editable Iris resources through Bukkit/NMS template managers; run /iris structure import on a Bukkit server against this pack, then copy the pack folder over."));
         root.then(message("capture", "Structure capture generates each structure in a throwaway Bukkit scratch world to read its blocks; it requires the Bukkit plugin (v26 NMS binding)."));
+        root.then(message("cap", "Structure capture generates each structure in a throwaway Bukkit scratch world to read its blocks; it requires the Bukkit plugin (v26 NMS binding)."));
         root.then(message("verify", "Vanilla structure locate is meaningless here: Iris modded dimensions do not run vanilla structure placement (Iris places structures itself). Use /iris goto structure <key> to locate Iris-placed structures."));
+        root.then(message("locateall", "Vanilla structure locate is meaningless here: Iris modded dimensions do not run vanilla structure placement (Iris places structures itself). Use /iris goto structure <key> to locate Iris-placed structures."));
 
         return root;
     }
@@ -194,6 +207,7 @@ public final class ModdedStructureCommands {
     }
 
     private static CompletableFuture<Suggestions> suggestIrisStructureKeys(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        ModdedCommandFeedback.tab(context.getSource());
         try {
             Engine engine = IrisModdedCommands.engineFor(context.getSource().getLevel());
             if (engine != null && engine.getData().getStructureLoader() != null) {

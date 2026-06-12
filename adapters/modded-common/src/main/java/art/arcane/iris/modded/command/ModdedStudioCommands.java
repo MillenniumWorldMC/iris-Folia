@@ -71,10 +71,17 @@ public final class ModdedStudioCommands {
     private ModdedStudioCommands() {
     }
 
-    public static LiteralArgumentBuilder<CommandSourceStack> tree() {
-        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("studio").requires(GATE);
+    public static LiteralArgumentBuilder<CommandSourceStack> tree(String name) {
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal(name).requires(GATE);
+
+        root.executes((CommandContext<CommandSourceStack> context) -> ModdedCommandHelp.send(context.getSource(), name));
 
         root.then(Commands.literal("create")
+                .then(Commands.argument("name", StringArgumentType.word())
+                        .executes((CommandContext<CommandSourceStack> context) -> create(context.getSource(), StringArgumentType.getString(context, "name"), DEFAULT_TEMPLATE))
+                        .then(Commands.argument("template", StringArgumentType.word()).suggests(IrisModdedCommands.PACK_NAMES)
+                                .executes((CommandContext<CommandSourceStack> context) -> create(context.getSource(), StringArgumentType.getString(context, "name"), StringArgumentType.getString(context, "template"))))));
+        root.then(Commands.literal("+")
                 .then(Commands.argument("name", StringArgumentType.word())
                         .executes((CommandContext<CommandSourceStack> context) -> create(context.getSource(), StringArgumentType.getString(context, "name"), DEFAULT_TEMPLATE))
                         .then(Commands.argument("template", StringArgumentType.word()).suggests(IrisModdedCommands.PACK_NAMES)
@@ -96,17 +103,27 @@ public final class ModdedStudioCommands {
                         .executes((CommandContext<CommandSourceStack> context) -> regions(context.getSource(), IntegerArgumentType.getInteger(context, "radius")))));
 
         root.then(message("open", "Studio worlds are temporary Bukkit worlds opened by the Bukkit studio toolchain; modded servers cannot open ad-hoc runtime dimensions. Edit the pack under config/irisworldgen/packs/<pack> and create a fresh world (or /iris regen) to see changes."));
+        root.then(message("o", "Studio worlds are temporary Bukkit worlds opened by the Bukkit studio toolchain; modded servers cannot open ad-hoc runtime dimensions. Edit the pack under config/irisworldgen/packs/<pack> and create a fresh world (or /iris regen) to see changes."));
         root.then(message("close", "There are no studio worlds on modded servers (/iris studio open is Bukkit-only), so there is nothing to close."));
+        root.then(message("x", "There are no studio worlds on modded servers (/iris studio open is Bukkit-only), so there is nothing to close."));
         root.then(message("tpstudio", "There are no studio worlds on modded servers to teleport to; /iris studio open is Bukkit-only."));
+        root.then(message("stp", "There are no studio worlds on modded servers to teleport to; /iris studio open is Bukkit-only."));
         root.then(message("vscode", "VSCode launch and workspace generation are desktop features of the Bukkit studio toolchain; edit config/irisworldgen/packs/<pack> directly in your editor."));
+        root.then(message("vsc", "VSCode launch and workspace generation are desktop features of the Bukkit studio toolchain; edit config/irisworldgen/packs/<pack> directly in your editor."));
         root.then(message("update", "Workspace regeneration (.code-workspace + JSON schemas) reads Bukkit registries (SchemaBuilder); run /iris studio update on a Bukkit server against this pack."));
         root.then(message("importvanilla", "Vanilla tree/object/structure capture generates features in throwaway Bukkit worlds via NMS; run /iris studio importvanilla on a Bukkit server against this pack, then copy the pack folder over."));
+        root.then(message("importv", "Vanilla tree/object/structure capture generates features in throwaway Bukkit worlds via NMS; run /iris studio importvanilla on a Bukkit server against this pack, then copy the pack folder over."));
+        root.then(message("iv", "Vanilla tree/object/structure capture generates features in throwaway Bukkit worlds via NMS; run /iris studio importvanilla on a Bukkit server against this pack, then copy the pack folder over."));
         root.then(message("noise", "The noise explorer is a desktop GUI launched from the Bukkit plugin."));
+        root.then(message("nmap", "The noise explorer is a desktop GUI launched from the Bukkit plugin."));
         root.then(message("map", "The world map renderer is a desktop GUI launched from the Bukkit plugin."));
+        root.then(message("render", "The world map renderer is a desktop GUI launched from the Bukkit plugin."));
         root.then(message("loot", "Loot simulation opens a Bukkit chest inventory GUI; it is not available on modded servers."));
         root.then(message("profile", "Pack performance profiling is part of the Bukkit studio toolchain and is not ported to modded servers."));
         root.then(message("spawn", "Iris entity spawning uses the Bukkit entity pipeline and is not ported to modded servers."));
+        root.then(message("summon", "Iris entity spawning uses the Bukkit entity pipeline and is not ported to modded servers."));
         root.then(message("objects", "The chunk object report reads Bukkit chunk data and is not ported to modded servers."));
+        root.then(message("find-objects", "The chunk object report reads Bukkit chunk data and is not ported to modded servers."));
 
         return root;
     }

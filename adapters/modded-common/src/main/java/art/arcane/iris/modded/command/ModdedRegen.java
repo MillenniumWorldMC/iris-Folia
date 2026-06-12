@@ -34,7 +34,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -89,7 +88,7 @@ public final class ModdedRegen {
 
     public static void start(CommandSourceStack source, ServerLevel level, IrisModdedChunkGenerator generator, Engine engine, ServerPlayer player, int radius) {
         if (!ACTIVE.compareAndSet(false, true)) {
-            source.sendFailure(Component.literal("A regen is already running."));
+            IrisModdedCommands.fail(source, "A regen is already running.");
             return;
         }
         int centerX = player.blockPosition().getX() >> 4;
@@ -276,10 +275,10 @@ public final class ModdedRegen {
     }
 
     private void ok(String message) {
-        server.execute(() -> source.sendSuccess(() -> Component.literal(message), false));
+        server.execute(() -> IrisModdedCommands.ok(source, message));
     }
 
     private void fail(String message) {
-        server.execute(() -> source.sendFailure(Component.literal(message)));
+        server.execute(() -> IrisModdedCommands.fail(source, message));
     }
 }

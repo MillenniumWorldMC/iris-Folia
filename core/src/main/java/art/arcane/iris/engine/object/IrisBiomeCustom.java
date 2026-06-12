@@ -180,7 +180,7 @@ public class IrisBiomeCustom {
     private int parseColor(String c) {
         String v = (c.startsWith("#") ? c : "#" + c).trim();
         try {
-            return Color.decode(v).getRGB();
+            return Color.decode(v).getRGB() & 0x00FFFFFF;
         } catch (Throwable e) {
             IrisLogging.reportError(e);
             IrisLogging.error("Error Parsing '''color''', (" + c + ")");

@@ -40,27 +40,10 @@ import java.util.stream.Stream;
 
 public final class ModdedPackInstaller {
     private static final Logger LOGGER = LoggerFactory.getLogger("Iris");
-    private static final String DEFAULT_PACK = "overworld";
-    private static final String DEFAULT_BRANCH = "master";
     private static final Pattern PACK_NAME = Pattern.compile("[a-z0-9_-]+");
     private static final Pattern BRANCH_NAME = Pattern.compile("[A-Za-z0-9._-]+");
 
     private ModdedPackInstaller() {
-    }
-
-    public static void ensureDefaultPack(Path configDir) {
-        Path target = configDir.resolve("irisworldgen").resolve("packs").resolve(DEFAULT_PACK);
-
-        if (Files.isDirectory(target.resolve("dimensions"))) {
-            return;
-        }
-
-        LOGGER.info("Iris default pack missing; downloading IrisDimensions/{} (latest on {})", DEFAULT_PACK, DEFAULT_BRANCH);
-        boolean installed = install(configDir, DEFAULT_PACK, DEFAULT_BRANCH, LOGGER::info);
-
-        if (!installed) {
-            LOGGER.error("Iris failed to download the default '{}' pack; install it manually at {} (source: https://github.com/IrisDimensions/overworld)", DEFAULT_PACK, target);
-        }
     }
 
     public static boolean install(Path configDir, String pack, String branch, Consumer<String> feedback) {

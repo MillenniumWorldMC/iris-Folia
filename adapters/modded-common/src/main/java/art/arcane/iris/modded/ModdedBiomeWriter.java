@@ -20,17 +20,55 @@ package art.arcane.iris.modded;
 
 import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.iris.spi.PlatformBiomeWriter;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.biome.Biome;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 public final class ModdedBiomeWriter implements PlatformBiomeWriter {
+    private final Supplier<MinecraftServer> server;
+
+    public ModdedBiomeWriter(Supplier<MinecraftServer> server) {
+        this.server = server;
+    }
+
     @Override
     public int biomeIdFor(String key) {
-        return 0;
+        Registry<Biome> registry = biomeRegistry();
+        Identifier identifier = Identifier.tryParse(key);
+        if (registry == null || identifier == null) {
+            return 0;
+        }
+        Biome biome = registry.getValue(identifier);
+        return biome == null ? 0 : registry.getId(biome);
     }
 
     @Override
     public List<PlatformBiome> allBiomes() {
-        return List.of();
+        Registry<Biome> registry = biomeRegistry();
+        List<PlatformBiome> biomes = new ArrayList<>();
+        if (registry == null) {
+            return biomes;
+        }
+        for (Identifier identifier : registry.keySet()) {
+            Biome biome = registry.getValue(identifier);
+            if (biome != null) {
+                biomes.add(ModdedBiome.of(biome, identifier.toString()));
+            }
+        }
+        return biomes;
+    }
+
+    private Registry<Biome> biomeRegistry() {
+        MinecraftServer instance = server.get();
+        if (instance == null) {
+            return null;
+        }
+        return instance.registryAccess().lookupOrThrow(Registries.BIOME);
     }
 }

@@ -27,7 +27,6 @@ import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.common.parallel.MultiBurst;
 import art.arcane.iris.util.project.hunk.Hunk;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import org.slf4j.Logger;
@@ -91,7 +90,7 @@ public final class ModdedGoldenHash {
 
     public static void start(CommandSourceStack source, ServerLevel level, Engine engine, int radius, int threads, Mode mode) {
         if (!ACTIVE.compareAndSet(false, true)) {
-            source.sendFailure(Component.literal("A goldenhash scan is already running."));
+            IrisModdedCommands.fail(source, "A goldenhash scan is already running.");
             return;
         }
         ModdedGoldenHash scan = new ModdedGoldenHash(source, level, engine, radius, threads, mode);
@@ -375,11 +374,11 @@ public final class ModdedGoldenHash {
     }
 
     private void ok(String message) {
-        server.execute(() -> source.sendSuccess(() -> Component.literal(message), false));
+        server.execute(() -> IrisModdedCommands.ok(source, message));
     }
 
     private void fail(String message) {
-        server.execute(() -> source.sendFailure(Component.literal(message)));
+        server.execute(() -> IrisModdedCommands.fail(source, message));
     }
 
     private static String shortHash(String hex) {
