@@ -1,10 +1,24 @@
 modLoader = "javafml"
-loaderVersion = "[1,)"
+loaderVersion = "[64,)"
 license = "GPL-3.0"
 
 [[mods]]
 modId = "irisworldgen"
 version = "${version}"
 displayName = "Iris"
-description = "Iris World Generation Engine (Forge adapter - SKELETON, worldgen not yet wired)"
+description = "Iris World Generation Engine (Forge adapter - native chunk generator, overworld override datapack, engine lifecycle)"
 authors = "Arcane Arts (Volmit Software)"
+
+[[dependencies.irisworldgen]]
+modId = "forge"
+mandatory = true
+versionRange = "[64,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.irisworldgen]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[${minecraftVersion}]"
+ordering = "NONE"
+side = "BOTH"

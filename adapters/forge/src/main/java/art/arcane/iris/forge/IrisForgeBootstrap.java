@@ -18,8 +18,57 @@
 
 package art.arcane.iris.forge;
 
+import art.arcane.iris.modded.IrisModdedChunkGenerator;
+import art.arcane.iris.modded.ModdedEngineBootstrap;
+import art.arcane.iris.modded.ModdedParityProbe;
+import art.arcane.iris.modded.ModdedWorldCheck;
+import art.arcane.iris.modded.ModdedWorldEngines;
+import com.mojang.serialization.MapCodec;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.fml.ModContainer;
+import net.minecraftforge.fml.ModList;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.loading.FMLLoader;
+import net.minecraftforge.fml.loading.VersionInfo;
+import net.minecraftforge.registries.DeferredRegister;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@Mod("irisworldgen")
 public final class IrisForgeBootstrap {
-    public IrisForgeBootstrap() {
-        throw new UnsupportedOperationException("The Iris Forge adapter is a build skeleton; worldgen is not wired yet (see CROSSPLATFORM_PLAN.md Phase 5).");
+    private static final Logger LOGGER = LoggerFactory.getLogger("Iris");
+
+    public IrisForgeBootstrap(FMLJavaModLoadingContext context) {
+        ModdedEngineBootstrap.initialize(new ForgeModdedLoader());
+        String modVersion = ModList.getModContainerById("irisworldgen")
+            .map((ModContainer container) -> container.getModInfo().getVersion().toString())
+            .orElse("unknown");
+        VersionInfo versionInfo = FMLLoader.versionInfo();
+        LOGGER.info("Iris {} bootstrapping on Minecraft {} (Forge {})", modVersion, versionInfo.mcVersion(), versionInfo.forgeVersion());
+
+        ModdedEngineBootstrap.selfTest(IrisForgeBootstrap.class.getClassLoader());
+        ModdedEngineBootstrap.bind();
+
+        DeferredRegister<MapCodec<? extends ChunkGenerator>> chunkGenerators = DeferredRegister.create(Registries.CHUNK_GENERATOR, "irisworldgen");
+        chunkGenerators.register("iris", () -> IrisModdedChunkGenerator.CODEC);
+        chunkGenerators.register(context.getModBusGroup());
+        LOGGER.info("Iris chunk generator registered as irisworldgen:iris");
+
+        ServerStoppingEvent.BUS.addListener((ServerStoppingEvent event) -> ModdedWorldEngines.shutdown());
+
+        String parity = System.getProperty("iris.parity");
+        if (parity != null) {
+            LOGGER.info("Iris parity probe armed: {}", parity);
+            ModdedParityProbe.schedule(parity);
+        }
+
+        String worldCheck = System.getProperty("iris.worldcheck");
+        if (worldCheck != null) {
+            LOGGER.info("Iris world check armed");
+            ModdedWorldCheck.schedule();
+        }
     }
 }

@@ -147,11 +147,17 @@ tasks.register('buildFabric', Copy) {
     into(layout.projectDirectory.dir('dist'))
 }
 
+tasks.register('forgeJar', Exec) {
+    group = 'iris'
+    workingDir = layout.projectDirectory.dir('adapters/forge').asFile
+    String wrapperScript = System.getProperty('os.name').toLowerCase().contains('windows') ? 'gradlew.bat' : 'gradlew'
+    commandLine(layout.projectDirectory.file(wrapperScript).asFile.absolutePath, 'shadowJar', '--console=plain')
+}
+
 tasks.register('buildForge', Copy) {
     group = 'iris'
-    dependsOn(':adapters:forge:jar')
-    from(project(':adapters:forge').layout.buildDirectory.file("libs/Iris-${project.version}-forge-skeleton.jar"))
-    rename { "Iris-${project.version}+mc${minecraftVersion}-forge-skeleton.jar" }
+    dependsOn('forgeJar')
+    from(layout.projectDirectory.file("adapters/forge/build/libs/Iris-${project.version}+mc${minecraftVersion}-forge.jar"))
     into(layout.projectDirectory.dir('dist'))
 }
 
