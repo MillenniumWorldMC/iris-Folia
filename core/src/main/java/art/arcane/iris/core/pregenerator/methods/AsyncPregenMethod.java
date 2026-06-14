@@ -34,8 +34,9 @@ import io.papermc.lib.PaperLib;
 import org.bukkit.Chunk;
 import org.bukkit.World;
 
-import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -350,13 +351,13 @@ public class AsyncPregenMethod implements PregeneratorMethod {
 
     static int computePaperLikeRecommendedCap(int workerThreads) {
         int normalizedWorkers = Math.max(1, workerThreads);
-        int recommendedCap = normalizedWorkers * 2;
-        if (recommendedCap < 8) {
-            return 8;
+        int recommendedCap = normalizedWorkers * 4;
+        if (recommendedCap < 16) {
+            return 16;
         }
 
-        if (recommendedCap > 96) {
-            return 96;
+        if (recommendedCap > 128) {
+            return 128;
         }
 
         return recommendedCap;
@@ -721,13 +722,18 @@ public class AsyncPregenMethod implements PregeneratorMethod {
 
     public static void increaseWorkerThreads() {
         THREAD_COUNT.updateAndGet(i -> {
-            if (i > 0) return 1;
-            var adjusted = IrisSettings.get().getConcurrency().getWorldGenThreads();
+            if (i > 0) {
+                return 1;
+            }
+
+            int adjusted = IrisSettings.get().getConcurrency().getWorldGenThreads();
             try {
-                var field = Class.forName("ca.spottedleaf.moonrise.common.util.MoonriseCommon").getDeclaredField("WORKER_POOL");
-                var pool = field.get(null);
-                var threads = ((Thread[]) pool.getClass().getDeclaredMethod("getCoreThreads").invoke(pool)).length;
-                if (threads >= adjusted) return 0;
+                Field field = Class.forName("ca.spottedleaf.moonrise.common.util.MoonriseCommon").getDeclaredField("WORKER_POOL");
+                Object pool = field.get(null);
+                int threads = ((Thread[]) pool.getClass().getDeclaredMethod("getCoreThreads").invoke(pool)).length;
+                if (threads >= adjusted) {
+                    return 0;
+                }
 
                 pool.getClass().getDeclaredMethod("adjustThreadCount", int.class).invoke(pool, adjusted);
                 return threads;
@@ -745,11 +751,14 @@ public class AsyncPregenMethod implements PregeneratorMethod {
 
     public static void resetWorkerThreads() {
         THREAD_COUNT.updateAndGet(i -> {
-            if (i == 0) return 0;
+            if (i == 0) {
+                return 0;
+            }
+
             try {
-                var field = Class.forName("ca.spottedleaf.moonrise.common.util.MoonriseCommon").getDeclaredField("WORKER_POOL");
-                var pool = field.get(null);
-                var method = pool.getClass().getDeclaredMethod("adjustThreadCount", int.class);
+                Field field = Class.forName("ca.spottedleaf.moonrise.common.util.MoonriseCommon").getDeclaredField("WORKER_POOL");
+                Object pool = field.get(null);
+                Method method = pool.getClass().getDeclaredMethod("adjustThreadCount", int.class);
                 method.invoke(pool, i);
                 return 0;
             } catch (Throwable e) {

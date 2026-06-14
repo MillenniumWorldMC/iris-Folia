@@ -237,6 +237,14 @@ public class IrisBiome extends IrisRegistrant implements IRare {
         undergroundOreCache.reset();
     }
 
+    public KList<IrisOreGenerator> getSurfaceOreGenerators() {
+        return getOres(true);
+    }
+
+    public KList<IrisOreGenerator> getUndergroundOreGenerators() {
+        return getOres(false);
+    }
+
     private KList<IrisOreGenerator> getSurfaceOres() {
         return getOres(true);
     }

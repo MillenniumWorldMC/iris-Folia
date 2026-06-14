@@ -7,6 +7,8 @@ import art.arcane.volmlib.util.math.M;
 import kotlinx.coroutines.CoroutineDispatcher;
 import kotlinx.coroutines.ExecutorsKt;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.function.IntSupplier;
 
 public class MultiBurst extends MultiBurstSupport {
@@ -44,6 +46,20 @@ public class MultiBurst extends MultiBurstSupport {
         }
 
         return dispatcher;
+    }
+
+    public boolean ownsCurrentThread() {
+        Thread thread = Thread.currentThread();
+        if (!(thread instanceof ForkJoinWorkerThread worker)) {
+            return false;
+        }
+
+        ExecutorService service = service();
+        if (!(service instanceof ForkJoinPool pool)) {
+            return false;
+        }
+
+        return worker.getPool() == pool;
     }
 
     @Override

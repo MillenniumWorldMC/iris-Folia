@@ -34,6 +34,7 @@ import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.mantle.runtime.Mantle;
 import art.arcane.volmlib.util.mantle.runtime.MantleChunk;
+import art.arcane.volmlib.util.mantle.runtime.TectonicPlate;
 import art.arcane.volmlib.util.math.BlockPosition;
 import art.arcane.volmlib.util.math.M;
 import art.arcane.volmlib.util.math.PowerOfTwoCoordinates;
@@ -229,61 +230,67 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
             return;
         }
 
-        boolean westLoaded = mantle.hasTectonicPlate(((chunkX - 1) >> 5), (chunkZ >> 5));
-        boolean eastLoaded = mantle.hasTectonicPlate(((chunkX + 1) >> 5), (chunkZ >> 5));
-        boolean northLoaded = mantle.hasTectonicPlate((chunkX >> 5), ((chunkZ - 1) >> 5));
-        boolean southLoaded = mantle.hasTectonicPlate((chunkX >> 5), ((chunkZ + 1) >> 5));
-        if (!westLoaded && !eastLoaded && !northLoaded && !southLoaded) {
+        MantleChunk<Matter> west = existingMantleChunk(mantle, chunkX - 1, chunkZ);
+        MantleChunk<Matter> east = existingMantleChunk(mantle, chunkX + 1, chunkZ);
+        MantleChunk<Matter> north = existingMantleChunk(mantle, chunkX, chunkZ - 1);
+        MantleChunk<Matter> south = existingMantleChunk(mantle, chunkX, chunkZ + 1);
+        if (west == null && east == null && north == null && south == null) {
             return;
         }
 
         for (int yy = 1; yy <= maxY; yy++) {
             for (int offset = 0; offset < 16; offset++) {
-                if (westLoaded) {
-                    tryAddBoundaryWall(mantle, mc, walls, boundaryMasks, boundaryCaverns, 0, yy, offset, baseX, baseZ, -1, 0);
+                if (west != null) {
+                    tryAddBoundaryWall(mc, west, walls, boundaryMasks, boundaryCaverns, 0, yy, offset, 15, offset);
                 }
-                if (eastLoaded) {
-                    tryAddBoundaryWall(mantle, mc, walls, boundaryMasks, boundaryCaverns, 15, yy, offset, baseX, baseZ, 1, 0);
+                if (east != null) {
+                    tryAddBoundaryWall(mc, east, walls, boundaryMasks, boundaryCaverns, 15, yy, offset, 0, offset);
                 }
-                if (northLoaded) {
-                    tryAddBoundaryWall(mantle, mc, walls, boundaryMasks, boundaryCaverns, offset, yy, 0, baseX, baseZ, 0, -1);
+                if (north != null) {
+                    tryAddBoundaryWall(mc, north, walls, boundaryMasks, boundaryCaverns, offset, yy, 0, offset, 15);
                 }
-                if (southLoaded) {
-                    tryAddBoundaryWall(mantle, mc, walls, boundaryMasks, boundaryCaverns, offset, yy, 15, baseX, baseZ, 0, 1);
+                if (south != null) {
+                    tryAddBoundaryWall(mc, south, walls, boundaryMasks, boundaryCaverns, offset, yy, 15, offset, 0);
                 }
             }
         }
     }
 
     private void tryAddBoundaryWall(
-            Mantle<Matter> mantle,
             MantleChunk<Matter> mc,
+            MantleChunk<Matter> neighborChunk,
             PackedWallBuffer walls,
             ColumnMask[] boundaryMasks,
             MatterCavern[] boundaryCaverns,
             int localX,
             int yy,
             int localZ,
-            int baseX,
-            int baseZ,
-            int dx,
-            int dz
+            int neighborX,
+            int neighborZ
     ) {
-        int worldX = baseX + localX;
-        int worldZ = baseZ + localZ;
-        if (mc.get(worldX, yy, worldZ, MatterCavern.class) != null) {
+        if (mc.get(localX, yy, localZ, MatterCavern.class) != null) {
             return;
         }
-        MatterCavern neighbor = mantle.get(worldX + dx, yy, worldZ + dz, MatterCavern.class);
+
+        MatterCavern neighbor = neighborChunk.get(neighborX, yy, neighborZ, MatterCavern.class);
         if (neighbor == null) {
             return;
         }
+
         walls.put(localX, yy, localZ, neighbor);
         int columnIndex = PowerOfTwoCoordinates.packLocal16(localX, localZ);
         boundaryMasks[columnIndex].add(yy);
         if (boundaryCaverns[columnIndex] == null) {
             boundaryCaverns[columnIndex] = neighbor;
         }
+    }
+
+    private MantleChunk<Matter> existingMantleChunk(Mantle<Matter> mantle, int chunkX, int chunkZ) {
+        TectonicPlate<Matter> plate = mantle.getLoadedRegions().get(Mantle.key(chunkX >> 5, chunkZ >> 5));
+        if (plate == null || plate.isClosed()) {
+            return null;
+        }
+        return plate.get(chunkX & 31, chunkZ & 31);
     }
 
     private void processColumnFromMask(

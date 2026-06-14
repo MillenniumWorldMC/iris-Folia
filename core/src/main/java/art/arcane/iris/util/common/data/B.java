@@ -2,19 +2,22 @@ package art.arcane.iris.util.common.data;
 
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.PlatformBlockState;
+import art.arcane.iris.spi.PlatformRegistries;
 import art.arcane.volmlib.util.collection.KList;
 
 public class B {
+    private static volatile PlatformRegistries registries;
+
     public static PlatformBlockState getState(String bdxf) {
-        return IrisPlatforms.get().registries().block(bdxf);
+        return registries().block(bdxf);
     }
 
     public static PlatformBlockState getStateOrNull(String bdxf) {
-        return IrisPlatforms.get().registries().blockOrNull(bdxf);
+        return registries().blockOrNull(bdxf);
     }
 
     public static PlatformBlockState getStateOrNull(String bdxf, boolean warn) {
-        return IrisPlatforms.get().registries().blockOrNull(bdxf, warn);
+        return registries().blockOrNull(bdxf, warn);
     }
 
     public static KList<PlatformBlockState> getStates(KList<String> find) {
@@ -26,11 +29,11 @@ public class B {
     }
 
     public static PlatformBlockState getAirState() {
-        return IrisPlatforms.get().registries().air();
+        return registries().air();
     }
 
     public static PlatformBlockState toDeepSlateOre(PlatformBlockState block, PlatformBlockState ore) {
-        return IrisPlatforms.get().registries().deepSlateOre(block, ore);
+        return registries().deepSlateOre(block, ore);
     }
 
     public static boolean isAir(PlatformBlockState state) {
@@ -107,5 +110,16 @@ public class B {
 
     public static boolean matches(PlatformBlockState filter, PlatformBlockState state) {
         return filter != null && state != null && filter.matches(state);
+    }
+
+    private static PlatformRegistries registries() {
+        PlatformRegistries cached = registries;
+        if (cached != null) {
+            return cached;
+        }
+
+        PlatformRegistries resolved = IrisPlatforms.get().registries();
+        registries = resolved;
+        return resolved;
     }
 }

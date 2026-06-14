@@ -15,10 +15,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ConcurrentHashMap;
 
 public interface MatterGenerator {
-    Executor DISPATCHER = MultiBurst.burst;
+    MultiBurst DISPATCHER = MultiBurst.burst;
+    ConcurrentHashMap<MatterTaskKey, CompletableFuture<Void>> IN_FLIGHT_COMPONENTS = new ConcurrentHashMap<>();
 
     Engine getEngine();
 
@@ -42,7 +43,7 @@ public interface MatterGenerator {
         try (MantleWriter writer = new MantleWriter(getEngine().getMantle(), getMantle(), x, z, writeRadius, multicore)) {
             for (Pair<List<MantleComponent>, Integer> pair : getComponents()) {
                 int passRadius = pair.getB();
-                List<CompletableFuture<Void>> launchedTasks = multicore ? new ArrayList<>() : null;
+                Set<CompletableFuture<Void>> launchedTasks = multicore ? new HashSet<>() : null;
 
                 for (int i = -passRadius; i <= passRadius; i++) {
                     for (int j = -passRadius; j <= passRadius; j++) {
@@ -55,6 +56,7 @@ public interface MatterGenerator {
                             continue;
                         }
 
+                        List<MantleComponent> eligibleComponents = new ArrayList<>(pair.getA().size());
                         for (MantleComponent component : pair.getA()) {
                             if (!component.isEnabled()) {
                                 continue;
@@ -88,18 +90,27 @@ public interface MatterGenerator {
                                 }
                             }
 
-                            int finalPassX = passX;
-                            int finalPassZ = passZ;
-                            MantleChunk<Matter> finalChunk = chunk;
-                            MantleComponent finalComponent = component;
-                            Runnable task = () -> finalChunk.raiseFlagSuspend(finalComponent.getFlag(),
-                                    () -> finalComponent.generateLayer(writer, finalPassX, finalPassZ, context));
+                            eligibleComponents.add(component);
+                        }
 
-                            if (multicore) {
-                                launchedTasks.add(CompletableFuture.runAsync(task, DISPATCHER));
-                            } else {
-                                task.run();
+                        if (eligibleComponents.isEmpty()) {
+                            continue;
+                        }
+
+                        int finalPassX = passX;
+                        int finalPassZ = passZ;
+                        Runnable task = () -> {
+                            for (MantleComponent component : eligibleComponents) {
+                                runComponentInline(chunk, component, writer, finalPassX, finalPassZ, context);
                             }
+                        };
+
+                        if (multicore) {
+                            for (MantleComponent component : eligibleComponents) {
+                                launchedTasks.add(runComponentAsync(chunk, component, writer, finalPassX, finalPassZ, context));
+                            }
+                        } else {
+                            task.run();
                         }
                     }
                 }
@@ -127,5 +138,111 @@ public interface MatterGenerator {
 
     private static long chunkKey(int x, int z) {
         return (((long) x) << 32) ^ (z & 0xffffffffL);
+    }
+
+    private CompletableFuture<Void> runComponentAsync(
+            MantleChunk<Matter> chunk,
+            MantleComponent component,
+            MantleWriter writer,
+            int chunkX,
+            int chunkZ,
+            ChunkContext context
+    ) {
+        MantleFlag flag = component.getFlag();
+        if (chunk.isFlagged(flag)) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        MatterTaskKey key = new MatterTaskKey(getMantle(), chunkX, chunkZ, flag.ordinal());
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        CompletableFuture<Void> existing = IN_FLIGHT_COMPONENTS.putIfAbsent(key, future);
+        if (existing != null) {
+            return existing;
+        }
+
+        try {
+            if (DISPATCHER.ownsCurrentThread()) {
+                completeComponentTask(future, key, chunk, component, writer, chunkX, chunkZ, context);
+            } else {
+                CompletableFuture.runAsync(() -> completeComponentTask(future, key, chunk, component, writer, chunkX, chunkZ, context), DISPATCHER);
+            }
+        } catch (Throwable throwable) {
+            IN_FLIGHT_COMPONENTS.remove(key, future);
+            future.completeExceptionally(throwable);
+            throw throwable;
+        }
+
+        return future;
+    }
+
+    private void completeComponentTask(
+            CompletableFuture<Void> future,
+            MatterTaskKey key,
+            MantleChunk<Matter> chunk,
+            MantleComponent component,
+            MantleWriter writer,
+            int chunkX,
+            int chunkZ,
+            ChunkContext context
+    ) {
+        try {
+            runComponentInline(chunk, component, writer, chunkX, chunkZ, context);
+            future.complete(null);
+        } catch (Throwable throwable) {
+            future.completeExceptionally(throwable);
+            throw throwable;
+        } finally {
+            IN_FLIGHT_COMPONENTS.remove(key, future);
+        }
+    }
+
+    private void runComponentInline(
+            MantleChunk<Matter> chunk,
+            MantleComponent component,
+            MantleWriter writer,
+            int chunkX,
+            int chunkZ,
+            ChunkContext context
+    ) {
+        chunk.raiseFlagSuspend(component.getFlag(), () -> component.generateLayer(writer, chunkX, chunkZ, context));
+    }
+
+    final class MatterTaskKey {
+        private final Mantle<Matter> mantle;
+        private final int chunkX;
+        private final int chunkZ;
+        private final int flagOrdinal;
+
+        MatterTaskKey(Mantle<Matter> mantle, int chunkX, int chunkZ, int flagOrdinal) {
+            this.mantle = mantle;
+            this.chunkX = chunkX;
+            this.chunkZ = chunkZ;
+            this.flagOrdinal = flagOrdinal;
+        }
+
+        @Override
+        public boolean equals(Object object) {
+            if (this == object) {
+                return true;
+            }
+
+            if (!(object instanceof MatterTaskKey other)) {
+                return false;
+            }
+
+            return mantle == other.mantle
+                    && chunkX == other.chunkX
+                    && chunkZ == other.chunkZ
+                    && flagOrdinal == other.flagOrdinal;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = System.identityHashCode(mantle);
+            result = 31 * result + chunkX;
+            result = 31 * result + chunkZ;
+            result = 31 * result + flagOrdinal;
+            return result;
+        }
     }
 }

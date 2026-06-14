@@ -25,6 +25,7 @@ import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.UpperDimensionContext;
 import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisDimension;
+import art.arcane.iris.engine.object.IrisOreGenerator;
 import art.arcane.iris.engine.object.IrisRegion;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.iris.util.project.context.ChunkedDataCache;
@@ -236,8 +237,14 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<PlatformBl
             int topY = Math.min(hf, chunkHeight - 1);
             PlatformBlockState fluid = fluidCache.get(xf, zf);
             PlatformBlockState rock = rockCache.get(xf, zf);
-            boolean hasSurfaceOres = !hideOres && (biome.hasSurfaceOres() || region.hasSurfaceOres() || dimension.hasSurfaceOres());
-            boolean hasUndergroundOres = !hideOres && (biome.hasUndergroundOres() || region.hasUndergroundOres() || dimension.hasUndergroundOres());
+            KList<IrisOreGenerator> biomeSurfaceOres = hideOres ? null : biome.getSurfaceOreGenerators();
+            KList<IrisOreGenerator> regionSurfaceOres = hideOres ? null : region.getSurfaceOreGenerators();
+            KList<IrisOreGenerator> dimensionSurfaceOres = hideOres ? null : dimension.getSurfaceOreGenerators();
+            KList<IrisOreGenerator> biomeUndergroundOres = hideOres ? null : biome.getUndergroundOreGenerators();
+            KList<IrisOreGenerator> regionUndergroundOres = hideOres ? null : region.getUndergroundOreGenerators();
+            KList<IrisOreGenerator> dimensionUndergroundOres = hideOres ? null : dimension.getUndergroundOreGenerators();
+            boolean hasSurfaceOres = !hideOres && (!biomeSurfaceOres.isEmpty() || !regionSurfaceOres.isEmpty() || !dimensionSurfaceOres.isEmpty());
+            boolean hasUndergroundOres = !hideOres && (!biomeUndergroundOres.isEmpty() || !regionUndergroundOres.isEmpty() || !dimensionUndergroundOres.isEmpty());
             KList<PlatformBlockState> blocks = null;
             KList<PlatformBlockState> fblocks = null;
 
@@ -250,9 +257,9 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<PlatformBl
 
                 PlatformBlockState ore = null;
                 if (hasSurfaceOres) {
-                    ore = biome.generateSurfaceOres(realX, i, realZ, localRng, data);
-                    ore = ore == null ? region.generateSurfaceOres(realX, i, realZ, localRng, data) : ore;
-                    ore = ore == null ? dimension.generateSurfaceOres(realX, i, realZ, localRng, data) : ore;
+                    ore = generateOres(biomeSurfaceOres, realX, i, realZ, localRng, data);
+                    ore = ore == null ? generateOres(regionSurfaceOres, realX, i, realZ, localRng, data) : ore;
+                    ore = ore == null ? generateOres(dimensionSurfaceOres, realX, i, realZ, localRng, data) : ore;
                 }
                 if (ore != null) {
                     h.setRaw(xf, i, zf, ore);
@@ -285,9 +292,9 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<PlatformBl
                     }
 
                     if (hasUndergroundOres) {
-                        ore = biome.generateUndergroundOres(realX, i, realZ, localRng, data);
-                        ore = ore == null ? region.generateUndergroundOres(realX, i, realZ, localRng, data) : ore;
-                        ore = ore == null ? dimension.generateUndergroundOres(realX, i, realZ, localRng, data) : ore;
+                        ore = generateOres(biomeUndergroundOres, realX, i, realZ, localRng, data);
+                        ore = ore == null ? generateOres(regionUndergroundOres, realX, i, realZ, localRng, data) : ore;
+                        ore = ore == null ? generateOres(dimensionUndergroundOres, realX, i, realZ, localRng, data) : ore;
                     }
 
                     if (ore != null) {
@@ -328,5 +335,22 @@ public class IrisTerrainNormalActuator extends EngineAssignedActuator<PlatformBl
                 }
             }
         }
+    }
+
+    private PlatformBlockState generateOres(KList<IrisOreGenerator> oreGenerators, int x, int y, int z, RNG rng, IrisData data) {
+        if (oreGenerators == null || oreGenerators.isEmpty()) {
+            return null;
+        }
+
+        int oreCount = oreGenerators.size();
+        for (int oreIndex = 0; oreIndex < oreCount; oreIndex++) {
+            IrisOreGenerator oreGenerator = oreGenerators.get(oreIndex);
+            PlatformBlockState ore = oreGenerator.generate(x, y, z, rng, data);
+            if (ore != null) {
+                return ore;
+            }
+        }
+
+        return null;
     }
 }

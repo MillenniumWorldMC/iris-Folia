@@ -114,6 +114,10 @@ import java.util.regex.Pattern;
 public class Iris extends VolmitPlugin implements Listener, ReloadAware {
     private static final Queue<Runnable> syncJobs = new ShurikenQueue<>();
 
+    static {
+        System.setProperty("iris.cache.fast", "true");
+    }
+
     public static Iris instance;
     public static Bindings.Adventure audiences;
     public static MultiverseCoreLink linkMultiverseCore;
@@ -580,6 +584,7 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
         compat = IrisCompat.configured(getDataFile("compat.json"));
         IrisServices.register(IrisCompat.class, compat);
         ServerConfigurator.configure();
+        IrisToolbelt.applyPregenPerformanceProfile();
         validateAllPacks();
         IrisSafeguard.execute();
         getSender().setTag(getTag());
@@ -607,7 +612,6 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
         services.values().forEach(this::registerListener);
         addShutdownHook();
         processPendingStartupWorldDeletes();
-        IrisToolbelt.applyPregenPerformanceProfile();
         WorldLifecycleService.get();
         WorldRuntimeControlService.get();
 

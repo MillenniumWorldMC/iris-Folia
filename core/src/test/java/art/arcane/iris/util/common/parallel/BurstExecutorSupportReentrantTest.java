@@ -12,6 +12,18 @@ import static org.junit.Assert.assertTrue;
 
 public class BurstExecutorSupportReentrantTest {
     @Test
+    public void multiBurstRecognizesOwnedWorkerThread() throws Exception {
+        MultiBurst burst = new MultiBurst("Iris Test", Thread.NORM_PRIORITY, () -> 1);
+
+        try {
+            Future<Boolean> future = burst.submit(burst::ownsCurrentThread);
+            assertTrue(future.get(5, TimeUnit.SECONDS));
+        } finally {
+            burst.close();
+        }
+    }
+
+    @Test
     public void runsNestedBurstInlineOnSameForkJoinPoolWorker() throws Exception {
         ForkJoinPool pool = new ForkJoinPool(1);
         AtomicBoolean nestedExecuted = new AtomicBoolean(false);

@@ -60,16 +60,47 @@ public class ChunkDataHunkHolder extends AtomicHunk<PlatformBlockState> {
     }
 
     public void apply() {
-        for (int i = 0; i < getHeight(); i++) {
-            for (int j = 0; j < getWidth(); j++) {
-                for (int k = 0; k < getDepth(); k++) {
-                    PlatformBlockState b = super.getRaw(j, i, k);
+        int height = getHeight();
+        for (int x = 0; x < getWidth(); x++) {
+            for (int z = 0; z < getDepth(); z++) {
+                BlockData activeBlock = null;
+                int runStart = -1;
 
-                    if (b != null) {
-                        chunk.setBlock(j, i + chunk.getMinHeight(), k, (BlockData) b.nativeHandle());
+                for (int y = 0; y < height; y++) {
+                    PlatformBlockState state = super.getRaw(x, y, z);
+                    BlockData block = state == null ? null : (BlockData) state.nativeHandle();
+                    if (block == null) {
+                        flushRun(x, z, runStart, y, activeBlock);
+                        activeBlock = null;
+                        runStart = -1;
+                        continue;
                     }
+
+                    if (activeBlock != null && activeBlock.equals(block)) {
+                        continue;
+                    }
+
+                    flushRun(x, z, runStart, y, activeBlock);
+                    activeBlock = block;
+                    runStart = y;
                 }
+
+                flushRun(x, z, runStart, height, activeBlock);
             }
         }
+    }
+
+    private void flushRun(int x, int z, int startY, int endY, BlockData block) {
+        if (block == null || startY < 0 || endY <= startY) {
+            return;
+        }
+
+        int minY = chunk.getMinHeight();
+        if (endY - startY == 1) {
+            chunk.setBlock(x, startY + minY, z, block);
+            return;
+        }
+
+        chunk.setRegion(x, startY + minY, z, x + 1, endY + minY, z + 1, block);
     }
 }

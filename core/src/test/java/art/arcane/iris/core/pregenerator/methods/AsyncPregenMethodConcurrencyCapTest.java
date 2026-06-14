@@ -7,10 +7,11 @@ import static org.junit.Assert.assertEquals;
 public class AsyncPregenMethodConcurrencyCapTest {
     @Test
     public void paperLikeRecommendedCapTracksWorkerThreads() {
-        assertEquals(8, AsyncPregenMethod.computePaperLikeRecommendedCap(1));
-        assertEquals(8, AsyncPregenMethod.computePaperLikeRecommendedCap(4));
-        assertEquals(24, AsyncPregenMethod.computePaperLikeRecommendedCap(12));
-        assertEquals(96, AsyncPregenMethod.computePaperLikeRecommendedCap(80));
+        assertEquals(16, AsyncPregenMethod.computePaperLikeRecommendedCap(1));
+        assertEquals(16, AsyncPregenMethod.computePaperLikeRecommendedCap(4));
+        assertEquals(48, AsyncPregenMethod.computePaperLikeRecommendedCap(12));
+        assertEquals(128, AsyncPregenMethod.computePaperLikeRecommendedCap(80));
+        assertEquals(128, AsyncPregenMethod.computePaperLikeRecommendedCap(128));
     }
 
     @Test
