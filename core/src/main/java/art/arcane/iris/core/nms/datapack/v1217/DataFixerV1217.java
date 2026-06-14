@@ -89,32 +89,7 @@ public class DataFixerV1217 extends DataFixerV1213 {
 
     @Override
     public JSONObject fixCustomBiome(IrisBiomeCustom biome, JSONObject json) {
-        json = super.fixCustomBiome(biome, json);
-        JSONObject effects = json.getJSONObject("effects");
-        JSONObject attributes = new JSONObject();
-
-        attributes.put("minecraft:visual/fog_color", effects.remove("fog_color"));
-        attributes.put("minecraft:visual/sky_color", effects.remove("sky_color"));
-        attributes.put("minecraft:visual/water_color", effects.remove("water_color"));
-        attributes.put("minecraft:visual/water_fog_color", effects.remove("water_fog_color"));
-        Object grassColor = effects.remove("grass_color");
-        if (grassColor != null) {
-            attributes.put("minecraft:visual/grass_color", grassColor);
-        }
-        Object foliageColor = effects.remove("foliage_color");
-        if (foliageColor != null) {
-            attributes.put("minecraft:visual/foliage_color", foliageColor);
-        }
-
-        JSONObject particle = (JSONObject) effects.remove("particle");
-        if (particle != null) {
-            particle.put("particle", particle.remove("options"));
-            attributes.put("minecraft:visual/ambient_particles", new JSONArray()
-                    .put(particle));
-        }
-        json.put("attributes", attributes);
-
-        return json;
+        return super.fixCustomBiome(biome, json);
     }
 
     @Override
