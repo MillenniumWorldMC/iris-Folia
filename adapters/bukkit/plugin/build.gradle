@@ -1,4 +1,4 @@
-def apiVersion = '26.1'
+def apiVersion = '26.2'
 def mainClass = 'art.arcane.iris.Iris'
 
 String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')

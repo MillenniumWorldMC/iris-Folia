@@ -46,7 +46,7 @@ tasks.named('run', JavaExec).configure {
 }
 
 String probePack = providers.gradleProperty('probePack')
-    .orElse('/Users/brianfopiano/Developer/RemoteGit/[Minecraft Server]/consumers/plugin-consumers/instances/purpur-26.1.2/plugins/Iris/packs/overworld')
+    .orElse('/Users/brianfopiano/Developer/RemoteGit/[Minecraft Server]/consumers/plugin-consumers/instances/purpur-26.2/plugins/Iris/packs/overworld')
     .get()
 String probeRadius = providers.gradleProperty('probeRadius').orElse('2').get()
 

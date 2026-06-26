@@ -90,6 +90,7 @@ public final class ModdedStudioCommands {
     private static final String STUDIO_NAMESPACE = "irisworldgen";
     private static final String STUDIO_PREFIX = "studio_";
     private static final String DEFAULT_TEMPLATE = "example";
+    private static final UUID CONSOLE_OWNER = new UUID(0L, 0L);
     private static final Map<UUID, String> STUDIOS = new ConcurrentHashMap<>();
     private static final SuggestionProvider<CommandSourceStack> GENERATOR_KEYS = (CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) -> {
         ModdedCommandFeedback.tab(context.getSource());
@@ -291,19 +292,19 @@ public final class ModdedStudioCommands {
         return STUDIO_NAMESPACE + ":" + STUDIO_PREFIX + base;
     }
 
+    private static String studioConsoleDimensionId() {
+        return STUDIO_NAMESPACE + ":" + STUDIO_PREFIX + "console";
+    }
+
     private static int open(CommandSourceStack source, String pack, long seed) {
-        ServerPlayer player = source.getPlayer();
-        if (player == null) {
-            IrisModdedCommands.fail(source, "This command can only be used by players (a studio teleports you into the dimension).");
-            return 0;
-        }
         if (pack == null || pack.isBlank()) {
             IrisModdedCommands.fail(source, "Provide a dimension pack: /iris studio open <pack> [seed]");
             return 0;
         }
+        ServerPlayer player = source.getPlayer();
+        UUID owner = player == null ? CONSOLE_OWNER : player.getUUID();
+        String dimensionId = player == null ? studioConsoleDimensionId() : studioDimensionId(player);
         MinecraftServer server = source.getServer();
-        UUID owner = player.getUUID();
-        String dimensionId = studioDimensionId(player);
         IrisModdedCommands.ok(source, "Opening studio for '" + pack + "' (seed " + seed + ")...");
         Thread thread = new Thread(() -> openAsync(source, server, owner, dimensionId, pack, seed), "Iris Studio Open");
         thread.setDaemon(true);
@@ -329,11 +330,43 @@ public final class ModdedStudioCommands {
                 server.execute(() -> IrisModdedCommands.fail(source, "Pack '" + pack + "' has no dimensions/" + pack + ".json"));
                 return;
             }
-            server.execute(() -> injectAndTeleport(source, server, owner, dimensionId, pack, seed));
+            server.execute(() -> {
+                if (owner.equals(CONSOLE_OWNER)) {
+                    injectConsole(source, server, dimensionId, pack, seed);
+                } else {
+                    injectAndTeleport(source, server, owner, dimensionId, pack, seed);
+                }
+            });
         } catch (Throwable e) {
             LOGGER.error("Iris studio open failed for {}", pack, e);
             server.execute(() -> IrisModdedCommands.fail(source, "Studio open failed: " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " - " + e.getMessage())));
         }
+    }
+
+    private static void injectConsole(CommandSourceStack source, MinecraftServer server, String dimensionId, String pack, long seed) {
+        ModdedDimensionManager.Handle handle;
+        try {
+            handle = ModdedDimensionManager.create(server, dimensionId, pack, seed);
+        } catch (Throwable e) {
+            LOGGER.error("Iris console studio injection failed for {} ({})", dimensionId, pack, e);
+            IrisModdedCommands.fail(source, "Studio injection failed: " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " - " + e.getMessage()));
+            return;
+        }
+        STUDIOS.put(CONSOLE_OWNER, dimensionId);
+        ServerLevel studio = handle.level();
+        int surface = studio.getMaxY();
+        try {
+            Engine engine = IrisModdedCommands.engineFor(studio);
+            if (engine != null) {
+                surface = engine.getMinHeight() + engine.getHeight(8, 8, false) + 2;
+            }
+        } catch (Throwable e) {
+            LOGGER.error("Iris console studio surface probe failed for {}", dimensionId, e);
+        }
+        IrisModdedCommands.ok(source, "Console studio open: " + dimensionId + " now runs '" + pack + "' seed " + seed + " (transient; not written to iris-dimensions.json and cleared on restart).");
+        IrisModdedCommands.ok(source, "Enter it with: /execute in " + dimensionId + " run tp @s 8.5 " + surface + " 8.5");
+        IrisModdedCommands.ok(source, "Pregen it with: /iris pregen start <radius> " + dimensionId);
+        IrisModdedCommands.ok(source, "Remove it with: /iris studio close");
     }
 
     private static void injectAndTeleport(CommandSourceStack source, MinecraftServer server, UUID owner, String dimensionId, String pack, long seed) {
@@ -366,12 +399,8 @@ public final class ModdedStudioCommands {
 
     private static int close(CommandSourceStack source) {
         ServerPlayer player = source.getPlayer();
-        if (player == null) {
-            IrisModdedCommands.fail(source, "This command can only be used by players.");
-            return 0;
-        }
         MinecraftServer server = source.getServer();
-        UUID owner = player.getUUID();
+        UUID owner = player == null ? CONSOLE_OWNER : player.getUUID();
         String dimensionId = STUDIOS.remove(owner);
         if (dimensionId == null) {
             IrisModdedCommands.fail(source, "You do not have an open studio. Use /iris studio open <pack> first.");
@@ -420,6 +449,9 @@ public final class ModdedStudioCommands {
     }
 
     private static String ownerName(MinecraftServer server, UUID owner) {
+        if (owner.equals(CONSOLE_OWNER)) {
+            return "console";
+        }
         ServerPlayer player = server.getPlayerList().getPlayer(owner);
         return player == null ? owner.toString() : player.getScoreboardName();
     }

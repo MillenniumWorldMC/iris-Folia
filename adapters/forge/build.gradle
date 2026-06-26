@@ -28,9 +28,9 @@ plugins {
 
 Properties rootProperties = new Properties()
 file('../../gradle.properties').withInputStream { InputStream stream -> rootProperties.load(stream) }
-String irisVersion = providers.gradleProperty('irisVersion').getOrElse(rootProperties.getProperty('irisVersion', '4.0.0-26.1'))
-String minecraftVersion = providers.gradleProperty('minecraftVersion').getOrElse(rootProperties.getProperty('minecraftVersion', '26.1.2'))
-String forgeVersion = providers.gradleProperty('forgeVersion').getOrElse(rootProperties.getProperty('forgeVersion', '26.1.2-64.0.9'))
+String irisVersion = providers.gradleProperty('irisVersion').getOrElse(rootProperties.getProperty('irisVersion', '4.0.0-26.2'))
+String minecraftVersion = providers.gradleProperty('minecraftVersion').getOrElse(rootProperties.getProperty('minecraftVersion', '26.2'))
+String forgeVersion = providers.gradleProperty('forgeVersion').getOrElse(rootProperties.getProperty('forgeVersion', '26.2-65.0.0'))
 Closure<String> loaderDisplayVersion = { String loaderVersion ->
     String coordinatePrefix = "${minecraftVersion}-"
     if (loaderVersion.startsWith(coordinatePrefix)) {

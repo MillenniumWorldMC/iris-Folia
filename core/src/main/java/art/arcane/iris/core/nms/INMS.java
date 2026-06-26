@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.Set;
 
 public class INMS {
-    private static final Version CURRENT = new Version(26, 1, 2, "v26_1_R1");
+    private static final Version CURRENT = new Version(26, 2, 0, "v26_2_R1");
 
     private static final List<Version> REVISION = List.of(
             CURRENT
@@ -85,7 +85,7 @@ public class INMS {
 
         MinecraftVersion detectedVersion = getMinecraftVersion();
         String serverVersion = detectedVersion == null ? Bukkit.getServer().getVersion() : detectedVersion.value();
-        throw new IllegalStateException("Iris requires Minecraft 26.1.2. Detected server version: " + serverVersion);
+        throw new IllegalStateException("Iris requires Minecraft 26.2. Detected server version: " + serverVersion);
     }
 
     private static String getTag(List<Version> versions, String def) {

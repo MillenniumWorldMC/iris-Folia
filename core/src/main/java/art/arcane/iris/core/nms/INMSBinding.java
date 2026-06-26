@@ -37,7 +37,11 @@ import art.arcane.volmlib.util.math.Vector3d;
 import art.arcane.volmlib.util.nbt.mca.palette.MCABiomeContainer;
 import art.arcane.volmlib.util.nbt.mca.palette.MCAPaletteAccess;
 import art.arcane.volmlib.util.nbt.tag.CompoundTag;
-import org.bukkit.*;
+import org.bukkit.Chunk;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.WorldCreator;
 import org.bukkit.block.Biome;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -197,7 +201,7 @@ public interface INMSBinding {
     Color getBiomeColor(Location location, BiomeColor type);
 
     default DataVersion getDataVersion() {
-        return DataVersion.V26_1_2;
+        return DataVersion.V26_2;
     }
 
     default int getSpawnChunkCount(World world) {

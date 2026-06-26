@@ -28,9 +28,9 @@ plugins {
 
 Properties rootProperties = new Properties()
 file('../../gradle.properties').withInputStream { InputStream stream -> rootProperties.load(stream) }
-String irisVersion = providers.gradleProperty('irisVersion').getOrElse(rootProperties.getProperty('irisVersion', '4.0.0-26.1'))
-String minecraftVersion = providers.gradleProperty('minecraftVersion').getOrElse(rootProperties.getProperty('minecraftVersion', '26.1.2'))
-String neoForgeVersion = providers.gradleProperty('neoForgeVersion').getOrElse(rootProperties.getProperty('neoForgeVersion', '26.1.2.75'))
+String irisVersion = providers.gradleProperty('irisVersion').getOrElse(rootProperties.getProperty('irisVersion', '4.0.0-26.2'))
+String minecraftVersion = providers.gradleProperty('minecraftVersion').getOrElse(rootProperties.getProperty('minecraftVersion', '26.2'))
+String neoForgeVersion = providers.gradleProperty('neoForgeVersion').getOrElse(rootProperties.getProperty('neoForgeVersion', '26.2.0.6-beta'))
 Closure<String> irisArtifactName = { String platform, String targetVersion ->
     return "Iris v${project.version} [${platform}] ${targetVersion}.jar"
 }

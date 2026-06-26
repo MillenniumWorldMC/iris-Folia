@@ -1,4 +1,4 @@
-package art.arcane.iris.core.nms.v26_1_R1;
+package art.arcane.iris.core.nms.v26_2_R1;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import art.arcane.iris.spi.IrisLogging;
@@ -812,11 +812,14 @@ public class NMSBinding implements INMSBinding {
             int minY = craftChunkData.getMinHeight();
             int height = craftChunkData.getMaxHeight() - minY;
             int accessMinY = access.getMinY();
+            int accessMaxY = accessMinY + access.getHeight();
+            int yStart = Math.max(0, accessMinY - minY);
+            int yEnd = Math.min(height, accessMaxY - minY);
             int baseX = access.getPos().getMinBlockX();
             int baseZ = access.getPos().getMinBlockZ();
             ChunkDataHunkHolder holder = data instanceof ChunkDataHunkHolder chunkDataHolder ? chunkDataHolder : null;
             for (int z = 0; z < 16; z++) {
-                for (int y = 0; y < height; y++) {
+                for (int y = yStart; y < yEnd; y++) {
                     int blockY = y + minY;
                     int sectionIndex = (blockY - accessMinY) >> 4;
                     LevelChunkSection section = access.getSection(sectionIndex);
@@ -1108,7 +1111,7 @@ public class NMSBinding implements INMSBinding {
 
     @Override
     public DataVersion getDataVersion() {
-        return DataVersion.V26_1_2;
+        return DataVersion.V26_2;
     }
 
     @Override

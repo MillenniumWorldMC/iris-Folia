@@ -13,7 +13,7 @@ import java.util.function.Supplier;
 @Getter
 public enum DataVersion {
     UNSUPPORTED("0.0.0", 0, () -> null),
-    V26_1_2("26.1.2", 101, DataFixerV1217::new);
+    V26_2("26.2", 107, DataFixerV1217::new);
     private static final KMap<DataVersion, IDataFixer> cache = new KMap<>();
     @Getter(AccessLevel.NONE)
     private final Supplier<IDataFixer> constructor;

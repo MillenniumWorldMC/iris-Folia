@@ -1,4 +1,4 @@
-package art.arcane.iris.core.nms.v26_1_R1;
+package art.arcane.iris.core.nms.v26_2_R1;
 
 import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.MapCodec;

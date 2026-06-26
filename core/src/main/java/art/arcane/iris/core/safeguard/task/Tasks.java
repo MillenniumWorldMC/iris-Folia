@@ -94,7 +94,7 @@ public final class Tasks {
         } else if (parts.length >= 2) {
             supportedVersions = parts[1];
         } else {
-            supportedVersions = "26.1.2";
+            supportedVersions = "26.2";
         }
 
         if (!(INMS.get() instanceof NMSBinding1X)) {

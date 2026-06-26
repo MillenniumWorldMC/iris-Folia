@@ -41,16 +41,16 @@ plugins {
 }
 
 group = 'art.arcane'
-version = providers.gradleProperty('irisVersion').getOrElse('4.0.0-26.1')
+version = providers.gradleProperty('irisVersion').getOrElse('4.0.0-26.2')
 
 project(':core') {
     group = 'art.arcane'
     version = rootProject.version
 }
-String minecraftVersion = providers.gradleProperty('minecraftVersion').getOrElse('26.1.2')
+String minecraftVersion = providers.gradleProperty('minecraftVersion').getOrElse('26.2')
 String fabricLoaderVersion = providers.gradleProperty('fabricLoaderVersion').getOrElse('0.19.3')
-String forgeVersion = providers.gradleProperty('forgeVersion').getOrElse('26.1.2-64.0.9')
-String neoForgeVersion = providers.gradleProperty('neoForgeVersion').getOrElse('26.1.2.75')
+String forgeVersion = providers.gradleProperty('forgeVersion').getOrElse('26.2-65.0.0')
+String neoForgeVersion = providers.gradleProperty('neoForgeVersion').getOrElse('26.2.0.6-beta')
 String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')
     .orElse('com.github.VolmitSoftware:VolmLib:master-SNAPSHOT')
     .get()
@@ -101,7 +101,7 @@ registerCustomOutputTaskUnix('CrazyDev22LT', '/home/julian/Desktop/server/plugin
 // ==============================================================
 
 def nmsBindings = [
-    v26_1_R1: '26.1.2.build.66-stable',
+    v26_2_R1: '26.2.build.25-alpha',
 ]
 Class nmsTypeClass = Class.forName('NMSBinding$Type')
 nmsBindings.each { key, value ->

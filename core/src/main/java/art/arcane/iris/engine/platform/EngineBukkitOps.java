@@ -114,7 +114,11 @@ public final class EngineBukkitOps {
         try {
             Runnable tileTask = () -> {
                 chunk.iterate(TileWrapper.class, (x, y, z, v) -> {
-                    Block block = c.getBlock(x & 15, y + engine.getWorld().minHeight(), z & 15);
+                    int worldY = y + engine.getWorld().minHeight();
+                    if (worldY < c.getWorld().getMinHeight() || worldY >= c.getWorld().getMaxHeight()) {
+                        return;
+                    }
+                    Block block = c.getBlock(x & 15, worldY, z & 15);
                     if (!TileData.setTileState(block, v.getData())) {
                         NamespacedKey blockTypeKey = KeyedType.getKey(block.getType());
                         NamespacedKey tileTypeKey = KeyedType.getKey(v.getData().getMaterial());
@@ -127,7 +131,11 @@ public final class EngineBukkitOps {
 
             Runnable customTask = () -> {
                 chunk.iterate(Identifier.class, (x, y, z, v) -> {
-                    IrisServices.get(ExternalDataSVC.class).processUpdate(engine, c.getBlock(x & 15, y + engine.getWorld().minHeight(), z & 15), v);
+                    int worldY = y + engine.getWorld().minHeight();
+                    if (worldY < c.getWorld().getMinHeight() || worldY >= c.getWorld().getMaxHeight()) {
+                        return;
+                    }
+                    IrisServices.get(ExternalDataSVC.class).processUpdate(engine, c.getBlock(x & 15, worldY, z & 15), v);
                 });
             };
 
@@ -246,6 +254,10 @@ public final class EngineBukkitOps {
     }
 
     public static void update(Engine engine, int x, int y, int z, Chunk c, MantleChunk<Matter> mc, RNG rf) {
+        World world = c.getWorld();
+        if (y < world.getMinHeight() || y >= world.getMaxHeight()) {
+            return;
+        }
         Block block = c.getBlock(x, y, z);
         BlockData data = block.getBlockData();
         engine.blockUpdatedMetric();
