@@ -19,6 +19,7 @@
 package art.arcane.iris.util.common.plugin;
 
 import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.volmlib.util.collection.KList;
@@ -34,7 +35,10 @@ import lombok.Getter;
 import lombok.Setter;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.title.Title;
+import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.md_5.bungee.api.ChatMessageType;
+import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Server;
 import org.bukkit.Sound;
 import org.bukkit.command.CommandSender;
@@ -44,7 +48,6 @@ import org.bukkit.permissions.PermissionAttachment;
 import org.bukkit.permissions.PermissionAttachmentInfo;
 import org.bukkit.plugin.Plugin;
 
-import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -226,10 +229,13 @@ public class VolmitSender implements CommandSender {
     }
 
     public void sendTitle(String title, String subtitle, int i, int s, int o) {
-        BukkitPlatform.audiences().player(player()).showTitle(Title.title(
-                createComponent(title),
-                createComponent(subtitle),
-                Title.Times.times(Duration.ofMillis(i), Duration.ofMillis(s), Duration.ofMillis(o))));
+        try {
+            player().sendTitle(
+                    LegacyComponentSerializer.legacySection().serialize(createComponent(title)),
+                    LegacyComponentSerializer.legacySection().serialize(createComponent(subtitle)),
+                    i / 50, s / 50, o / 50);
+        } catch (Throwable ignored) {
+        }
     }
 
     public void sendProgress(double percent, String thing) {
@@ -248,18 +254,27 @@ public class VolmitSender implements CommandSender {
     }
 
     public void sendAction(String action) {
-        BukkitPlatform.audiences().player(player()).sendActionBar(createNoPrefixComponent(action));
+        try {
+            player().spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(LegacyComponentSerializer.legacySection().serialize(createNoPrefixComponent(action))));
+        } catch (Throwable ignored) {
+        }
     }
 
     public void sendActionNoProcessing(String action) {
-        BukkitPlatform.audiences().player(player()).sendActionBar(createNoPrefixComponentNoProcessing(action));
+        try {
+            player().spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(LegacyComponentSerializer.legacySection().serialize(createNoPrefixComponentNoProcessing(action))));
+        } catch (Throwable ignored) {
+        }
     }
 
     public void sendTitle(String subtitle, int i, int s, int o) {
-        BukkitPlatform.audiences().player(player()).showTitle(Title.title(
-                createNoPrefixComponent(" "),
-                createNoPrefixComponent(subtitle),
-                Title.Times.times(Duration.ofMillis(i), Duration.ofMillis(s), Duration.ofMillis(o))));
+        try {
+            player().sendTitle(
+                    " ",
+                    LegacyComponentSerializer.legacySection().serialize(createNoPrefixComponent(subtitle)),
+                    i / 50, s / 50, o / 50);
+        } catch (Throwable ignored) {
+        }
     }
 
     private Component createNoPrefixComponent(String message) {
@@ -338,15 +353,7 @@ public class VolmitSender implements CommandSender {
             return;
         }
 
-        try {
-            BukkitPlatform.audiences().sender(s).sendMessage(createComponent(message));
-        } catch (Throwable e) {
-            String t = C.translateAlternateColorCodes('&', getTag() + message);
-            String a = C.aura(t, IrisSettings.get().getGeneral().getSpinh(), IrisSettings.get().getGeneral().getSpins(), IrisSettings.get().getGeneral().getSpinb());
-
-            IrisLogging.debug("<NOMINI>Failure to parse " + a);
-            s.sendMessage(C.translateAlternateColorCodes('&', getTag() + message));
-        }
+        deliver(createComponent(message));
     }
 
     public void sendMessageBasic(String message) {
@@ -368,14 +375,109 @@ public class VolmitSender implements CommandSender {
             return;
         }
 
-        try {
-            BukkitPlatform.audiences().sender(s).sendMessage(createComponentRaw(message));
-        } catch (Throwable e) {
-            String t = C.translateAlternateColorCodes('&', getTag() + message);
-            String a = C.aura(t, IrisSettings.get().getGeneral().getSpinh(), IrisSettings.get().getGeneral().getSpins(), IrisSettings.get().getGeneral().getSpinb());
+        deliver(createComponentRaw(message));
+    }
 
-            IrisLogging.debug("<NOMINI>Failure to parse " + a);
-            s.sendMessage(C.translateAlternateColorCodes('&', getTag() + message));
+    public void sendComponent(Component component) {
+        if (s instanceof CommandDummy) {
+            return;
+        }
+        deliver(component);
+    }
+
+    private void deliver(Component component) {
+        if (sendNative(s, component)) {
+            return;
+        }
+        s.sendMessage(LegacyComponentSerializer.legacySection().serialize(component));
+    }
+
+    private static volatile boolean nativeProbed = false;
+    private static Object nativeGson;
+    private static java.lang.reflect.Method nativeDeserialize;
+    private static java.lang.reflect.Method nativeSendMessage;
+    private static final java.util.concurrent.atomic.AtomicBoolean SEND_LOGGED = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    private static void adventureDebug(String message) {
+        try {
+            java.io.File f = IrisPlatforms.get().dataFile("adventure-debug.txt");
+            java.nio.file.Files.writeString(f.toPath(), message + "\n", java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static String nativeAdventure(String suffix) {
+        return new String(new char[]{'n', 'e', 't', '.', 'k', 'y', 'o', 'r', 'i', '.', 'a', 'd', 'v', 'e', 'n', 't', 'u', 'r', 'e', '.', 't', 'e', 'x', 't', '.'}) + suffix;
+    }
+
+    private static void probeNative() {
+        String step = "start";
+        try {
+            String[] candidates = {nativeAdventure("serializer.gson.GsonComponentSerializer"), nativeAdventure("serializer.json.JSONComponentSerializer")};
+            String[] accessors = {"gson", "json"};
+            Class<?> serializer = null;
+            for (int i = 0; i < candidates.length; i++) {
+                try {
+                    step = "forName " + candidates[i];
+                    Class<?> c = Class.forName(candidates[i]);
+                    step = "accessor " + accessors[i] + " on " + candidates[i];
+                    nativeGson = c.getMethod(accessors[i]).invoke(null);
+                    serializer = c;
+                    break;
+                } catch (Throwable ignore) {
+                }
+            }
+            if (serializer == null) {
+                throw new ClassNotFoundException("no native adventure json serializer exposed");
+            }
+            step = "find deserialize on " + serializer.getName();
+            java.lang.reflect.Method exact = null;
+            java.lang.reflect.Method loose = null;
+            for (java.lang.reflect.Method m : serializer.getMethods()) {
+                if (m.getName().equals("deserialize") && m.getParameterCount() == 1) {
+                    Class<?> p = m.getParameterTypes()[0];
+                    if (p == String.class) {
+                        exact = m;
+                        break;
+                    }
+                    if (p.isAssignableFrom(String.class)) {
+                        loose = m;
+                    }
+                }
+            }
+            nativeDeserialize = exact != null ? exact : loose;
+            if (nativeDeserialize == null) {
+                throw new NoSuchMethodException("deserialize(String-compatible) not found");
+            }
+            step = "forName Component";
+            Class<?> componentType = Class.forName(nativeAdventure("Component"));
+            step = "getMethod CommandSender.sendMessage(Component)";
+            nativeSendMessage = CommandSender.class.getMethod("sendMessage", componentType);
+        } catch (Throwable e) {
+            nativeSendMessage = null;
+            adventureDebug("PROBE FAIL at [" + step + "]: " + e.getClass().getName() + ": " + e.getMessage());
+        }
+        nativeProbed = true;
+    }
+
+    private static boolean sendNative(CommandSender target, Component component) {
+        if (!nativeProbed) {
+            probeNative();
+        }
+        if (nativeSendMessage == null) {
+            return false;
+        }
+        try {
+            String json = GsonComponentSerializer.gson().serialize(component);
+            Object nativeComponent = nativeDeserialize.invoke(nativeGson, json);
+            nativeSendMessage.invoke(target, nativeComponent);
+            return true;
+        } catch (Throwable e) {
+            if (SEND_LOGGED.compareAndSet(false, true)) {
+                Throwable cause = e.getCause() != null ? e.getCause() : e;
+                adventureDebug("SEND FAIL: " + cause.getClass().getName() + ": " + cause.getMessage());
+            }
+            return false;
         }
     }
 

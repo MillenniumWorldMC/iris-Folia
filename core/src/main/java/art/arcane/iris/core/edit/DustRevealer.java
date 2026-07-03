@@ -270,7 +270,7 @@ public class DustRevealer {
                     .color(NamedTextColor.GREEN)
                     .clickEvent(ClickEvent.copyToClipboard(payload))
                     .hoverEvent(HoverEvent.showText(Component.text("Copy block stats to clipboard")));
-            BukkitPlatform.audiences().player(sender.player()).sendMessage(button);
+            sender.sendComponent(button);
         } catch (Throwable e) {
             IrisLogging.reportError(e);
         }

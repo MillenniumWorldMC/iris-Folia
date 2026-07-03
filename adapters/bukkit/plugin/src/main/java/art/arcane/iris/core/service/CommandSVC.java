@@ -223,8 +223,7 @@ public class CommandSVC implements IrisService, CommandExecutor, TabCompleter, D
         }
 
         if (sender instanceof Player player) {
-            player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_CLUSTER_BREAK, 0.77f, 0.25f);
-            player.playSound(player.getLocation(), Sound.BLOCK_BEACON_DEACTIVATE, 0.2f, 0.45f);
+            J.s(() -> playSounds(player, Sound.BLOCK_AMETHYST_CLUSTER_BREAK, 0.77f, 0.25f, Sound.BLOCK_BEACON_DEACTIVATE, 0.2f, 0.45f));
         }
     }
 
@@ -234,8 +233,24 @@ public class CommandSVC implements IrisService, CommandExecutor, TabCompleter, D
         }
 
         if (sender instanceof Player player) {
-            player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_CLUSTER_BREAK, 0.77f, 1.65f);
-            player.playSound(player.getLocation(), Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 0.125f, 2.99f);
+            J.s(() -> playSounds(player, Sound.BLOCK_AMETHYST_CLUSTER_BREAK, 0.77f, 1.65f, Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 0.125f, 2.99f));
+        }
+    }
+
+    private static final java.util.concurrent.atomic.AtomicBoolean SOUND_LOGGED = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    private void playSounds(Player player, Sound a, float av, float ap, Sound b, float bv, float bp) {
+        try {
+            player.playSound(player.getLocation(), a, av, ap);
+            player.playSound(player.getLocation(), b, bv, bp);
+        } catch (Throwable e) {
+            if (SOUND_LOGGED.compareAndSet(false, true)) {
+                try {
+                    java.io.File f = Iris.instance.getDataFile("adventure-debug.txt");
+                    java.nio.file.Files.writeString(f.toPath(), "SOUND FAIL: " + e.getClass().getName() + ": " + e.getMessage() + "\n", java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+                } catch (Throwable ignored) {
+                }
+            }
         }
     }
 
