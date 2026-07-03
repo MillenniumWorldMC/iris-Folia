@@ -18,6 +18,7 @@
 
 package art.arcane.iris.modded;
 
+import art.arcane.iris.core.gui.GuiHost;
 import art.arcane.iris.engine.decorator.DecoratorPlatformHooks;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineWorldManager;
@@ -28,8 +29,16 @@ import art.arcane.iris.engine.object.IrisObjectRotation;
 import art.arcane.iris.engine.object.TileData;
 import art.arcane.iris.modded.api.ModdedCustomContentRegistry;
 import art.arcane.iris.modded.command.ModdedGuiHost;
+import art.arcane.iris.modded.command.ModdedObjectUndo;
+import art.arcane.iris.modded.command.ModdedPregenJob;
+import art.arcane.iris.modded.command.ModdedStudioCommands;
+import art.arcane.iris.modded.command.ModdedWandService;
+import art.arcane.iris.modded.service.ModdedChunkUpdateService;
+import art.arcane.iris.modded.service.ModdedEngineMaintenanceService;
 import art.arcane.iris.modded.service.ModdedLogFilterService;
 import art.arcane.iris.modded.service.ModdedPreservationService;
+import art.arcane.iris.modded.service.ModdedSettingsHotloadService;
+import art.arcane.iris.modded.service.ModdedStudioHotloadService;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.IrisServices;
 import net.minecraft.server.MinecraftServer;
@@ -51,6 +60,7 @@ public final class ModdedEngineBootstrap {
     private static final ModdedServiceManager SERVICE_MANAGER = new ModdedServiceManager();
     private static volatile ModdedLoader loader;
     private static volatile ModdedPlatform platform;
+    private static volatile MinecraftServer currentServer;
 
     private ModdedEngineBootstrap() {
     }
@@ -71,32 +81,76 @@ public final class ModdedEngineBootstrap {
         SERVICE_MANAGER.tick(server);
     }
 
-    public static void stop() {
-        ModdedPrimaryWorldRouter.clear();
-        SERVICE_MANAGER.disableAll();
+    public static void start(MinecraftServer server) {
+        currentServer = server;
+        bind();
+        ModdedStartup.reset();
         ModdedScheduler scheduler = schedulerOrNull();
         if (scheduler != null) {
-            scheduler.shutdown();
+            scheduler.reset();
         }
+        SERVICE_MANAGER.enableAll();
     }
 
-    public static void initialize(ModdedLoader moddedLoader) {
+    public static void stop() {
+        ModdedPregenJob.shutdown();
+        ModdedObjectUndo.clearAll();
+        ModdedWandService.clearAll();
+        ModdedStudioCommands.clear();
+        ModdedWorldEngines.shutdown();
+        ModdedPrimaryWorldRouter.clear();
+        SERVICE_MANAGER.disableAll();
+        ModdedDimensionManager.clear();
+        ModdedScheduler scheduler = schedulerOrNull();
+        if (scheduler != null) {
+            scheduler.reset();
+        }
+        ModdedStartup.reset();
+        currentServer = null;
+    }
+
+    public static void bootCommon(ModdedLoader moddedLoader, String loaderDescription, Runnable chunkGeneratorRegistration) {
         loader = moddedLoader;
+        ModdedIrisLog.info("Iris " + moddedLoader.modVersion() + " bootstrapping on Minecraft " + moddedLoader.minecraftVersion() + " (" + loaderDescription + ")");
+        selfTest(moddedLoader.getClass().getClassLoader());
+        bind();
+        chunkGeneratorRegistration.run();
+        ModdedIrisLog.info("Iris chunk generator registered as irisworldgen:iris");
+        armParityProbe();
+        armWorldCheck();
+    }
+
+    private static void armParityProbe() {
+        String parity = System.getProperty("iris.parity");
+        if (parity == null) {
+            return;
+        }
+        ModdedIrisLog.info("Iris parity probe armed: " + parity);
+        ModdedParityProbe.schedule(parity);
+    }
+
+    private static void armWorldCheck() {
+        if (System.getProperty("iris.worldcheck") == null) {
+            return;
+        }
+        ModdedIrisLog.info("Iris world check armed");
+        ModdedWorldCheck.schedule();
     }
 
     public static ModdedLoader loader() {
         ModdedLoader bound = loader;
         if (bound == null) {
-            throw new IllegalStateException("Iris modded loader is not initialized; the loader bootstrap must call ModdedEngineBootstrap.initialize first");
+            throw new IllegalStateException("Iris modded loader is not initialized; the loader bootstrap must call ModdedEngineBootstrap.bootCommon first");
         }
         return bound;
     }
 
     public static MinecraftServer currentServer() {
-        return loader().currentServer();
+        MinecraftServer tracked = currentServer;
+        return tracked != null ? tracked : loader().currentServer();
     }
 
-    public static void selfTest(ClassLoader classLoader) {
+    private static void selfTest(ClassLoader classLoader) {
         int loadedClasses = 0;
         for (String className : CORE_SELF_TEST_CLASSES) {
             try {
@@ -124,6 +178,7 @@ public final class ModdedEngineBootstrap {
                 return platform;
             }
             ModdedLoader boundLoader = loader();
+            GuiHost.suppressDesktop(boundLoader.clientEnvironment());
             ModdedPlatform created = new ModdedPlatform(boundLoader);
             IrisPlatforms.bind(created);
             ModdedDimensionManager.bindAccess(new ModdedServerLevels());
@@ -135,11 +190,18 @@ public final class ModdedEngineBootstrap {
             DecoratorPlatformHooks.bind(decoratorHooks, decoratorHooks);
             ModdedPreservationService preservation = SERVICE_MANAGER.register(ModdedPreservationService.class, new ModdedPreservationService());
             SERVICE_MANAGER.register(ModdedLogFilterService.class, new ModdedLogFilterService());
+            SERVICE_MANAGER.register(ModdedEngineMaintenanceService.class, new ModdedEngineMaintenanceService());
+            SERVICE_MANAGER.register(ModdedSettingsHotloadService.class, new ModdedSettingsHotloadService());
+            SERVICE_MANAGER.register(ModdedStudioHotloadService.class, new ModdedStudioHotloadService());
+            SERVICE_MANAGER.register(ModdedChunkUpdateService.class, new ModdedChunkUpdateService());
             IrisServices.register(PreservationRegistry.class, preservation);
             IrisServices.register(EngineWorldManagerProvider.class, (EngineWorldManagerProvider) (Engine engine) -> new InertWorldManager());
             ModdedCustomContentRegistry.discover();
             platform = created;
             SERVICE_MANAGER.enableAll();
+            if (boundLoader.clientEnvironment()) {
+                ModdedStartup.prefetchDefaultPack();
+            }
             ModdedIrisSplash.print(boundLoader);
             return created;
         }

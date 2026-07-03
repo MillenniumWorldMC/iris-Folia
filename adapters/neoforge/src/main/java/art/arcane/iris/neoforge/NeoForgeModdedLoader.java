@@ -21,6 +21,7 @@ package art.arcane.iris.neoforge;
 import art.arcane.iris.modded.ModdedLoader;
 import net.minecraft.server.MinecraftServer;
 import net.neoforged.fml.ModList;
+import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
@@ -50,6 +51,11 @@ public final class NeoForgeModdedLoader implements ModdedLoader {
     @Override
     public MinecraftServer currentServer() {
         return ServerLifecycleHooks.getCurrentServer();
+    }
+
+    @Override
+    public boolean clientEnvironment() {
+        return FMLEnvironment.getDist().isClient();
     }
 
     @Override

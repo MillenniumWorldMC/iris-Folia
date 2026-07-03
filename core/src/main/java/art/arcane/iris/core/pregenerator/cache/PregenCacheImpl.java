@@ -196,6 +196,16 @@ public class PregenCacheImpl implements PregenCache {
         boolean test(Region region);
     }
 
+    private enum CacheResult {
+        NOOP,
+        SET,
+        COMPLETED
+    }
+
+    private interface RegionCacheOp {
+        CacheResult apply(Region region);
+    }
+
     private static class Plate {
         private final int x;
         private final int z;
@@ -216,7 +226,7 @@ public class PregenCacheImpl implements PregenCache {
             this.lastAccess = System.currentTimeMillis();
         }
 
-        private boolean cache(int x, int z, RegionPredicate predicate) {
+        private boolean cache(int x, int z, RegionCacheOp op) {
             lastAccess = System.currentTimeMillis();
             if (count == SIZE) {
                 return false;
@@ -229,7 +239,13 @@ public class PregenCacheImpl implements PregenCache {
                 regions[index] = region;
             }
 
-            if (!predicate.test(region)) {
+            CacheResult result = op.apply(region);
+            if (result == CacheResult.NOOP) {
+                return false;
+            }
+
+            dirty = true;
+            if (result != CacheResult.COMPLETED) {
                 return false;
             }
 
@@ -237,7 +253,6 @@ public class PregenCacheImpl implements PregenCache {
             if (count == SIZE) {
                 regions = null;
             }
-            dirty = true;
             return true;
         }
 
@@ -282,23 +297,23 @@ public class PregenCacheImpl implements PregenCache {
             this.words = words;
         }
 
-        private boolean cache() {
+        private CacheResult cache() {
             if (count == SIZE) {
-                return false;
+                return CacheResult.NOOP;
             }
             count = SIZE;
             words = null;
-            return true;
+            return CacheResult.COMPLETED;
         }
 
-        private boolean cache(int x, int z) {
+        private CacheResult cache(int x, int z) {
             if (count == SIZE) {
-                return false;
+                return CacheResult.NOOP;
             }
 
             long[] value = words;
             if (value == null) {
-                return false;
+                return CacheResult.NOOP;
             }
 
             int index = PowerOfTwoCoordinates.packLocal32(x, z);
@@ -306,17 +321,17 @@ public class PregenCacheImpl implements PregenCache {
             long bit = 1L << (index & 63);
             boolean current = (value[wordIndex] & bit) != 0L;
             if (current) {
-                return false;
+                return CacheResult.NOOP;
             }
 
             count++;
             if (count == SIZE) {
                 words = null;
-                return true;
+                return CacheResult.COMPLETED;
             }
 
             value[wordIndex] = value[wordIndex] | bit;
-            return false;
+            return CacheResult.SET;
         }
 
         private boolean isCached() {

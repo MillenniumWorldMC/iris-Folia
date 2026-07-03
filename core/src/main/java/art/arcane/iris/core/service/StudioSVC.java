@@ -26,9 +26,11 @@ import art.arcane.iris.core.ServerConfigurator;
 import art.arcane.iris.core.lifecycle.WorldLifecycleService;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.pack.IrisPack;
+import art.arcane.iris.core.pack.PackDownloader;
 import art.arcane.iris.core.pack.PackValidationRegistry;
 import art.arcane.iris.core.pack.PackValidationResult;
 import art.arcane.iris.core.project.IrisProject;
+import art.arcane.iris.core.project.IrisProjectCopier;
 import art.arcane.iris.core.runtime.TransientWorldCleanupSupport;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.data.cache.AtomicCache;
@@ -36,7 +38,6 @@ import art.arcane.iris.engine.object.IrisDimension;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.exceptions.IrisException;
-import art.arcane.volmlib.util.format.Form;
 import art.arcane.volmlib.util.io.IO;
 import art.arcane.volmlib.util.json.JSONException;
 import art.arcane.volmlib.util.json.JSONObject;
@@ -52,7 +53,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -259,99 +259,12 @@ public class StudioSVC implements IrisService {
     }
 
     public void download(VolmitSender sender, String repo, String branch, boolean forceOverwrite, boolean directUrl) throws JsonSyntaxException, IOException {
-        String url = directUrl ? branch : "https://codeload.github.com/" + repo + "/zip/refs/heads/" + branch;
-        sender.sendMessage("Downloading " + url + " "); //The extra space stops a bug in adventure API from repeating the last letter of the URL
-        File zip = art.arcane.iris.util.common.misc.WebCache.getNonCachedFile("pack-" + repo, url);
-        File temp = art.arcane.iris.util.common.misc.WebCache.getTemp();
-        File work = new File(temp, "dl-" + UUID.randomUUID());
-        File packs = getWorkspaceFolder();
+        String key = PackDownloader.download(getWorkspaceFolder(), repo, branch, forceOverwrite, directUrl, sender::sendMessage);
 
-        if (zip == null || !zip.exists()) {
-            sender.sendMessage("Failed to find pack at " + url);
-            sender.sendMessage("Make sure you specified the correct repo and branch!");
-            sender.sendMessage("For example: /iris download overworld branch=stable");
-            return;
-        }
-        sender.sendMessage("Unpacking " + repo);
-        try {
-            ZipUtil.unpack(zip, work);
-        } catch (Throwable e) {
-            IrisLogging.reportError(e);
-            e.printStackTrace();
-            sender.sendMessage(
-                    """
-                            Issue when unpacking. Please check/do the following:
-                            1. Do you have a functioning internet connection?
-                            2. Did the download corrupt?
-                            3. Try deleting the */plugins/iris/packs folder and re-download.
-                            4. Download the pack from the GitHub repo: https://github.com/IrisDimensions/overworld
-                            5. Contact support (if all other options do not help)"""
-            );
-        }
-        File dir = null;
-        File[] zipFiles = work.listFiles();
-
-        if (zipFiles == null) {
-            sender.sendMessage("No files were extracted from the zip file.");
+        if (key == null) {
             return;
         }
 
-        try {
-            dir = zipFiles.length > 1 ? work : zipFiles[0].isDirectory() ? zipFiles[0] : null;
-        } catch (NullPointerException e) {
-            IrisLogging.reportError(e);
-            sender.sendMessage("Error when finding home directory. Are there any non-text characters in the file name?");
-            return;
-        }
-
-        if (dir == null) {
-            sender.sendMessage("Invalid Format. Missing root folder or too many folders!");
-            return;
-        }
-
-        IrisData data = IrisData.get(dir);
-        String[] dimensions = data.getDimensionLoader().getPossibleKeys();
-
-        if (dimensions == null || dimensions.length == 0) {
-            sender.sendMessage("No dimension file found in the extracted zip file.");
-            sender.sendMessage("Check it is there on GitHub and report this to staff!");
-        } else if (dimensions.length != 1) {
-            sender.sendMessage("Dimensions folder must have 1 file in it");
-            return;
-        }
-
-        IrisDimension d = data.getDimensionLoader().load(dimensions[0]);
-        data.close();
-
-        if (d == null) {
-            sender.sendMessage("Invalid dimension (folder) in dimensions folder");
-            return;
-        }
-
-        String key = d.getLoadKey();
-        sender.sendMessage("Importing " + d.getName() + " (" + key + ")");
-        File packEntry = new File(packs, key);
-
-        if (forceOverwrite) {
-            IO.delete(packEntry);
-        }
-
-        if (IrisData.loadAnyDimension(key, null) != null) {
-            sender.sendMessage("Another dimension in the packs folder is already using the key " + key + " IMPORT FAILED!");
-            return;
-        }
-
-        if (packEntry.exists() && packEntry.listFiles().length > 0) {
-            sender.sendMessage("Another pack is using the key " + key + ". IMPORT FAILED!");
-            return;
-        }
-
-        FileUtils.copyDirectory(dir, packEntry);
-
-        IrisData.getLoaded(packEntry)
-                .ifPresent(IrisData::hotloaded);
-
-        sender.sendMessage("Successfully Aquired " + d.getName());
         ServerConfigurator.installDataPacks(true);
     }
 
@@ -557,32 +470,7 @@ public class StudioSVC implements IrisService {
         }
 
         try {
-            FileUtils.copyDirectory(importPack, newPack, pathname -> !pathname.getAbsolutePath().contains(".git"), false);
-        } catch (IOException e) {
-            IrisLogging.reportError(e);
-            e.printStackTrace();
-        }
-
-        new File(importPack, existingPack + ".code-workspace").delete();
-        File dimFile = new File(importPack, "dimensions/" + existingPack + ".json");
-        File newDimFile = new File(newPack, "dimensions/" + newName + ".json");
-
-        try {
-            FileUtils.copyFile(dimFile, newDimFile);
-        } catch (IOException e) {
-            IrisLogging.reportError(e);
-            e.printStackTrace();
-        }
-
-        new File(newPack, "dimensions/" + existingPack + ".json").delete();
-
-        try {
-            JSONObject json = new JSONObject(IO.readAll(newDimFile));
-
-            if (json.has("name")) {
-                json.put("name", Form.capitalizeWords(newName.replaceAll("\\Q-\\E", " ")));
-                IO.writeAll(newDimFile, json.toString(4));
-            }
+            IrisProjectCopier.copyProject(importPack, newPack, existingPack, newName);
         } catch (JSONException | IOException e) {
             IrisLogging.reportError(e);
             e.printStackTrace();

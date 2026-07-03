@@ -18,8 +18,10 @@
 
 package art.arcane.iris.modded.command;
 
+import art.arcane.iris.core.gui.GuiHost;
 import art.arcane.iris.core.gui.GuiMarker;
 import art.arcane.iris.core.gui.GuiOverlay;
+import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.render.RenderType;
 import net.minecraft.server.MinecraftServer;
@@ -30,19 +32,24 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 
+import java.awt.Desktop;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 public final class ModdedVisionOverlay implements GuiOverlay {
     private final MinecraftServer server;
     private final ServerLevel level;
     private final Engine engine;
+    private final UUID opener;
 
-    public ModdedVisionOverlay(MinecraftServer server, ServerLevel level, Engine engine) {
+    public ModdedVisionOverlay(MinecraftServer server, ServerLevel level, Engine engine, UUID opener) {
         this.server = server;
         this.level = level;
         this.engine = engine;
+        this.opener = opener;
     }
 
     @Override
@@ -76,11 +83,14 @@ public final class ModdedVisionOverlay implements GuiOverlay {
         int blockX = (int) worldX;
         int blockZ = (int) worldZ;
         server.execute(() -> {
-            List<ServerPlayer> players = level.players();
-            if (players.isEmpty()) {
-                return;
+            ServerPlayer player = opener == null ? null : server.getPlayerList().getPlayer(opener);
+            if (player == null) {
+                List<ServerPlayer> players = level.players();
+                if (players.isEmpty()) {
+                    return;
+                }
+                player = players.get(0);
             }
-            ServerPlayer player = players.get(0);
             int surfaceY = engine.getMinHeight() + engine.getHeight(blockX, blockZ, false) + 2;
             int safeY = Math.max(surfaceY, level.getHeight(Heightmap.Types.MOTION_BLOCKING, blockX, blockZ) + 1);
             player.teleportTo(level, blockX + 0.5D, safeY, blockZ + 0.5D, java.util.Set.of(), player.getYRot(), player.getXRot(), false);
@@ -89,6 +99,19 @@ public final class ModdedVisionOverlay implements GuiOverlay {
 
     @Override
     public String openInEditor(double worldX, double worldZ, RenderType type) {
-        return null;
+        if (!GuiHost.isAvailable() || !Desktop.isDesktopSupported()) {
+            return null;
+        }
+        IrisComplex complex = engine.getComplex();
+        File file = switch (type) {
+            case BIOME, LAYER_LOAD, DECORATOR_LOAD, OBJECT_LOAD, HEIGHT ->
+                    complex.getTrueBiomeStream().get(worldX, worldZ).openInVSCode();
+            case BIOME_LAND -> complex.getLandBiomeStream().get(worldX, worldZ).openInVSCode();
+            case BIOME_SEA -> complex.getSeaBiomeStream().get(worldX, worldZ).openInVSCode();
+            case REGION -> complex.getRegionStream().get(worldX, worldZ).openInVSCode();
+            case CAVE_LAND -> complex.getCaveBiomeStream().get(worldX, worldZ).openInVSCode();
+            default -> null;
+        };
+        return file == null ? null : file.getName();
     }
 }

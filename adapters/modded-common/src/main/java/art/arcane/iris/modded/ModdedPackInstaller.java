@@ -18,25 +18,15 @@
 
 package art.arcane.iris.modded;
 
+import art.arcane.iris.core.pack.PackDownloader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.zeroturnaround.zip.ZipUtil;
 
+import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.time.Duration;
-import java.util.Comparator;
-import java.util.List;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 public final class ModdedPackInstaller {
     private static final Logger LOGGER = LoggerFactory.getLogger("Iris");
@@ -56,87 +46,13 @@ public final class ModdedPackInstaller {
             return false;
         }
 
-        Path target = configDir.resolve("irisworldgen").resolve("packs").resolve(pack);
-        String url = "https://codeload.github.com/IrisDimensions/" + pack + "/zip/refs/heads/" + branch;
-
+        File packs = configDir.resolve("irisworldgen").resolve("packs").toFile();
         try {
-            Path work = Files.createTempDirectory("iris-pack-dl");
-            Path zip = work.resolve(pack + ".zip");
-            HttpClient client = HttpClient.newBuilder()
-                    .followRedirects(HttpClient.Redirect.NORMAL)
-                    .connectTimeout(Duration.ofSeconds(30))
-                    .build();
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                    .timeout(Duration.ofMinutes(5))
-                    .GET()
-                    .build();
-            HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-
-            if (response.statusCode() != 200) {
-                feedback.accept("Pack download failed: HTTP " + response.statusCode() + " from " + url);
-                return false;
-            }
-
-            try (InputStream in = response.body()) {
-                Files.copy(in, zip, StandardCopyOption.REPLACE_EXISTING);
-            }
-
-            Path extracted = work.resolve("extracted");
-            ZipUtil.unpack(zip.toFile(), extracted.toFile());
-            Path root = singleRoot(extracted);
-            Files.createDirectories(target.getParent());
-            deleteRecursively(target);
-            copyRecursively(root, target);
-            deleteRecursively(work);
-            feedback.accept("Iris installed pack '" + pack + "' (branch " + branch + ") into " + target);
-            return true;
-        } catch (IOException | InterruptedException error) {
+            return PackDownloader.download(packs, "IrisDimensions/" + pack, branch, true, false, feedback) != null;
+        } catch (IOException error) {
             LOGGER.error("Iris pack download failed for IrisDimensions/{} ({})", pack, branch, error);
             feedback.accept("Pack download failed: " + error.getClass().getSimpleName() + (error.getMessage() == null ? "" : " - " + error.getMessage()));
-
-            if (error instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
             return false;
-        }
-    }
-
-    private static Path singleRoot(Path extracted) throws IOException {
-        try (Stream<Path> entries = Files.list(extracted)) {
-            List<Path> children = entries.toList();
-
-            if (children.size() == 1 && Files.isDirectory(children.get(0))) {
-                return children.get(0);
-            }
-
-            return extracted;
-        }
-    }
-
-    private static void copyRecursively(Path source, Path target) throws IOException {
-        try (Stream<Path> walk = Files.walk(source)) {
-            for (Path path : walk.toList()) {
-                Path destination = target.resolve(source.relativize(path).toString());
-
-                if (Files.isDirectory(path)) {
-                    Files.createDirectories(destination);
-                } else {
-                    Files.createDirectories(destination.getParent());
-                    Files.copy(path, destination, StandardCopyOption.REPLACE_EXISTING);
-                }
-            }
-        }
-    }
-
-    private static void deleteRecursively(Path root) throws IOException {
-        if (!Files.exists(root)) {
-            return;
-        }
-
-        try (Stream<Path> walk = Files.walk(root)) {
-            for (Path path : walk.sorted(Comparator.reverseOrder()).toList()) {
-                Files.delete(path);
-            }
         }
     }
 }

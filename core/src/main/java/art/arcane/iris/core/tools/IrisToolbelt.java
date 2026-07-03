@@ -26,11 +26,14 @@ import art.arcane.iris.core.IrisRuntimeSchedulerMode;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.gui.PregeneratorJob;
 import art.arcane.iris.core.loader.IrisData;
+import art.arcane.iris.core.pregenerator.PregenPerformanceProfile;
 import art.arcane.iris.core.pregenerator.PregenTask;
 import art.arcane.iris.core.pregenerator.PregeneratorMethod;
+import art.arcane.iris.core.pregenerator.cache.PregenCache;
 import art.arcane.iris.core.project.IrisProject;
 import art.arcane.iris.core.pregenerator.methods.CachedPregenMethod;
 import art.arcane.iris.core.pregenerator.methods.HybridPregenMethod;
+import art.arcane.iris.core.service.GlobalCacheSVC;
 import art.arcane.iris.core.service.StudioSVC;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.IrisDimension;
@@ -53,7 +56,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -66,7 +68,6 @@ public class IrisToolbelt {
     private static final Map<String, AtomicInteger> worldMaintenanceDepth = new ConcurrentHashMap<>();
     private static final Map<String, AtomicInteger> worldMaintenanceMantleBypassDepth = new ConcurrentHashMap<>();
     private static final Method BUKKIT_IS_STOPPING_METHOD = resolveBukkitIsStoppingMethod();
-    private static final AtomicBoolean PREGEN_PROFILE_JVM_HINT_LOGGED = new AtomicBoolean(false);
 
     /**
      * Will find / download / search for the dimension or return null
@@ -247,39 +248,24 @@ public class IrisToolbelt {
             IrisRuntimeSchedulerMode runtimeSchedulerMode = IrisRuntimeSchedulerMode.resolve(IrisSettings.get().getPregen());
             useCachedWrapper = runtimeSchedulerMode != IrisRuntimeSchedulerMode.FOLIA;
         }
-        return new PregeneratorJob(task, useCachedWrapper ? new CachedPregenMethod(method, engine.getWorld().name()) : method, engine);
+        return new PregeneratorJob(task, useCachedWrapper ? new CachedPregenMethod(method, resolvePregenCache(engine.getWorld().name()), task) : method, engine);
+    }
+
+    private static PregenCache resolvePregenCache(String worldName) {
+        PregenCache cache = IrisServices.get(GlobalCacheSVC.class).get(worldName);
+        if (cache == null) {
+            IrisLogging.debug("Could not find existing cache for " + worldName + " creating fallback");
+            cache = GlobalCacheSVC.createDefault(worldName);
+        }
+        return cache;
     }
 
     public static boolean applyPregenPerformanceProfile() {
-        IrisSettings.IrisSettingsPerformance performance = IrisSettings.get().getPerformance();
-        int previousNoiseCacheSize = performance.getNoiseCacheSize();
-        int targetNoiseCacheSize = Math.max(previousNoiseCacheSize, 4_096);
-        boolean fastCacheEnabledBefore = Boolean.getBoolean("iris.cache.fast");
-        boolean changed = false;
-
-        if (targetNoiseCacheSize != previousNoiseCacheSize) {
-            performance.setNoiseCacheSize(targetNoiseCacheSize);
-            changed = true;
-        }
-
-        if (!fastCacheEnabledBefore) {
-            System.setProperty("iris.cache.fast", "true");
-            changed = true;
-        }
-
-        if (PREGEN_PROFILE_JVM_HINT_LOGGED.compareAndSet(false, true) && !fastCacheEnabledBefore) {
-            IrisLogging.info("For startup-wide cache-fast coverage, set JVM argument: -Diris.cache.fast=true");
-        }
-
-        return changed;
+        return PregenPerformanceProfile.apply();
     }
 
     public static void applyPregenPerformanceProfile(Engine engine) {
-        boolean changed = applyPregenPerformanceProfile();
-        if (changed && engine != null) {
-            engine.hotloadComplex();
-            IrisLogging.info("Pregen profile applied: noiseCacheSize=" + IrisSettings.get().getPerformance().getNoiseCacheSize() + " iris.cache.fast=" + Boolean.getBoolean("iris.cache.fast"));
-        }
+        PregenPerformanceProfile.apply(engine);
     }
 
     /**
@@ -432,15 +418,26 @@ public class IrisToolbelt {
             return;
         }
 
-        String name = world.getName();
-        int depth = worldMaintenanceDepth.computeIfAbsent(name, k -> new AtomicInteger()).incrementAndGet();
+        beginWorldMaintenance(world.getName(), reason, bypassMantleStages);
+    }
+
+    public static void beginWorldMaintenance(String worldName, String reason) {
+        beginWorldMaintenance(worldName, reason, false);
+    }
+
+    public static void beginWorldMaintenance(String worldName, String reason, boolean bypassMantleStages) {
+        if (worldName == null) {
+            return;
+        }
+
+        int depth = worldMaintenanceDepth.computeIfAbsent(worldName, k -> new AtomicInteger()).incrementAndGet();
         if (bypassMantleStages) {
-            worldMaintenanceMantleBypassDepth.computeIfAbsent(name, k -> new AtomicInteger()).incrementAndGet();
+            worldMaintenanceMantleBypassDepth.computeIfAbsent(worldName, k -> new AtomicInteger()).incrementAndGet();
         }
         if (IrisSettings.get().getGeneral().isDebug()) {
-            IrisLogging.info("World maintenance enter: " + name + " reason=" + reason + " depth=" + depth + " bypassMantle=" + bypassMantleStages);
+            IrisLogging.info("World maintenance enter: " + worldName + " reason=" + reason + " depth=" + depth + " bypassMantle=" + bypassMantleStages);
         } else {
-            IrisLogging.debug("World maintenance enter: " + name + " reason=" + reason + " depth=" + depth + " bypassMantle=" + bypassMantleStages);
+            IrisLogging.debug("World maintenance enter: " + worldName + " reason=" + reason + " depth=" + depth + " bypassMantle=" + bypassMantleStages);
         }
     }
 
@@ -449,50 +446,65 @@ public class IrisToolbelt {
             return;
         }
 
-        String name = world.getName();
-        AtomicInteger depthCounter = worldMaintenanceDepth.get(name);
+        endWorldMaintenance(world.getName(), reason);
+    }
+
+    public static void endWorldMaintenance(String worldName, String reason) {
+        if (worldName == null) {
+            return;
+        }
+
+        AtomicInteger depthCounter = worldMaintenanceDepth.get(worldName);
         if (depthCounter == null) {
             return;
         }
 
         int depth = depthCounter.decrementAndGet();
         if (depth <= 0) {
-            worldMaintenanceDepth.remove(name, depthCounter);
+            worldMaintenanceDepth.remove(worldName, depthCounter);
             depth = 0;
         }
 
-        AtomicInteger bypassCounter = worldMaintenanceMantleBypassDepth.get(name);
+        AtomicInteger bypassCounter = worldMaintenanceMantleBypassDepth.get(worldName);
         int bypassDepth = 0;
         if (bypassCounter != null) {
             bypassDepth = bypassCounter.decrementAndGet();
             if (bypassDepth <= 0) {
-                worldMaintenanceMantleBypassDepth.remove(name, bypassCounter);
+                worldMaintenanceMantleBypassDepth.remove(worldName, bypassCounter);
                 bypassDepth = 0;
             }
         }
 
         if (IrisSettings.get().getGeneral().isDebug()) {
-            IrisLogging.info("World maintenance exit: " + name + " reason=" + reason + " depth=" + depth + " bypassMantleDepth=" + bypassDepth);
+            IrisLogging.info("World maintenance exit: " + worldName + " reason=" + reason + " depth=" + depth + " bypassMantleDepth=" + bypassDepth);
         } else {
-            IrisLogging.debug("World maintenance exit: " + name + " reason=" + reason + " depth=" + depth + " bypassMantleDepth=" + bypassDepth);
+            IrisLogging.debug("World maintenance exit: " + worldName + " reason=" + reason + " depth=" + depth + " bypassMantleDepth=" + bypassDepth);
         }
     }
 
     public static boolean isWorldMaintenanceActive(World world) {
-        if (world == null) {
+        return world != null && isWorldMaintenanceActive(world.getName());
+    }
+
+    public static boolean isWorldMaintenanceActive(String worldName) {
+        if (worldName == null) {
             return false;
         }
 
-        AtomicInteger counter = worldMaintenanceDepth.get(world.getName());
+        AtomicInteger counter = worldMaintenanceDepth.get(worldName);
         return counter != null && counter.get() > 0;
     }
 
     public static boolean isWorldMaintenanceBypassingMantleStages(World world) {
-        if (world == null) {
+        return world != null && isWorldMaintenanceBypassingMantleStages(world.getName());
+    }
+
+    public static boolean isWorldMaintenanceBypassingMantleStages(String worldName) {
+        if (worldName == null) {
             return false;
         }
 
-        AtomicInteger counter = worldMaintenanceMantleBypassDepth.get(world.getName());
+        AtomicInteger counter = worldMaintenanceMantleBypassDepth.get(worldName);
         return counter != null && counter.get() > 0;
     }
 

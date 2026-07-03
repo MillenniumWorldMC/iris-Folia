@@ -109,7 +109,7 @@ final class DecoratorCore {
         String half = IrisProceduralBlocks.propertyValue(bd, "half");
         if (half != null) {
             try {
-                if (!caveSkipFluid || !B.isFluid(data.get(x, height + 2, z))) {
+                if (height + 2 < data.getHeight() && (!caveSkipFluid || !B.isFluid(data.get(x, height + 2, z)))) {
                     data.set(x, height + 2, z, bd.withProperty("half", topHalfValue(half)));
                 }
             } catch (Throwable e) {
@@ -118,7 +118,7 @@ final class DecoratorCore {
             bd = bd.withProperty("half", bottomHalfValue(half));
         }
 
-        if (B.isAir(data.get(x, height + 1, z))) {
+        if (height + 1 < data.getHeight() && B.isAir(data.get(x, height + 1, z))) {
             data.set(x, height + 1, z, fixFacesForHunk(bd, data, x, z, realX, height + 1, realZ, mantle));
         }
     }
@@ -135,6 +135,10 @@ final class DecoratorCore {
                                    int x, int z, int realX, int height, int realZ,
                                    Hunk<PlatformBlockState> data, RNG rng, IrisData irisData,
                                    boolean underwater, boolean caveSkipFluid, EngineMantle mantle) {
+        if (height < 0 || height >= data.getHeight()) {
+            return;
+        }
+
         PlatformBlockState bdx = data.get(x, height, z);
         PlatformBlockState bd = decorator.pickBlockData(rng, irisData, realX, realZ);
 
@@ -166,7 +170,7 @@ final class DecoratorCore {
         String half = bd == null ? null : IrisProceduralBlocks.propertyValue(bd, "half");
         if (half != null) {
             try {
-                if (!caveSkipFluid || !B.isFluid(data.get(x, height + 2, z))) {
+                if (height + 2 < data.getHeight() && (!caveSkipFluid || !B.isFluid(data.get(x, height + 2, z)))) {
                     data.set(x, height + 2, z, bd.withProperty("half", topHalfValue(half)));
                 }
             } catch (Throwable e) {
@@ -175,7 +179,7 @@ final class DecoratorCore {
             bd = bd.withProperty("half", bottomHalfValue(half));
         }
 
-        if (B.isAir(data.get(x, height + 1, z))) {
+        if (height + 1 < data.getHeight() && B.isAir(data.get(x, height + 1, z))) {
             data.set(x, height + 1, z, fixFacesForHunk(bd, data, x, z, realX, height + 1, realZ, mantle));
         }
     }
@@ -196,6 +200,10 @@ final class DecoratorCore {
     static void placeStackUp(IrisDecorator decorator, int x, int z, int realX, int realZ,
                              int height, int max, Hunk<PlatformBlockState> data,
                              RNG rng, IrisData irisData, PlaceOpts opts) {
+        if (height < 0 || height >= data.getHeight()) {
+            return;
+        }
+
         int effectiveMax = max;
         if (opts.underwater && height < opts.fluidHeight) {
             effectiveMax = opts.fluidHeight;
@@ -229,6 +237,10 @@ final class DecoratorCore {
             }
 
             if (opts.underwater && height + 1 + i > opts.fluidHeight) {
+                break;
+            }
+
+            if (height + 1 + i >= data.getHeight()) {
                 break;
             }
 

@@ -71,6 +71,16 @@ public class AsyncOrMedievalPregenMethod implements PregeneratorMethod {
     }
 
     @Override
+    public void onRegionBounds(int minRegionX, int minRegionZ, int maxRegionX, int maxRegionZ) {
+        method.onRegionBounds(minRegionX, minRegionZ, maxRegionX, maxRegionZ);
+    }
+
+    @Override
+    public void onRegionSubmitted(int regionX, int regionZ) {
+        method.onRegionSubmitted(regionX, regionZ);
+    }
+
+    @Override
     public Mantle getMantle() {
         return method.getMantle();
     }

@@ -58,7 +58,6 @@ import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.volmlib.util.scheduling.ChronoLatch;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.iris.util.project.stream.ProceduralStream;
-import org.bukkit.World;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.Color;
@@ -660,15 +659,24 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
     }
 
     default void cleanupMantleChunk(int x, int z) {
-        World world = getWorld().realWorld();
-        if (world != null && IrisToolbelt.isWorldMaintenanceActive(world)) {
-            PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
-            if (pregeneratorJob == null || !pregeneratorJob.targetsWorld(world)) {
-                return;
-            }
+        if (shouldSkipMaintenanceCleanup()) {
+            return;
         }
         if (IrisSettings.get().getPerformance().isTrimMantleInStudio() || !isStudio()) {
             getMantle().cleanupChunk(x, z);
         }
+    }
+
+    private boolean shouldSkipMaintenanceCleanup() {
+        IrisWorld world = getWorld();
+        if (world == null) {
+            return false;
+        }
+        String worldName = world.name();
+        if (!IrisToolbelt.isWorldMaintenanceActive(worldName)) {
+            return false;
+        }
+        PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
+        return pregeneratorJob == null || !pregeneratorJob.targetsWorldName(worldName);
     }
 }

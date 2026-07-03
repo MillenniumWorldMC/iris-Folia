@@ -98,7 +98,7 @@ public interface EngineMode extends Staged {
         }
 
         PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
-        boolean pregeneratorTargetsWorld = pregeneratorJob != null && pregeneratorJob.targetsWorld(getEngine().getWorld().realWorld());
+        boolean pregeneratorTargetsWorld = pregeneratorJob != null && pregeneratorJob.targetsWorldName(getEngine().getWorld().name());
         return shouldDisableContextCacheForMaintenance(maintenanceActive, pregeneratorTargetsWorld);
     }
 }

@@ -18,17 +18,12 @@
 
 package art.arcane.iris.modded;
 
-import art.arcane.iris.BuildConstants;
 import art.arcane.iris.core.IrisSettings;
-import art.arcane.iris.core.splash.IrisSplashPackScanner;
-import art.arcane.iris.core.splash.IrisSplashPackScanner.SplashPackMetadata;
+import art.arcane.iris.core.splash.IrisSplashComposer;
 import art.arcane.iris.core.splash.IrisSplashRenderer;
 import art.arcane.iris.spi.IrisLogging;
 
 import java.io.File;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.List;
 
 public final class ModdedIrisSplash {
 
@@ -44,44 +39,16 @@ public final class ModdedIrisSplash {
 
     private static void printPacks(ModdedLoader loader) {
         File packFolder = loader.configDir().resolve("irisworldgen").resolve("packs").toFile();
-        List<SplashPackMetadata> packs = IrisSplashPackScanner.collect(packFolder, IrisLogging::reportError);
-        if (packs.isEmpty()) {
-            return;
-        }
-
-        IrisLogging.info("Custom Dimensions: " + packs.size());
-        for (SplashPackMetadata pack : packs) {
-            IrisLogging.info("  " + pack.name() + " v" + pack.version());
+        for (String line : IrisSplashComposer.composePackLines(packFolder, IrisLogging::reportError)) {
+            IrisLogging.info(line);
         }
     }
 
     private static void printLogo(ModdedLoader loader) {
-        String padding = " ".repeat(4);
-        String version = loader.modVersion();
-        String releaseTrain = getReleaseTrain(version);
-        String startupDate = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-        int javaVersion = getJavaVersion();
+        String serverLine = loader.platformName() + " / Minecraft " + loader.minecraftVersion();
         String[] splash = IrisSplashRenderer.renderPlain();
-        String[] info = new String[]{
-                "",
-                " Iris, Dimension Engine [" + releaseTrain + " RC.1.1.6]",
-                " Version: " + version,
-                " By: Volmit Software (Arcane Arts)",
-                " Server: " + loader.platformName() + " / Minecraft " + loader.minecraftVersion(),
-                " Java: " + javaVersion + " | Date: " + startupDate,
-                " Commit: " + BuildConstants.COMMIT + "/" + BuildConstants.ENVIRONMENT,
-                "",
-                "",
-                "",
-                ""
-        };
-
-        StringBuilder builder = new StringBuilder("\n\n");
-        for (int i = 0; i < splash.length; i++) {
-            builder.append(padding).append(splash[i]).append(info[i]).append('\n');
-        }
-
-        IrisLogging.info(builder.toString());
+        String[] info = IrisSplashComposer.composeInfo(loader.modVersion(), serverLine, IrisSplashComposer.InfoStyle.PLAIN);
+        IrisLogging.info(IrisSplashComposer.compose(splash, info));
     }
 
     private static boolean isLogoEnabled() {
@@ -91,31 +58,5 @@ public final class ModdedIrisSplash {
             IrisLogging.warn("Iris splash setting could not be read: " + error.getClass().getSimpleName());
             return true;
         }
-    }
-
-    private static int getJavaVersion() {
-        String version = System.getProperty("java.version");
-        if (version.startsWith("1.")) {
-            version = version.substring(2, 3);
-        } else {
-            int dot = version.indexOf('.');
-            if (dot != -1) {
-                version = version.substring(0, dot);
-            }
-        }
-        return Integer.parseInt(version);
-    }
-
-    private static String getReleaseTrain(String version) {
-        String value = version == null ? "unknown" : version;
-        int suffixIndex = value.indexOf('-');
-        if (suffixIndex >= 0) {
-            value = value.substring(0, suffixIndex);
-        }
-        String[] split = value.split("\\.");
-        if (split.length >= 2) {
-            return split[0] + "." + split[1];
-        }
-        return value;
     }
 }

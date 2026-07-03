@@ -1,5 +1,8 @@
 package art.arcane.iris.core.nms.v26_2_R1;
 
+import ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO;
+import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkHolderManager;
+import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.core.nms.INMSBinding;
@@ -32,6 +35,7 @@ import art.arcane.iris.util.common.scheduling.J;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.shorts.ShortList;
 import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.matcher.ElementMatchers;
 import net.minecraft.core.*;
@@ -50,6 +54,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Block;
@@ -77,7 +82,6 @@ import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.TreeFeature;
 import net.minecraft.world.level.levelgen.flat.FlatLayerInfo;
 import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
-import net.minecraft.world.level.storage.LevelStorageSource;
 import org.bukkit.*;
 import org.bukkit.block.Biome;
 import org.bukkit.block.data.BlockData;
@@ -876,6 +880,34 @@ public class NMSBinding implements INMSBinding {
     }
 
     @Override
+    public boolean saveAndUnloadChunk(World world, int x, int z) {
+        try {
+            ServerLevel level = ((CraftWorld) world).getHandle();
+            ChunkHolderManager chm = level.moonrise$getChunkTaskScheduler().chunkHolderManager;
+            chm.processTicketUpdates();
+            NewChunkHolder holder = chm.getChunkHolder(x, z);
+            if (holder != null) {
+                holder.save(false);
+            }
+            chm.processUnloads();
+            return true;
+        } catch (Throwable e) {
+            IrisLogging.reportError(e);
+            return false;
+        }
+    }
+
+    @Override
+    public void flushChunkIO(World world) {
+        try {
+            ServerLevel level = ((CraftWorld) world).getHandle();
+            MoonriseRegionFileIO.flush(level);
+        } catch (Throwable e) {
+            IrisLogging.reportError(e);
+        }
+    }
+
+    @Override
     public boolean clearChunkBlocks(Chunk bukkitChunk) {
         try {
             ServerLevel level = ((CraftWorld) bukkitChunk.getWorld()).getHandle();
@@ -1133,13 +1165,16 @@ public class NMSBinding implements INMSBinding {
             return true;
         try {
             IrisLogging.info("Injecting Bukkit");
-            var buddy = new ByteBuddy();
-            buddy.redefine(ServerLevel.class)
-                    .visit(Advice.to(ServerLevelAdvice.class).on(ElementMatchers.isConstructor()
-                            .and(ElementMatchers.takesArgument(0, MinecraftServer.class))
-                            .and(ElementMatchers.takesArgument(5, LevelStem.class))))
-                    .make()
-                    .load(ServerLevel.class.getClassLoader(), Agent.installed());
+            new AgentBuilder.Default()
+                    .disableClassFormatChanges()
+                    .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+                    .type(ElementMatchers.is(ServerLevel.class))
+                    .transform((builder, typeDescription, classLoader, module, protectionDomain) ->
+                            builder.visit(Advice.to(ServerLevelAdvice.class).on(ElementMatchers.isConstructor()
+                                    .and(ElementMatchers.takesArgument(0, MinecraftServer.class))
+                                    .and(ElementMatchers.takesArgument(5, LevelStem.class)))))
+                    .installOn(Agent.getInstrumentation());
+            ByteBuddy buddy = new ByteBuddy();
             for (Class<?> clazz : List.of(ChunkAccess.class, ProtoChunk.class)) {
                 buddy.redefine(clazz)
                         .visit(Advice.to(ChunkAccessAdvice.class).on(ElementMatchers.isMethod().and(ElementMatchers.takesArguments(ShortList.class, int.class))))
@@ -1153,6 +1188,17 @@ public class NMSBinding implements INMSBinding {
             e.printStackTrace();
         }
         return false;
+    }
+
+    @Override
+    public void ensureServerLevelInjection() {
+        if (!injected.get())
+            return;
+        try {
+            Agent.getInstrumentation().retransformClasses(ServerLevel.class);
+        } catch (Throwable e) {
+            IrisLogging.error(C.RED + "Failed to re-apply ServerLevel injection");
+        }
     }
 
     @Override
@@ -1210,14 +1256,14 @@ public class NMSBinding implements INMSBinding {
         @Advice.OnMethodEnter
         static void enter(
                 @Advice.Argument(0) MinecraftServer server,
-                @Advice.Argument(2) LevelStorageSource.LevelStorageAccess levelStorageAccess,
+                @Advice.Argument(4) ResourceKey<Level> dimensionKey,
                 @Advice.Argument(value = 5, readOnly = false) LevelStem levelStem
         ) {
-            if (levelStorageAccess == null)
+            if (dimensionKey == null)
                 return;
 
             try {
-                String levelId = levelStorageAccess.getLevelId();
+                String levelId = dimensionKey.identifier().getPath();
                 if (levelId == null || levelId.isBlank()) {
                     return;
                 }

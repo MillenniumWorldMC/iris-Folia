@@ -21,21 +21,16 @@ package art.arcane.iris.modded;
 import art.arcane.iris.spi.IrisPlatform;
 import art.arcane.iris.spi.LogLevel;
 import art.arcane.iris.spi.PlatformBiomeWriter;
-import art.arcane.iris.spi.PlatformCapabilities;
 import art.arcane.iris.spi.PlatformEntityType;
-import art.arcane.iris.spi.PlatformItem;
 import art.arcane.iris.spi.PlatformRegistries;
 import art.arcane.iris.spi.PlatformScheduler;
 import art.arcane.iris.spi.PlatformStructureHooks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 
 import java.io.File;
 import java.util.function.Consumer;
@@ -46,7 +41,6 @@ public final class ModdedPlatform implements IrisPlatform {
     private final ModdedLoader loader;
     private final ModdedRegistries registries;
     private final ModdedScheduler scheduler;
-    private final ModdedCapabilities capabilities;
     private final ModdedStructureHooks structureHooks;
     private final ModdedBiomeWriter biomeWriter;
 
@@ -54,7 +48,6 @@ public final class ModdedPlatform implements IrisPlatform {
         this.loader = loader;
         this.registries = new ModdedRegistries(loader::currentServer);
         this.scheduler = new ModdedScheduler();
-        this.capabilities = new ModdedCapabilities();
         this.structureHooks = new ModdedStructureHooks(loader::currentServer);
         this.biomeWriter = new ModdedBiomeWriter(loader::currentServer);
     }
@@ -89,11 +82,6 @@ public final class ModdedPlatform implements IrisPlatform {
     @Override
     public PlatformScheduler scheduler() {
         return scheduler;
-    }
-
-    @Override
-    public PlatformCapabilities capabilities() {
-        return capabilities;
     }
 
     @Override
@@ -160,20 +148,6 @@ public final class ModdedPlatform implements IrisPlatform {
     }
 
     @Override
-    public boolean giveItem(Object player, String itemKey, int amount) {
-        if (!(player instanceof ServerPlayer serverPlayer) || itemKey == null || amount <= 0) {
-            return false;
-        }
-        PlatformItem resolved = registries.item(itemKey);
-        if (resolved == null) {
-            return false;
-        }
-        Item item = (Item) resolved.nativeHandle();
-        ItemStack stack = new ItemStack(item, amount);
-        return serverPlayer.getInventory().add(stack);
-    }
-
-    @Override
     public void log(LogLevel level, String message) {
         ModdedIrisLog.log(level, message);
     }
@@ -192,28 +166,6 @@ public final class ModdedPlatform implements IrisPlatform {
         }
         if (error != null) {
             ModdedIrisLog.error("Iris reported error", error);
-        }
-    }
-
-    private static final class ModdedCapabilities implements PlatformCapabilities {
-        @Override
-        public boolean customBiomes() {
-            return true;
-        }
-
-        @Override
-        public boolean dataPacks() {
-            return true;
-        }
-
-        @Override
-        public boolean structurePlacement() {
-            return true;
-        }
-
-        @Override
-        public boolean regionizedThreading() {
-            return false;
         }
     }
 }

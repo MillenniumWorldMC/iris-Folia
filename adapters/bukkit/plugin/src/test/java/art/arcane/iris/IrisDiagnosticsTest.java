@@ -1,5 +1,6 @@
 package art.arcane.iris;
 
+import art.arcane.iris.core.splash.IrisSplashPackScanner;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -34,7 +35,7 @@ public class IrisDiagnosticsTest {
     }
 
     @Test
-    public void collectSplashPacksSkipsInternalAndInvalidFolders() throws Exception {
+    public void splashPackScanSkipsInternalAndInvalidFolders() throws Exception {
         Path root = Files.createTempDirectory("iris-splash");
         try {
             Path validPack = root.resolve("overworld");
@@ -50,9 +51,9 @@ public class IrisDiagnosticsTest {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             PrintStream originalErr = System.err;
             System.setErr(new PrintStream(output, true, StandardCharsets.UTF_8));
-            List<Iris.SplashPackMetadata> packs;
+            List<IrisSplashPackScanner.SplashPackMetadata> packs;
             try {
-                packs = Iris.collectSplashPacks(root.toFile());
+                packs = IrisSplashPackScanner.collect(root.toFile(), Iris::reportError);
             } finally {
                 System.setErr(originalErr);
             }

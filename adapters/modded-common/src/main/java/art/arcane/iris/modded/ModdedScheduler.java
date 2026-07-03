@@ -114,10 +114,11 @@ public final class ModdedScheduler implements PlatformScheduler {
         laterGlobal(task, ticks);
     }
 
-    public void shutdown() {
-        asyncExecutor.shutdownNow();
+    public void reset() {
+        asyncExecutor.getQueue().clear();
         mainQueue.clear();
         delayedQueue.clear();
+        mainThread = null;
     }
 
     private void drain() {

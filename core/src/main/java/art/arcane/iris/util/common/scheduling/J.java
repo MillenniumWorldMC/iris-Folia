@@ -19,6 +19,7 @@
 package art.arcane.iris.util.common.scheduling;
 
 import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.IrisServices;
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.engine.framework.PreservationRegistry;
@@ -121,6 +122,13 @@ public class J {
     }
 
     public static void aBukkit(Runnable a) {
+        if (!BUKKIT_PRESENT) {
+            if (IrisPlatforms.isBound()) {
+                IrisPlatforms.get().scheduler().async(a);
+            }
+            return;
+        }
+
         if (!isPluginEnabled()) {
             return;
         }
@@ -328,6 +336,13 @@ public class J {
     }
 
     public static void s(Runnable r) {
+        if (!BUKKIT_PRESENT) {
+            if (IrisPlatforms.isBound()) {
+                IrisPlatforms.get().scheduler().global(r);
+            }
+            return;
+        }
+
         if (!isPluginEnabled()) {
             return;
         }
@@ -355,7 +370,7 @@ public class J {
     public static CompletableFuture sfut(Runnable r) {
         CompletableFuture f = new CompletableFuture();
 
-        if (!isPluginEnabled()) {
+        if (!canSchedule()) {
             return null;
         }
 
@@ -370,7 +385,7 @@ public class J {
     public static <T> CompletableFuture<T> sfut(Supplier<T> r) {
         CompletableFuture<T> f = new CompletableFuture<>();
 
-        if (!isPluginEnabled()) {
+        if (!canSchedule()) {
             return null;
         }
 
@@ -388,7 +403,7 @@ public class J {
     public static CompletableFuture sfut(Runnable r, int delay) {
         CompletableFuture f = new CompletableFuture();
 
-        if (!isPluginEnabled()) {
+        if (!canSchedule()) {
             return null;
         }
 
@@ -410,6 +425,13 @@ public class J {
     }
 
     public static void s(Runnable r, int delay) {
+        if (!BUKKIT_PRESENT) {
+            if (IrisPlatforms.isBound()) {
+                IrisPlatforms.get().scheduler().laterGlobal(r, delay);
+            }
+            return;
+        }
+
         if (!isPluginEnabled()) {
             return;
         }
@@ -451,7 +473,7 @@ public class J {
     }
 
     public static int sr(Runnable r, int interval) {
-        if (!isPluginEnabled()) {
+        if (!canSchedule()) {
             return -1;
         }
 
@@ -461,13 +483,13 @@ public class J {
 
         Runnable[] loop = new Runnable[1];
         loop[0] = () -> {
-            if (state.cancelled || !isPluginEnabled()) {
+            if (state.cancelled || !canSchedule()) {
                 REPEATING_CANCELLERS.remove(taskId);
                 return;
             }
 
             r.run();
-            if (state.cancelled || !isPluginEnabled()) {
+            if (state.cancelled || !canSchedule()) {
                 REPEATING_CANCELLERS.remove(taskId);
                 return;
             }
@@ -496,6 +518,17 @@ public class J {
     }
 
     public static void a(Runnable r, int delay) {
+        if (!BUKKIT_PRESENT) {
+            if (IrisPlatforms.isBound()) {
+                if (delay <= 0) {
+                    IrisPlatforms.get().scheduler().async(r);
+                } else {
+                    IrisPlatforms.get().scheduler().laterGlobal(() -> IrisPlatforms.get().scheduler().async(r), delay);
+                }
+            }
+            return;
+        }
+
         if (!isPluginEnabled()) {
             return;
         }
@@ -521,7 +554,7 @@ public class J {
     }
 
     public static int ar(Runnable r, int interval) {
-        if (!isPluginEnabled()) {
+        if (!canSchedule()) {
             return -1;
         }
 
@@ -531,13 +564,13 @@ public class J {
 
         Runnable[] loop = new Runnable[1];
         loop[0] = () -> {
-            if (state.cancelled || !isPluginEnabled()) {
+            if (state.cancelled || !canSchedule()) {
                 REPEATING_CANCELLERS.remove(taskId);
                 return;
             }
 
             r.run();
-            if (state.cancelled || !isPluginEnabled()) {
+            if (state.cancelled || !canSchedule()) {
                 REPEATING_CANCELLERS.remove(taskId);
                 return;
             }
@@ -580,6 +613,10 @@ public class J {
 
     private static boolean isPluginEnabled() {
         return BUKKIT_PRESENT && BukkitPlatform.hasPlugin() && Bukkit.getPluginManager().isPluginEnabled(BukkitPlatform.plugin());
+    }
+
+    private static boolean canSchedule() {
+        return BUKKIT_PRESENT ? isPluginEnabled() : IrisPlatforms.isBound();
     }
 
     private static long ticksToMilliseconds(int ticks) {

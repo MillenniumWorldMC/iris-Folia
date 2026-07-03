@@ -77,7 +77,6 @@ public final class ModdedServiceManager {
         }
         enabled = false;
         forEachReversed(this::disableService);
-        services.clear();
     }
 
     private void enableService(ModdedService service) {

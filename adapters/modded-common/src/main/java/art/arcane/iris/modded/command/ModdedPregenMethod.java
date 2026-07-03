@@ -20,6 +20,7 @@ package art.arcane.iris.modded.command;
 
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.pregenerator.PregenListener;
+import art.arcane.iris.core.pregenerator.PregenMantleBackpressure;
 import art.arcane.iris.core.pregenerator.PregeneratorMethod;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.volmlib.util.mantle.runtime.Mantle;
@@ -42,45 +43,76 @@ public final class ModdedPregenMethod implements PregeneratorMethod {
 
     private final ServerLevel level;
     private final Engine engine;
-    private final ModdedPregenMode mode;
+    private final boolean sync;
     private final Semaphore semaphore;
     private final int permits;
     private final int timeoutSeconds;
+    private final PregenMantleBackpressure backpressure;
 
     public ModdedPregenMethod(ServerLevel level, Engine engine) {
-        this(level, engine, ModdedPregenMode.ASYNC);
+        this(level, engine, false);
     }
 
-    public ModdedPregenMethod(ServerLevel level, Engine engine, ModdedPregenMode mode) {
+    public ModdedPregenMethod(ServerLevel level, Engine engine, boolean sync) {
         this.level = level;
         this.engine = engine;
-        this.mode = mode;
+        this.sync = sync;
         this.permits = Math.min(96, Math.max(8, Runtime.getRuntime().availableProcessors() * 2));
         this.semaphore = new Semaphore(permits, true);
-        this.timeoutSeconds = Math.max(120, IrisSettings.get().getPregen().getChunkLoadTimeoutSeconds());
+        IrisSettings.IrisSettingsPregen pregen = IrisSettings.get().getPregen();
+        this.timeoutSeconds = Math.max(120, pregen.getChunkLoadTimeoutSeconds());
+        this.backpressure = new PregenMantleBackpressure(
+                this::getMantle,
+                pregen.getEffectiveResidentTectonicPlates(engine.getHeight()),
+                pregen.getMantleBackpressureWaitMs(),
+                pregen.getMantleBackpressureTimeoutMs(),
+                () -> {
+                },
+                () -> "dim=" + level.dimension().identifier());
     }
 
     @Override
     public void init() {
         LOGGER.info("Iris modded pregen init: dim={} mode={} inFlightCap={} timeout={}s",
-                level.dimension().identifier(), mode, mode == ModdedPregenMode.ASYNC ? permits : 1, timeoutSeconds);
+                level.dimension().identifier(), sync ? "sync" : "async", sync ? 1 : permits, timeoutSeconds);
     }
 
     @Override
     public void close() {
-        if (mode == ModdedPregenMode.ASYNC) {
-            semaphore.acquireUninterruptibly(permits);
+        if (!sync) {
+            try {
+                semaphore.tryAcquire(permits, 5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
-        saveLevel();
+        saveLevel(true);
     }
 
     @Override
     public void save() {
-        saveLevel();
+        saveLevel(false);
     }
 
-    private void saveLevel() {
-        level.getServer().execute(() -> level.save(null, false, false));
+    private void saveLevel(boolean wait) {
+        CompletableFuture<Void> saved = new CompletableFuture<>();
+        level.getServer().execute(() -> {
+            try {
+                level.save(null, false, false);
+            } finally {
+                saved.complete(null);
+            }
+        });
+        if (!wait) {
+            return;
+        }
+        try {
+            saved.get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (TimeoutException | ExecutionException e) {
+            LOGGER.warn("Iris pregen level save did not complete in time for {}", level.dimension().identifier());
+        }
     }
 
     @Override
@@ -95,7 +127,7 @@ public final class ModdedPregenMethod implements PregeneratorMethod {
 
     @Override
     public boolean isAsyncChunkMode() {
-        return mode == ModdedPregenMode.ASYNC;
+        return !sync;
     }
 
     @Override
@@ -105,7 +137,8 @@ public final class ModdedPregenMethod implements PregeneratorMethod {
 
     @Override
     public void generateChunk(int x, int z, PregenListener listener) {
-        if (mode == ModdedPregenMode.SYNC) {
+        backpressure.apply();
+        if (sync) {
             generateChunkSync(x, z, listener);
             return;
         }
@@ -122,6 +155,7 @@ public final class ModdedPregenMethod implements PregeneratorMethod {
             Object result = loadFuture.get(timeoutSeconds, TimeUnit.SECONDS);
             if (result instanceof ChunkResult<?> chunkResult && !chunkResult.isSuccess()) {
                 LOGGER.warn("Iris pregen chunk {},{} returned no chunk: {}", x, z, chunkResult.getError());
+                listener.onChunkFailed(x, z);
                 return;
             }
             listener.onChunkGenerated(x, z);
@@ -131,6 +165,7 @@ public final class ModdedPregenMethod implements PregeneratorMethod {
             Thread.currentThread().interrupt();
         } catch (TimeoutException | ExecutionException e) {
             LOGGER.warn("Iris pregen chunk {},{} failed: {}", x, z, e.toString());
+            listener.onChunkFailed(x, z);
         } finally {
             level.getServer().execute(() -> level.getChunkSource().removeTicketWithRadius(PREGEN_TICKET, pos, 0));
         }
@@ -155,10 +190,12 @@ public final class ModdedPregenMethod implements PregeneratorMethod {
             try {
                 if (error != null) {
                     LOGGER.warn("Iris pregen chunk {},{} failed: {}", x, z, error.toString());
+                    listener.onChunkFailed(x, z);
                     return;
                 }
                 if (result instanceof ChunkResult<?> chunkResult && !chunkResult.isSuccess()) {
                     LOGGER.warn("Iris pregen chunk {},{} returned no chunk: {}", x, z, chunkResult.getError());
+                    listener.onChunkFailed(x, z);
                     return;
                 }
                 listener.onChunkGenerated(x, z);

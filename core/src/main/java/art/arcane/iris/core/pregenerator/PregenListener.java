@@ -29,6 +29,9 @@ public interface PregenListener {
 
     void onChunkGenerated(int x, int z, boolean cached);
 
+    default void onChunkFailed(int x, int z) {
+    }
+
     void onRegionGenerated(int x, int z);
 
     void onRegionGenerating(int x, int z);

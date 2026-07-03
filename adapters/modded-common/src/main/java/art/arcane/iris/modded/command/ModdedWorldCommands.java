@@ -19,19 +19,25 @@
 package art.arcane.iris.modded.command;
 
 import art.arcane.iris.core.loader.IrisData;
+import art.arcane.iris.core.pack.PackValidationRegistry;
+import art.arcane.iris.core.pack.PackValidationResult;
 import art.arcane.iris.engine.object.IrisDimension;
 import art.arcane.iris.modded.IrisModdedChunkGenerator;
 import art.arcane.iris.modded.ModdedDimensionManager;
+import art.arcane.iris.modded.ModdedEngineBootstrap;
 import art.arcane.iris.modded.ModdedModConfig;
+import art.arcane.iris.modded.ModdedPackInstaller;
 import art.arcane.iris.modded.ModdedPrimaryWorldRouter;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.context.ParsedCommandNode;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.IdentifierArgument;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import org.slf4j.Logger;
@@ -41,12 +47,14 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
 
 public final class ModdedWorldCommands {
     private static final Logger LOGGER = LoggerFactory.getLogger("Iris");
     private static final Predicate<CommandSourceStack> GATE = Commands.hasPermission(Commands.LEVEL_GAMEMASTERS);
     private static final String DEFAULT_NAMESPACE = "irisworldgen";
+    private static final long DEFAULT_SEED = 1337L;
     private static final SuggestionProvider<CommandSourceStack> LOADED_DIMENSIONS = (CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) -> SharedSuggestionProvider.suggest(loadedIrisDimensions(context.getSource().getServer()), builder);
 
     private ModdedWorldCommands() {
@@ -68,53 +76,68 @@ public final class ModdedWorldCommands {
         root.then(enableTree("create"));
         root.then(replaceOverworldTree());
 
-        root.then(disableTree("disable"));
-        root.then(disableTree("remove"));
-        root.then(disableTree("rm"));
+        root.then(disableTree());
+        root.then(deleteTree("delete"));
+        root.then(deleteTree("remove"));
+        root.then(deleteTree("rm"));
 
         return root;
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> enableTree(String name) {
         return Commands.literal(name)
-                .then(Commands.argument("dimension", StringArgumentType.word())
-                        .then(Commands.argument("pack", StringArgumentType.word()).suggests(IrisModdedCommands.PACK_NAMES)
+                .then(Commands.argument("dimension", IdentifierArgument.id())
+                        .then(Commands.argument("pack", StringArgumentType.string()).suggests(IrisModdedCommands.PACK_NAMES)
                                 .executes((CommandContext<CommandSourceStack> context) -> enable(context.getSource(),
-                                        StringArgumentType.getString(context, "dimension"),
+                                        dimensionArgument(context),
                                         StringArgumentType.getString(context, "pack"),
-                                        StringArgumentType.getString(context, "pack"),
-                                        1337L))
-                                .then(Commands.argument("packDimension", StringArgumentType.word())
+                                        null))
+                                .then(Commands.argument("seed", StringArgumentType.word())
                                         .executes((CommandContext<CommandSourceStack> context) -> enable(context.getSource(),
-                                                StringArgumentType.getString(context, "dimension"),
+                                                dimensionArgument(context),
                                                 StringArgumentType.getString(context, "pack"),
-                                                StringArgumentType.getString(context, "packDimension"),
-                                                1337L)))));
+                                                StringArgumentType.getString(context, "seed"))))));
     }
 
-    private static LiteralArgumentBuilder<CommandSourceStack> disableTree(String name) {
+    private static LiteralArgumentBuilder<CommandSourceStack> disableTree() {
+        return Commands.literal("disable")
+                .then(Commands.argument("dimension", IdentifierArgument.id()).suggests(LOADED_DIMENSIONS)
+                        .executes((CommandContext<CommandSourceStack> context) -> disable(context.getSource(), dimensionArgument(context), false)));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> deleteTree(String name) {
         return Commands.literal(name)
-                .then(Commands.argument("dimension", StringArgumentType.word()).suggests(LOADED_DIMENSIONS)
-                        .executes((CommandContext<CommandSourceStack> context) -> disable(context.getSource(), StringArgumentType.getString(context, "dimension"))));
+                .then(Commands.argument("dimension", IdentifierArgument.id()).suggests(LOADED_DIMENSIONS)
+                        .executes((CommandContext<CommandSourceStack> context) -> disable(context.getSource(), dimensionArgument(context), true)));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> replaceOverworldTree() {
         return Commands.literal("replace-overworld")
-                .then(Commands.argument("pack", StringArgumentType.word()).suggests(IrisModdedCommands.PACK_NAMES)
+                .then(Commands.argument("pack", StringArgumentType.string()).suggests(IrisModdedCommands.PACK_NAMES)
                         .executes((CommandContext<CommandSourceStack> context) -> replaceOverworld(context.getSource(),
                                 StringArgumentType.getString(context, "pack"),
-                                StringArgumentType.getString(context, "pack")))
-                        .then(Commands.argument("packDimension", StringArgumentType.word())
+                                null))
+                        .then(Commands.argument("seed", StringArgumentType.word())
                                 .executes((CommandContext<CommandSourceStack> context) -> replaceOverworld(context.getSource(),
                                         StringArgumentType.getString(context, "pack"),
-                                        StringArgumentType.getString(context, "packDimension")))));
+                                        StringArgumentType.getString(context, "seed")))));
     }
 
     public static int createWorld(CommandSourceStack source, String name, String pack, long seed) {
-        return enable(source, name, pack, pack, seed);
+        String[] packRef = parsePackRef(pack);
+        return enable(source, name, packRef[0], packRef[1], seed);
     }
 
-    private static int enable(CommandSourceStack source, String targetDimension, String packName, String packDimension, long seed) {
+    private static int enable(CommandSourceStack source, String targetDimension, String packRaw, String seedRaw) {
+        Long seed = parseSeed(source, seedRaw);
+        if (seed == null) {
+            return 0;
+        }
+        String[] packRef = parsePackRef(packRaw);
+        return enable(source, targetDimension, packRef[0], packRef[1], seed);
+    }
+
+    private static int enable(CommandSourceStack source, String targetDimension, String pack, String packDimension, long seed) {
         MinecraftServer server = source.getServer();
         String dimensionId;
         try {
@@ -123,58 +146,146 @@ public final class ModdedWorldCommands {
             IrisModdedCommands.fail(source, e.getMessage());
             return 0;
         }
-        if (!loadPackDimension(source, packName, packDimension)) {
+        if (!validPackRef(source, pack, packDimension)) {
+            return 0;
+        }
+        File packFolder = new File(ModdedPackCommands.packsRoot(), pack);
+        if (packFolder.isDirectory()) {
+            return enableInstalled(source, server, dimensionId, pack, packDimension, seed);
+        }
+        IrisModdedCommands.ok(source, "Pack '" + pack + "' is not installed; downloading IrisDimensions/" + pack + "...");
+        Thread thread = new Thread(() -> {
+            boolean installed = ModdedPackInstaller.install(ModdedEngineBootstrap.loader().configDir(), pack, "master",
+                    (String line) -> server.execute(() -> IrisModdedCommands.ok(source, line)));
+            server.execute(() -> {
+                if (!installed || !packFolder.isDirectory()) {
+                    IrisModdedCommands.fail(source, "Pack '" + pack + "' could not be downloaded; check the name or install it with /iris download " + pack + ".");
+                    return;
+                }
+                enableInstalled(source, server, dimensionId, pack, packDimension, seed);
+            });
+        }, "Iris World Pack Download");
+        thread.setDaemon(true);
+        thread.start();
+        return 1;
+    }
+
+    private static int enableInstalled(CommandSourceStack source, MinecraftServer server, String dimensionId, String pack, String packDimension, long seed) {
+        if (!loadPackDimension(source, pack, packDimension)) {
+            return 0;
+        }
+        if (blockIfPackBroken(source, dimensionId, pack)) {
             return 0;
         }
         try {
-            ModdedDimensionManager.createPersistent(server, dimensionId, packDimension, seed);
+            ModdedDimensionManager.createPersistent(server, dimensionId, pack, packDimension, seed);
         } catch (Throwable e) {
-            LOGGER.error("Iris world injection failed for {} (pack={} dim={})", dimensionId, packName, packDimension, e);
+            LOGGER.error("Iris world injection failed for {} (pack={} dim={})", dimensionId, pack, packDimension, e);
             IrisModdedCommands.fail(source, "Failed to inject Iris world '" + dimensionId + "': " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " - " + e.getMessage()));
             return 0;
         }
-        IrisModdedCommands.ok(source, "Created Iris world " + dimensionId + " from pack '" + packName + "' dimension '" + packDimension + "' (seed " + seed + ").");
+        IrisModdedCommands.ok(source, "Created Iris world " + dimensionId + " from pack '" + pack + "' dimension '" + packDimension + "' (seed " + seed + ").");
         IrisModdedCommands.ok(source, "It is live now and re-injected on every startup. Teleport in with /iris world status or a portal; no restart required.");
         return 1;
     }
 
-    private static int replaceOverworld(CommandSourceStack source, String packName, String packDimension) {
+    private static int replaceOverworld(CommandSourceStack source, String packRaw, String seedRaw) {
         MinecraftServer server = source.getServer();
+        Long seed = parseSeed(source, seedRaw);
+        if (seed == null) {
+            return 0;
+        }
+        String[] packRef = parsePackRef(packRaw);
+        String pack = packRef[0];
+        String packDimension = packRef[1];
+        if (!validPackRef(source, pack, packDimension)) {
+            return 0;
+        }
         String dimensionId = DEFAULT_NAMESPACE + ":primary";
-        if (!loadPackDimension(source, packName, packDimension)) {
+        if (!loadPackDimension(source, pack, packDimension)) {
+            return 0;
+        }
+        if (blockIfPackBroken(source, dimensionId, pack)) {
             return 0;
         }
         try {
-            ModdedDimensionManager.createPersistent(server, dimensionId, packDimension, 1337L);
+            ModdedDimensionManager.createPersistent(server, dimensionId, pack, packDimension, seed);
         } catch (Throwable e) {
-            LOGGER.error("Iris primary world injection failed for {} (pack={} dim={})", dimensionId, packName, packDimension, e);
+            LOGGER.error("Iris primary world injection failed for {} (pack={} dim={})", dimensionId, pack, packDimension, e);
             IrisModdedCommands.fail(source, "Failed to inject Iris primary world: " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " - " + e.getMessage()));
             return 0;
         }
         ModdedModConfig.setPrimaryWorld(dimensionId);
         ModdedPrimaryWorldRouter.clear();
-        IrisModdedCommands.ok(source, "Iris primary world set to " + dimensionId + " (pack '" + packName + "' dimension '" + packDimension + "').");
+        IrisModdedCommands.ok(source, "Iris primary world set to " + dimensionId + " (pack '" + pack + "' dimension '" + packDimension + "' seed " + seed + ").");
         IrisModdedCommands.ok(source, "The vanilla overworld generator cannot be hot-swapped, so this does NOT regenerate the existing overworld.");
         IrisModdedCommands.ok(source, "Instead, " + dimensionId + " is now the configured primary world: players in the vanilla overworld are routed there on join, and it re-injects on every startup.");
         return 1;
     }
 
-    private static boolean loadPackDimension(CommandSourceStack source, String packName, String packDimension) {
-        File packFolder = new File(ModdedPackCommands.packsRoot(), packName);
+    private static boolean blockIfPackBroken(CommandSourceStack source, String dimensionId, String pack) {
+        PackValidationResult validation = PackValidationRegistry.get(pack);
+        if (validation == null || validation.isLoadable()) {
+            return false;
+        }
+        IrisModdedCommands.fail(source, "Refusing to create world '" + dimensionId + "' using broken pack '" + pack + "':");
+        for (String reason : validation.getBlockingErrors()) {
+            IrisModdedCommands.fail(source, "  - " + reason);
+        }
+        IrisModdedCommands.fail(source, "Fix the pack and run /iris pack validate " + pack + " to revalidate.");
+        return true;
+    }
+
+    private static boolean loadPackDimension(CommandSourceStack source, String pack, String packDimension) {
+        File packFolder = new File(ModdedPackCommands.packsRoot(), pack);
         if (!packFolder.isDirectory()) {
-            IrisModdedCommands.fail(source, "Pack '" + packName + "' was not found under " + ModdedPackCommands.packsRoot().getAbsolutePath());
+            IrisModdedCommands.fail(source, "Pack '" + pack + "' was not found under " + ModdedPackCommands.packsRoot().getAbsolutePath());
             return false;
         }
         IrisData data = IrisData.get(packFolder);
         IrisDimension dimension = data.getDimensionLoader().load(packDimension);
         if (dimension == null) {
-            IrisModdedCommands.fail(source, "Pack '" + packName + "' does not contain dimensions/" + packDimension + ".json");
+            IrisModdedCommands.fail(source, "Pack '" + pack + "' does not contain dimensions/" + packDimension + ".json");
             return false;
         }
         return true;
     }
 
-    private static int disable(CommandSourceStack source, String targetDimension) {
+    private static String[] parsePackRef(String raw) {
+        String value = raw.trim();
+        int colon = value.indexOf(':');
+        if (colon >= 0) {
+            return new String[]{value.substring(0, colon), value.substring(colon + 1)};
+        }
+        return new String[]{value, value};
+    }
+
+    private static boolean validPackRef(CommandSourceStack source, String pack, String packDimension) {
+        if (pack.matches("[A-Za-z0-9_.-]+") && !pack.contains("..")
+                && packDimension.matches("[A-Za-z0-9_/.-]+") && !packDimension.contains("..")) {
+            return true;
+        }
+        IrisModdedCommands.fail(source, "Invalid pack reference '" + pack + (pack.equals(packDimension) ? "" : ":" + packDimension) + "'. Use pack or pack:dimensionKey.");
+        return false;
+    }
+
+    private static Long parseSeed(CommandSourceStack source, String seedRaw) {
+        if (seedRaw == null || seedRaw.isBlank()) {
+            return DEFAULT_SEED;
+        }
+        String value = seedRaw.trim();
+        if (value.equalsIgnoreCase("random")) {
+            return ThreadLocalRandom.current().nextLong();
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            IrisModdedCommands.fail(source, "Invalid seed '" + seedRaw + "'. Use a number or 'random'.");
+            return null;
+        }
+    }
+
+    private static int disable(CommandSourceStack source, String targetDimension, boolean wipeStorage) {
         MinecraftServer server = source.getServer();
         String dimensionId;
         try {
@@ -185,7 +296,7 @@ public final class ModdedWorldCommands {
         }
         boolean removed;
         try {
-            removed = ModdedDimensionManager.removePersistent(server, dimensionId);
+            removed = ModdedDimensionManager.removePersistent(server, dimensionId, wipeStorage);
         } catch (Throwable e) {
             LOGGER.error("Iris world removal failed for {}", dimensionId, e);
             IrisModdedCommands.fail(source, "Failed to remove Iris world '" + dimensionId + "': " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " - " + e.getMessage()));
@@ -196,10 +307,19 @@ public final class ModdedWorldCommands {
             ModdedPrimaryWorldRouter.clear();
         }
         if (!removed) {
-            IrisModdedCommands.ok(source, "Iris world '" + dimensionId + "' was not loaded; cleared its persistent registry entry.");
+            if (wipeStorage) {
+                IrisModdedCommands.ok(source, "Iris world '" + dimensionId + "' was not loaded; cleared its persistent registry entry and wiped its stored chunk/mantle data.");
+            } else {
+                IrisModdedCommands.ok(source, "Iris world '" + dimensionId + "' was not loaded; cleared its persistent registry entry. World data on disk is kept.");
+            }
             return 1;
         }
-        IrisModdedCommands.ok(source, "Removed Iris world '" + dimensionId + "': evacuated, unloaded, region data deleted, and dropped from the startup registry.");
+        if (wipeStorage) {
+            IrisModdedCommands.ok(source, "Deleted Iris world '" + dimensionId + "': evacuated, unloaded, chunk/mantle data wiped, and dropped from the startup registry.");
+        } else {
+            IrisModdedCommands.ok(source, "Disabled Iris world '" + dimensionId + "': evacuated, unloaded, and dropped from the startup registry.");
+            IrisModdedCommands.ok(source, "World data on disk is kept; re-enable with /iris world enable " + dimensionId + " <pack> or delete it with /iris world delete " + dimensionId + ".");
+        }
         return 1;
     }
 
@@ -209,7 +329,7 @@ public final class ModdedWorldCommands {
         for (ServerLevel level : server.getAllLevels()) {
             if (level.getChunkSource().getGenerator() instanceof IrisModdedChunkGenerator generator) {
                 loaded++;
-                IrisModdedCommands.ok(source, "Loaded Iris level: " + level.dimension().identifier() + " -> pack dimension '" + generator.activePackKey() + "'");
+                IrisModdedCommands.ok(source, "Loaded Iris level: " + level.dimension().identifier() + " -> pack '" + generator.activePack() + "' dimension '" + generator.activeDimensionKey() + "'");
             }
         }
         String primary = ModdedModConfig.get().primaryWorld();
@@ -242,6 +362,15 @@ public final class ModdedWorldCommands {
             }
         }
         return dimensions;
+    }
+
+    private static String dimensionArgument(CommandContext<CommandSourceStack> context) {
+        for (ParsedCommandNode<CommandSourceStack> node : context.getNodes()) {
+            if ("dimension".equals(node.getNode().getName())) {
+                return node.getRange().get(context.getInput());
+            }
+        }
+        return IdentifierArgument.getId(context, "dimension").toString();
     }
 
     private static String normalizeDimensionId(String value) {

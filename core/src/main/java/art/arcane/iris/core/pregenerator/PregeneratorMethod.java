@@ -80,5 +80,11 @@ public interface PregeneratorMethod {
      */
     void generateChunk(int x, int z, PregenListener listener);
 
+    default void onRegionBounds(int minRegionX, int minRegionZ, int maxRegionX, int maxRegionZ) {
+    }
+
+    default void onRegionSubmitted(int regionX, int regionZ) {
+    }
+
     Mantle getMantle();
 }

@@ -26,12 +26,14 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class ModdedGuiHost implements GuiHost.Provider {
     private static final ModdedGuiHost INSTANCE = new ModdedGuiHost();
 
     private final Map<Engine, ServerLevel> levels = new ConcurrentHashMap<>();
+    private final Map<Engine, UUID> openers = new ConcurrentHashMap<>();
     private volatile Engine active;
     private volatile MinecraftServer server;
 
@@ -42,10 +44,15 @@ public final class ModdedGuiHost implements GuiHost.Provider {
         GuiHost.set(INSTANCE);
     }
 
-    public static void bindContext(MinecraftServer server, ServerLevel level, Engine engine) {
+    public static void bindContext(MinecraftServer server, ServerLevel level, Engine engine, UUID opener) {
         INSTANCE.server = server;
         INSTANCE.active = engine;
         INSTANCE.levels.put(engine, level);
+        if (opener == null) {
+            INSTANCE.openers.remove(engine);
+        } else {
+            INSTANCE.openers.put(engine, opener);
+        }
     }
 
     public static boolean isGuiLaunchable() {
@@ -53,6 +60,9 @@ public final class ModdedGuiHost implements GuiHost.Provider {
     }
 
     public static String guiUnavailableReason() {
+        if (GuiHost.isDesktopSuppressed()) {
+            return "running inside a Minecraft client (desktop GUIs disabled to avoid a client crash)";
+        }
         if (!GuiHost.isAvailable()) {
             return "headless JVM (no display)";
         }
@@ -82,6 +92,6 @@ public final class ModdedGuiHost implements GuiHost.Provider {
         if (level == null || server == null) {
             return null;
         }
-        return new ModdedVisionOverlay(server, level, engine);
+        return new ModdedVisionOverlay(server, level, engine, openers.get(engine));
     }
 }

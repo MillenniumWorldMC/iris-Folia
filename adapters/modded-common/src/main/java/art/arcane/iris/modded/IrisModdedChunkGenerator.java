@@ -19,6 +19,7 @@
 package art.arcane.iris.modded;
 
 import art.arcane.iris.engine.framework.Engine;
+import art.arcane.iris.engine.framework.GenerationSessionException;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.iris.spi.PlatformBlockState;
@@ -64,6 +65,7 @@ import org.slf4j.LoggerFactory;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -76,28 +78,39 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
     ).apply(instance, IrisModdedChunkGenerator::new));
 
     private final String dimensionKey;
+    private final String defaultPack;
+    private final String defaultDimensionKey;
     private final ConcurrentHashMap<String, Holder<Biome>> biomeHolders = new ConcurrentHashMap<>();
+    private final Set<String> missingBiomeWarnings = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean announced = new AtomicBoolean(false);
     private volatile Engine engine;
-    private volatile String activePackKey;
+    private volatile String activePack;
+    private volatile String activeDimensionKey;
     private volatile long seedOverride = Long.MIN_VALUE;
+    private volatile long lastChunkGenAt = 0L;
 
     public IrisModdedChunkGenerator(BiomeSource biomeSource, String dimensionKey) {
         super(biomeSource);
         this.dimensionKey = dimensionKey;
-        this.activePackKey = dimensionKey;
+        int colon = dimensionKey.indexOf(':');
+        this.defaultPack = colon >= 0 ? dimensionKey.substring(0, colon) : dimensionKey;
+        this.defaultDimensionKey = colon >= 0 ? dimensionKey.substring(colon + 1) : dimensionKey;
+        this.activePack = defaultPack;
+        this.activeDimensionKey = defaultDimensionKey;
     }
 
-    public synchronized void repoint(String packKey, long seed) {
+    public synchronized void repoint(String pack, String packDimensionKey, long seed) {
         ServerLevel level = boundLevel();
         if (level != null) {
             ModdedWorldEngines.evict(level);
         }
-        this.activePackKey = packKey;
+        this.activePack = pack;
+        this.activeDimensionKey = packDimensionKey;
         this.seedOverride = seed;
         this.engine = null;
         this.announced.set(false);
         this.biomeHolders.clear();
+        this.missingBiomeWarnings.clear();
     }
 
     public synchronized void unbindEngine() {
@@ -108,14 +121,19 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
         this.engine = null;
         this.announced.set(false);
         this.biomeHolders.clear();
+        this.missingBiomeWarnings.clear();
     }
 
     public synchronized void resetToDefault() {
-        repoint(dimensionKey, Long.MIN_VALUE);
+        repoint(defaultPack, defaultDimensionKey, Long.MIN_VALUE);
     }
 
-    public String activePackKey() {
-        return activePackKey;
+    public String activePack() {
+        return activePack;
+    }
+
+    public String activeDimensionKey() {
+        return activeDimensionKey;
     }
 
     @Override
@@ -149,7 +167,7 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
             if (level == null) {
                 throw new IllegalStateException("Iris generator '" + dimensionKey + "' has no bound ServerLevel yet");
             }
-            Engine created = ModdedWorldEngines.get(level, activePackKey, seedOverride);
+            Engine created = ModdedWorldEngines.get(level, activePack, activeDimensionKey, seedOverride);
             engine = created;
             return created;
         }
@@ -179,10 +197,20 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
         return engine();
     }
 
+    public long lastChunkGenAt() {
+        return lastChunkGenAt;
+    }
+
+    public void onHotload() {
+        biomeHolders.clear();
+        missingBiomeWarnings.clear();
+    }
+
     @Override
     public CompletableFuture<ChunkAccess> fillFromNoise(Blender blender, RandomState randomState, StructureManager structureManager, ChunkAccess chunk) {
         Engine generationEngine = engine();
         ChunkPos pos = chunk.getPos();
+        lastChunkGenAt = System.currentTimeMillis();
         if (announced.compareAndSet(false, true)) {
             LOGGER.info("Iris generating {} through IrisModdedChunkGenerator (dim={} first chunk {},{})",
                     dimensionKey, generationEngine.getDimension().getLoadKey(), pos.x(), pos.z());
@@ -197,6 +225,13 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
         Hunk<PlatformBiome> biomes = Hunk.newArrayHunk(16, height, 16);
         try {
             generationEngine.generate(pos.getMinBlockX(), pos.getMinBlockZ(), blocks, biomes, false);
+        } catch (GenerationSessionException e) {
+            if (e.isExpectedTeardown()) {
+                LOGGER.debug("Iris chunk {},{} skipped: engine sealed for hotload/teardown", pos.x(), pos.z());
+                return CompletableFuture.completedFuture(chunk);
+            }
+            LOGGER.error("Iris failed to generate chunk {},{}", pos.x(), pos.z(), e);
+            throw new IllegalStateException("Iris generation failed for chunk " + pos.x() + "," + pos.z(), e);
         } catch (Throwable e) {
             LOGGER.error("Iris failed to generate chunk {},{}", pos.x(), pos.z(), e);
             throw new IllegalStateException("Iris generation failed for chunk " + pos.x() + "," + pos.z(), e);
@@ -232,7 +267,12 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
         }
         Identifier identifier = Identifier.tryParse(key);
         Optional<Holder.Reference<Biome>> reference = identifier == null ? Optional.empty() : registry.get(identifier);
-        Holder<Biome> resolved = reference.<Holder<Biome>>map((Holder.Reference<Biome> value) -> value).orElseGet(() -> fallbackBiome(registry));
+        Holder<Biome> resolved = reference.<Holder<Biome>>map((Holder.Reference<Biome> value) -> value).orElseGet(() -> {
+            if (missingBiomeWarnings.size() < 256 && missingBiomeWarnings.add(key)) {
+                LOGGER.warn("Iris biome '{}' (pack {}) is not in the biome registry; writing minecraft:plains. Restart so the forced datapack registers the pack biomes.", key, activePack);
+            }
+            return fallbackBiome(registry);
+        });
         Holder<Biome> raced = biomeHolders.putIfAbsent(key, resolved);
         return raced != null ? raced : resolved;
     }

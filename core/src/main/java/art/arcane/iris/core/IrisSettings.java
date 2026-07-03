@@ -141,6 +141,10 @@ public class IrisSettings {
 
     @Data
     public static class IrisSettingsPregen {
+        private static final int REFERENCE_WORLD_HEIGHT = 384;
+        private static final int MIN_RESIDENT_TECTONIC_PLATES = 16;
+        private static final double MANTLE_HEAP_FRACTION = 0.6D;
+        private static final int REFERENCE_PLATE_MEGABYTES = 48;
         public boolean useTicketQueue = true;
         public IrisRuntimeSchedulerMode runtimeSchedulerMode = IrisRuntimeSchedulerMode.AUTO;
         public IrisPaperLikeBackendMode paperLikeBackendMode = IrisPaperLikeBackendMode.AUTO;
@@ -157,6 +161,17 @@ public class IrisSettings {
 
         public int getMaxResidentTectonicPlates() {
             return Math.max(16, maxResidentTectonicPlates);
+        }
+
+        public int getEffectiveResidentTectonicPlates(int worldHeight) {
+            int baseCap = getMaxResidentTectonicPlates();
+            int normalizedHeight = Math.max(1, worldHeight);
+            int heightScaledCap = (int) Math.round((double) baseCap * REFERENCE_WORLD_HEIGHT / (double) normalizedHeight);
+            long maxHeapMegabytes = getHardware.getProcessMemory();
+            double plateMegabytes = (double) REFERENCE_PLATE_MEGABYTES * (double) normalizedHeight / (double) REFERENCE_WORLD_HEIGHT;
+            int byteBudgetCap = (int) Math.floor(MANTLE_HEAP_FRACTION * (double) maxHeapMegabytes / plateMegabytes);
+            int effective = Math.min(heightScaledCap, byteBudgetCap);
+            return Math.max(MIN_RESIDENT_TECTONIC_PLATES, Math.min(baseCap, effective));
         }
 
         public int getMantleBackpressureWaitMs() {

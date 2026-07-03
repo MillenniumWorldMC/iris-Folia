@@ -18,6 +18,9 @@
 
 package art.arcane.iris.modded.command;
 
+import art.arcane.iris.core.IrisSettings;
+import art.arcane.iris.core.gui.GuiHost;
+import art.arcane.iris.core.loader.IrisRegistrant;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.IrisStructureLocator;
 import art.arcane.iris.engine.framework.Locator;
@@ -27,6 +30,7 @@ import art.arcane.iris.engine.object.IrisPosition;
 import art.arcane.iris.engine.object.IrisRegion;
 import art.arcane.iris.modded.IrisModdedChunkGenerator;
 import art.arcane.iris.modded.ModdedBlockState;
+import art.arcane.iris.modded.ModdedDimensionManager;
 import art.arcane.iris.modded.ModdedEngineBootstrap;
 import art.arcane.iris.modded.ModdedLoader;
 import art.arcane.iris.modded.ModdedPackInstaller;
@@ -39,8 +43,11 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
@@ -48,14 +55,18 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.DimensionArgument;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Relative;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -64,10 +75,10 @@ import net.minecraft.world.phys.HitResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.awt.Desktop;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -118,9 +129,28 @@ public final class IrisModdedCommands {
                 .executes((CommandContext<CommandSourceStack> context) -> what(context.getSource()))
                 .then(Commands.literal("block")
                         .executes((CommandContext<CommandSourceStack> context) -> whatBlock(context.getSource())))
+                .then(Commands.literal("hand")
+                        .executes((CommandContext<CommandSourceStack> context) -> whatHand(context.getSource())))
                 .then(Commands.literal("markers")
                         .then(Commands.argument("marker", StringArgumentType.greedyString()).suggests(MARKER_TYPES)
                                 .executes((CommandContext<CommandSourceStack> context) -> whatMarkers(context.getSource(), StringArgumentType.getString(context, "marker"))))));
+
+        root.then(Commands.literal("tp").requires(GATE)
+                .then(Commands.argument("dimension", DimensionArgument.dimension()).suggests(DIMENSION_NAMES)
+                        .executes((CommandContext<CommandSourceStack> context) -> tp(context.getSource(), DimensionArgument.getDimension(context, "dimension"), null))
+                        .then(Commands.argument("player", EntityArgument.player())
+                                .executes((CommandContext<CommandSourceStack> context) -> tp(context.getSource(), DimensionArgument.getDimension(context, "dimension"), EntityArgument.getPlayer(context, "player"))))));
+
+        root.then(Commands.literal("evacuate").requires(GATE)
+                .executes((CommandContext<CommandSourceStack> context) -> evacuate(context.getSource(), null))
+                .then(Commands.argument("dimension", DimensionArgument.dimension()).suggests(DIMENSION_NAMES)
+                        .executes((CommandContext<CommandSourceStack> context) -> evacuate(context.getSource(), DimensionArgument.getDimension(context, "dimension")))));
+
+        root.then(Commands.literal("debug").requires(GATE)
+                .executes((CommandContext<CommandSourceStack> context) -> debug(context.getSource())));
+
+        root.then(Commands.literal("reload").requires(GATE)
+                .executes((CommandContext<CommandSourceStack> context) -> reload(context.getSource())));
 
         root.then(gotoTree("goto"));
         root.then(gotoTree("find"));
@@ -171,7 +201,7 @@ public final class IrisModdedCommands {
     private static LiteralArgumentBuilder<CommandSourceStack> createTree() {
         return Commands.literal("create").requires(GATE)
                 .then(Commands.argument("name", StringArgumentType.word())
-                        .then(Commands.argument("pack", StringArgumentType.word()).suggests(PACK_NAMES)
+                        .then(Commands.argument("pack", StringArgumentType.string()).suggests(PACK_NAMES)
                                 .executes((CommandContext<CommandSourceStack> context) -> ModdedWorldCommands.createWorld(context.getSource(),
                                         StringArgumentType.getString(context, "name"),
                                         StringArgumentType.getString(context, "pack"),
@@ -231,27 +261,20 @@ public final class IrisModdedCommands {
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> pregenTree(String name) {
+        RequiredArgumentBuilder<CommandSourceStack, Integer> radius = Commands.argument("radius", IntegerArgumentType.integer(1, 100000))
+                .executes((CommandContext<CommandSourceStack> context) -> pregenStart(context, false, false, false, false, false));
+        attachPregenCenter(radius, false);
+        attachPregenFlags(radius, false, false, false, false, false);
+        RequiredArgumentBuilder<CommandSourceStack, Identifier> dimension = Commands.argument("dimension", DimensionArgument.dimension()).suggests(DIMENSION_NAMES)
+                .executes((CommandContext<CommandSourceStack> context) -> pregenStart(context, true, false, false, false, false));
+        attachPregenCenter(dimension, true);
+        attachPregenFlags(dimension, true, false, false, false, false);
+        radius.then(dimension);
+
         return Commands.literal(name).requires(GATE)
                 .executes((CommandContext<CommandSourceStack> context) -> ModdedCommandHelp.send(context.getSource(), name))
                 .then(Commands.literal("start")
-                        .then(Commands.argument("radius", IntegerArgumentType.integer(1, 100000))
-                                .executes((CommandContext<CommandSourceStack> context) -> pregenStart(context.getSource(), IntegerArgumentType.getInteger(context, "radius"), 0, 0, false, ModdedPregenMode.ASYNC, false))
-                                .then(pregenStartFlag("gui", false, true, ModdedPregenMode.ASYNC, false))
-                                .then(pregenStartFlag("sync", false, false, ModdedPregenMode.SYNC, false))
-                                .then(pregenStartFlag("cached", false, false, ModdedPregenMode.SYNC, true))
-                                .then(Commands.argument("x", IntegerArgumentType.integer())
-                                        .then(Commands.argument("z", IntegerArgumentType.integer())
-                                                .executes((CommandContext<CommandSourceStack> context) -> pregenStart(context.getSource(),
-                                                        IntegerArgumentType.getInteger(context, "radius"),
-                                                        IntegerArgumentType.getInteger(context, "x"),
-                                                        IntegerArgumentType.getInteger(context, "z"), false, ModdedPregenMode.ASYNC, false))
-                                                .then(pregenStartFlag("gui", true, true, ModdedPregenMode.ASYNC, false))
-                                                .then(pregenStartFlag("sync", true, false, ModdedPregenMode.SYNC, false))
-                                                .then(pregenStartFlag("cached", true, false, ModdedPregenMode.SYNC, true))))
-                                .then(Commands.argument("dimension", StringArgumentType.greedyString()).suggests(DIMENSION_NAMES)
-                                        .executes((CommandContext<CommandSourceStack> context) -> pregenStart(context.getSource(),
-                                                IntegerArgumentType.getInteger(context, "radius"), 0, 0, false, ModdedPregenMode.ASYNC, false,
-                                                StringArgumentType.getString(context, "dimension"))))))
+                        .then(radius))
                 .then(Commands.literal("stop")
                         .executes((CommandContext<CommandSourceStack> context) -> pregenStop(context.getSource())))
                 .then(Commands.literal("x")
@@ -264,12 +287,32 @@ public final class IrisModdedCommands {
                         .executes((CommandContext<CommandSourceStack> context) -> pregenStatus(context.getSource())));
     }
 
-    private static LiteralArgumentBuilder<CommandSourceStack> pregenStartFlag(String name, boolean withCenter, boolean gui, ModdedPregenMode mode, boolean cached) {
-        return Commands.literal(name).executes((CommandContext<CommandSourceStack> context) -> pregenStart(context.getSource(),
-                IntegerArgumentType.getInteger(context, "radius"),
-                withCenter ? IntegerArgumentType.getInteger(context, "x") : 0,
-                withCenter ? IntegerArgumentType.getInteger(context, "z") : 0,
-                gui, mode, cached));
+    private static void attachPregenCenter(ArgumentBuilder<CommandSourceStack, ?> node, boolean withDimension) {
+        RequiredArgumentBuilder<CommandSourceStack, Integer> z = Commands.argument("z", IntegerArgumentType.integer())
+                .executes((CommandContext<CommandSourceStack> context) -> pregenStart(context, withDimension, true, false, false, false));
+        attachPregenFlags(z, withDimension, true, false, false, false);
+        node.then(Commands.literal("at")
+                .then(Commands.argument("x", IntegerArgumentType.integer())
+                        .then(z)));
+    }
+
+    private static void attachPregenFlags(ArgumentBuilder<CommandSourceStack, ?> node, boolean withDimension, boolean withCenter, boolean gui, boolean sync, boolean nocache) {
+        if (!gui) {
+            node.then(pregenFlagNode("gui", withDimension, withCenter, true, sync, nocache));
+        }
+        if (!sync) {
+            node.then(pregenFlagNode("sync", withDimension, withCenter, gui, true, nocache));
+        }
+        if (!nocache) {
+            node.then(pregenFlagNode("nocache", withDimension, withCenter, gui, sync, true));
+        }
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> pregenFlagNode(String name, boolean withDimension, boolean withCenter, boolean gui, boolean sync, boolean nocache) {
+        LiteralArgumentBuilder<CommandSourceStack> flag = Commands.literal(name)
+                .executes((CommandContext<CommandSourceStack> context) -> pregenStart(context, withDimension, withCenter, gui, sync, nocache));
+        attachPregenFlags(flag, withDimension, withCenter, gui, sync, nocache);
+        return flag;
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> goldenhashTree(String name) {
@@ -302,21 +345,176 @@ public final class IrisModdedCommands {
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> editTree() {
-        String message = "/iris edit opens pack JSON files in a desktop editor through the Bukkit studio toolchain; "
-                + "on modded servers edit the pack files directly under config/irisworldgen/packs/<pack>/.";
-        LiteralArgumentBuilder<CommandSourceStack> node = Commands.literal("edit").requires(GATE)
-                .executes((CommandContext<CommandSourceStack> context) -> {
-                    fail(context.getSource(), message);
-                    return 0;
-                });
-        for (String child : new String[]{"biome", "region", "dimension"}) {
-            node.then(Commands.literal(child)
-                    .executes((CommandContext<CommandSourceStack> context) -> {
-                        fail(context.getSource(), message);
-                        return 0;
-                    }));
+        return Commands.literal("edit").requires(GATE)
+                .executes((CommandContext<CommandSourceStack> context) -> ModdedCommandHelp.send(context.getSource(), "edit"))
+                .then(Commands.literal("biome")
+                        .executes((CommandContext<CommandSourceStack> context) -> editBiome(context.getSource(), null))
+                        .then(Commands.argument("key", StringArgumentType.greedyString()).suggests(BIOME_KEYS)
+                                .executes((CommandContext<CommandSourceStack> context) -> editBiome(context.getSource(), StringArgumentType.getString(context, "key")))))
+                .then(Commands.literal("region")
+                        .executes((CommandContext<CommandSourceStack> context) -> editRegion(context.getSource(), null))
+                        .then(Commands.argument("key", StringArgumentType.greedyString()).suggests(REGION_KEYS)
+                                .executes((CommandContext<CommandSourceStack> context) -> editRegion(context.getSource(), StringArgumentType.getString(context, "key")))))
+                .then(Commands.literal("dimension")
+                        .executes((CommandContext<CommandSourceStack> context) -> editDimension(context.getSource())));
+    }
+
+    private static int editBiome(CommandSourceStack source, String key) {
+        Engine engine = engineFor(source.getLevel());
+        if (engine == null) {
+            fail(source, "This dimension is not generated by Iris.");
+            return 0;
         }
-        return node;
+        IrisBiome biome;
+        if (key == null || key.isBlank()) {
+            ServerPlayer player = source.getPlayer();
+            if (player == null) {
+                fail(source, "Console must name a biome: /iris edit biome <key>");
+                return 0;
+            }
+            BlockPos pos = player.blockPosition();
+            try {
+                biome = engine.getBiome(pos.getX(), pos.getY() - engine.getMinHeight(), pos.getZ());
+            } catch (Throwable e) {
+                fail(source, "Biome lookup failed: " + e.getClass().getSimpleName());
+                return 0;
+            }
+        } else {
+            biome = engine.getData().getBiomeLoader().load(key.trim());
+            if (biome == null) {
+                fail(source, "Unknown biome: " + key);
+                return 0;
+            }
+        }
+        return openJson(source, biome);
+    }
+
+    private static int editRegion(CommandSourceStack source, String key) {
+        Engine engine = engineFor(source.getLevel());
+        if (engine == null) {
+            fail(source, "This dimension is not generated by Iris.");
+            return 0;
+        }
+        IrisRegion region;
+        if (key == null || key.isBlank()) {
+            ServerPlayer player = source.getPlayer();
+            if (player == null) {
+                fail(source, "Console must name a region: /iris edit region <key>");
+                return 0;
+            }
+            BlockPos pos = player.blockPosition();
+            try {
+                region = engine.getRegion(pos.getX(), pos.getZ());
+            } catch (Throwable e) {
+                fail(source, "Region lookup failed: " + e.getClass().getSimpleName());
+                return 0;
+            }
+        } else {
+            region = engine.getData().getRegionLoader().load(key.trim());
+            if (region == null) {
+                fail(source, "Unknown region: " + key);
+                return 0;
+            }
+        }
+        return openJson(source, region);
+    }
+
+    private static int editDimension(CommandSourceStack source) {
+        Engine engine = engineFor(source.getLevel());
+        if (engine == null) {
+            fail(source, "This dimension is not generated by Iris.");
+            return 0;
+        }
+        return openJson(source, engine.getDimension());
+    }
+
+    private static int openJson(CommandSourceStack source, IrisRegistrant registrant) {
+        if (!GuiHost.isAvailable() || !Desktop.isDesktopSupported()) {
+            fail(source, "Cannot open files here: " + ModdedGuiHost.guiUnavailableReason());
+            return 0;
+        }
+        if (registrant == null || registrant.getLoadFile() == null || !registrant.getLoadFile().isFile()) {
+            fail(source, "Cannot find the file; perhaps it was not loaded directly from a file?");
+            return 0;
+        }
+        File file = registrant.getLoadFile();
+        try {
+            Desktop.getDesktop().open(file);
+        } catch (Throwable e) {
+            LOGGER.error("Iris edit failed to open {}", file, e);
+            fail(source, "Could not open " + file.getName() + ": " + e.getClass().getSimpleName());
+            return 0;
+        }
+        ok(source, "Opening " + registrant.getTypeName() + " " + file.getName() + " in your editor.");
+        return 1;
+    }
+
+    private static int tp(CommandSourceStack source, ServerLevel level, ServerPlayer target) {
+        ServerPlayer player = target != null ? target : source.getPlayer();
+        if (player == null) {
+            fail(source, "Console must name a player: /iris tp <dimension> <player>");
+            return 0;
+        }
+        if (!(level.getChunkSource().getGenerator() instanceof IrisModdedChunkGenerator)) {
+            fail(source, level.dimension().identifier() + " is not generated by Iris.");
+            return 0;
+        }
+        String dimensionId = level.dimension().identifier().toString();
+        if (!ModdedDimensionManager.teleport(player, source.getServer(), dimensionId, 8.5D, Double.MIN_VALUE, 8.5D)) {
+            fail(source, "Teleport failed: dimension " + dimensionId + " is not loaded.");
+            return 0;
+        }
+        ok(source, "Teleporting " + player.getScoreboardName() + " to " + dimensionId + "...");
+        return 1;
+    }
+
+    private static int evacuate(CommandSourceStack source, ServerLevel target) {
+        MinecraftServer server = source.getServer();
+        ServerLevel level = target != null ? target : source.getLevel();
+        if (!(level.getChunkSource().getGenerator() instanceof IrisModdedChunkGenerator)) {
+            fail(source, level.dimension().identifier() + " is not generated by Iris.");
+            return 0;
+        }
+        ServerLevel fallback = server.overworld();
+        if (fallback == level) {
+            fail(source, "Cannot evacuate the primary world; there is nowhere to send players.");
+            return 0;
+        }
+        int count = ModdedDimensionManager.evacuate(server, level);
+        ok(source, "Evacuated " + count + " player(s) from " + level.dimension().identifier() + " to " + fallback.dimension().identifier() + ".");
+        return 1;
+    }
+
+    private static int debug(CommandSourceStack source) {
+        boolean to = !IrisSettings.get().getGeneral().isDebug();
+        IrisSettings.get().getGeneral().setDebug(to);
+        IrisSettings.get().forceSave();
+        ok(source, "Set debug to: " + to);
+        return 1;
+    }
+
+    private static int reload(CommandSourceStack source) {
+        if (IrisSettings.settings != null) {
+            IrisSettings.invalidate();
+        }
+        IrisSettings.get();
+        ok(source, "Hotloaded settings");
+        return 1;
+    }
+
+    private static int whatHand(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            fail(source, "This command can only be used by players (it inspects your held item).");
+            return 0;
+        }
+        ItemStack stack = player.getMainHandItem();
+        if (stack.isEmpty()) {
+            fail(source, "Your main hand is empty.");
+            return 0;
+        }
+        ok(source, "Hand: " + BuiltInRegistries.ITEM.getKey(stack.getItem()) + " x" + stack.getCount());
+        return 1;
     }
 
     private static int regen(CommandSourceStack source, int radius) {
@@ -339,28 +537,23 @@ public final class IrisModdedCommands {
         return 1;
     }
 
-    private static int pregenStart(CommandSourceStack source, int radius, int centerX, int centerZ, boolean gui, ModdedPregenMode mode, boolean cached) {
-        return pregenStart(source, radius, centerX, centerZ, gui, mode, cached, null);
-    }
-
-    private static int pregenStart(CommandSourceStack source, int radius, int centerX, int centerZ, boolean gui, ModdedPregenMode mode, boolean cached, String dimension) {
-        ServerLevel level;
-        if (dimension == null || dimension.isBlank()) {
-            level = source.getLevel();
-        } else {
-            level = resolveIrisLevel(source.getServer(), dimension);
-            if (level == null) {
-                fail(source, "No loaded Iris dimension matches '" + dimension + "'. Use a bare name (irisworld) or full id (irisworldgen:irisworld); see /iris info for loaded dimensions.");
-                return 0;
-            }
-        }
+    private static int pregenStart(CommandContext<CommandSourceStack> context, boolean withDimension, boolean withCenter, boolean gui, boolean sync, boolean nocache) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        int radius = IntegerArgumentType.getInteger(context, "radius");
+        int centerX = withCenter ? IntegerArgumentType.getInteger(context, "x") : 0;
+        int centerZ = withCenter ? IntegerArgumentType.getInteger(context, "z") : 0;
+        ServerLevel level = withDimension ? DimensionArgument.getDimension(context, "dimension") : source.getLevel();
         Engine engine = engineFor(level);
         if (engine == null) {
-            fail(source, "This dimension is not generated by Iris.");
+            if (withDimension) {
+                fail(source, level.dimension().identifier() + " is not generated by Iris; see /iris info for loaded Iris dimensions.");
+            } else {
+                fail(source, "The current dimension (" + level.dimension().identifier() + ") is not generated by Iris. Name one explicitly: /iris pregen start " + radius + " <dimension>; see /iris info for loaded Iris dimensions.");
+            }
             return 0;
         }
         boolean showGui = gui && ModdedGuiHost.isGuiLaunchable();
-        if (!ModdedPregenJob.start(source.getServer(), level, engine, radius, centerX, centerZ, showGui, mode, cached)) {
+        if (!ModdedPregenJob.start(source.getServer(), level, engine, radius, centerX, centerZ, showGui, sync, !nocache)) {
             fail(source, "A pregeneration task is already running. Stop it first with /iris pregen stop.");
             return 0;
         }
@@ -372,7 +565,7 @@ public final class IrisModdedCommands {
         } else {
             guiNote = " (GUI requested but unavailable: " + ModdedGuiHost.guiUnavailableReason() + ")";
         }
-        String modeNote = mode == ModdedPregenMode.SYNC ? " Mode: sync" + (cached ? " (checkpoint cache resumable)." : ".") : "";
+        String modeNote = " Mode: " + (sync ? "sync" : "async") + (nocache ? ", cache disabled." : ", resumable (checkpoint cache).");
         ok(source, "Pregen started in " + level.dimension().identifier() + " of " + (radius * 2) + " by " + (radius * 2)
                 + " blocks from " + centerX + "," + centerZ + "." + modeNote + " Progress logs to console; see /iris pregen status." + guiNote);
         return 1;
@@ -786,14 +979,15 @@ public final class IrisModdedCommands {
 
     private static int download(CommandSourceStack source, String pack, String branch) {
         MinecraftServer server = source.getServer();
-        ok(source, "Downloading IrisDimensions/" + pack + " (branch " + branch + ")...");
+        String effectiveBranch = pack.equals("overworld") ? "master" : branch;
+        ok(source, "Downloading IrisDimensions/" + pack + " (branch " + effectiveBranch + ")...");
         Thread thread = new Thread(() -> {
-            boolean installed = ModdedPackInstaller.install(ModdedEngineBootstrap.loader().configDir(), pack, branch,
+            boolean installed = ModdedPackInstaller.install(ModdedEngineBootstrap.loader().configDir(), pack, effectiveBranch,
                     (String message) -> server.execute(() -> ok(source, message)));
             if (installed) {
-                server.execute(() -> ok(source, "Pack '" + pack + "' installed. Restart or create a new world to use it."));
+                server.execute(() -> ok(source, "Pack '" + pack + "' installed. Its dimension types and custom biomes join the forced Iris datapack on the next server restart; worlds created before restarting run with fallback heights until then."));
             } else {
-                server.execute(() -> fail(source, "Pack download failed for " + pack + "/" + branch + " (see console)."));
+                server.execute(() -> fail(source, "Pack download failed for " + pack + "/" + effectiveBranch + " (see console)."));
             }
         }, "Iris Pack Download");
         thread.setDaemon(true);
@@ -841,29 +1035,6 @@ public final class IrisModdedCommands {
             }
         }
         return count;
-    }
-
-    private static ServerLevel resolveIrisLevel(MinecraftServer server, String raw) {
-        String target = raw.trim().toLowerCase(Locale.ROOT);
-        boolean qualified = target.indexOf(':') >= 0;
-        for (ServerLevel level : server.getAllLevels()) {
-            if (!(level.getChunkSource().getGenerator() instanceof IrisModdedChunkGenerator)) {
-                continue;
-            }
-            String fullId = level.dimension().identifier().toString();
-            if (qualified) {
-                if (fullId.equals(target)) {
-                    return level;
-                }
-                continue;
-            }
-            int separator = fullId.indexOf(':');
-            String path = separator >= 0 ? fullId.substring(separator + 1) : fullId;
-            if (path.equals(target)) {
-                return level;
-            }
-        }
-        return null;
     }
 
     private static CompletableFuture<Suggestions> suggestBiomeKeys(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {

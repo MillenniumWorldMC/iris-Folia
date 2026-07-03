@@ -29,18 +29,30 @@ import org.apache.logging.log4j.message.Message;
 import java.util.List;
 
 public final class ModdedLogFilterService implements ModdedService, Filter {
+    private static final String VANILLA_LOGGER_PREFIX = "net.minecraft";
     private static final List<String> FILTERS = List.of(
         "Ignoring heightmap data for chunk",
         "Could not save data net.minecraft.world.entity.raid.PersistentRaid",
         "UUID of added entity already exists");
 
+    private boolean installed = false;
+
     @Override
     public void onEnable() {
+        if (installed) {
+            return;
+        }
         ((Logger) LogManager.getRootLogger()).addFilter(this);
+        installed = true;
     }
 
     @Override
     public void onDisable() {
+        if (!installed) {
+            return;
+        }
+        ((Logger) LogManager.getRootLogger()).get().removeFilter(this);
+        installed = false;
     }
 
     @Override
@@ -82,76 +94,76 @@ public final class ModdedLogFilterService implements ModdedService, Filter {
 
     @Override
     public Result filter(LogEvent event) {
-        return check(event.getMessage().getFormattedMessage());
+        return check(event.getLoggerName(), event.getMessage().getFormattedMessage());
     }
 
     @Override
     public Result filter(Logger logger, Level level, Marker marker, Object msg, Throwable t) {
-        return check(String.valueOf(msg));
+        return check(logger.getName(), String.valueOf(msg));
     }
 
     @Override
     public Result filter(Logger logger, Level level, Marker marker, Message msg, Throwable t) {
-        return check(msg.getFormattedMessage());
+        return check(logger.getName(), msg.getFormattedMessage());
     }
 
     @Override
     public Result filter(Logger logger, Level level, Marker marker, String message, Object... params) {
-        return check(message);
+        return check(logger.getName(), message);
     }
 
     @Override
     public Result filter(Logger logger, Level level, Marker marker, String message, Object p0) {
-        return check(message);
+        return check(logger.getName(), message);
     }
 
     @Override
     public Result filter(Logger logger, Level level, Marker marker, String message, Object p0, Object p1) {
-        return check(message);
+        return check(logger.getName(), message);
     }
 
     @Override
     public Result filter(Logger logger, Level level, Marker marker, String message, Object p0, Object p1, Object p2) {
-        return check(message);
+        return check(logger.getName(), message);
     }
 
     @Override
     public Result filter(Logger logger, Level level, Marker marker, String message, Object p0, Object p1, Object p2, Object p3) {
-        return check(message);
+        return check(logger.getName(), message);
     }
 
     @Override
     public Result filter(Logger logger, Level level, Marker marker, String message, Object p0, Object p1, Object p2, Object p3, Object p4) {
-        return check(message);
+        return check(logger.getName(), message);
     }
 
     @Override
     public Result filter(Logger logger, Level level, Marker marker, String message, Object p0, Object p1, Object p2, Object p3, Object p4, Object p5) {
-        return check(message);
+        return check(logger.getName(), message);
     }
 
     @Override
     public Result filter(Logger logger, Level level, Marker marker, String message, Object p0, Object p1, Object p2, Object p3, Object p4, Object p5, Object p6) {
-        return check(message);
+        return check(logger.getName(), message);
     }
 
     @Override
     public Result filter(Logger logger, Level level, Marker marker, String message, Object p0, Object p1, Object p2, Object p3, Object p4, Object p5, Object p6, Object p7) {
-        return check(message);
+        return check(logger.getName(), message);
     }
 
     @Override
     public Result filter(Logger logger, Level level, Marker marker, String message, Object p0, Object p1, Object p2, Object p3, Object p4, Object p5, Object p6, Object p7, Object p8) {
-        return check(message);
+        return check(logger.getName(), message);
     }
 
     @Override
     public Result filter(Logger logger, Level level, Marker marker, String message, Object p0, Object p1, Object p2, Object p3, Object p4, Object p5, Object p6, Object p7, Object p8, Object p9) {
-        return check(message);
+        return check(logger.getName(), message);
     }
 
-    private Result check(String message) {
-        if (message == null) {
+    private Result check(String loggerName, String message) {
+        if (loggerName == null || !loggerName.startsWith(VANILLA_LOGGER_PREFIX) || message == null) {
             return Result.NEUTRAL;
         }
         for (String filter : FILTERS) {

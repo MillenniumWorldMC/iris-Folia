@@ -293,6 +293,19 @@ public class IrisBiome extends IrisRegistrant implements IRare {
         return resolved == null ? getDerivative() : resolved;
     }
 
+    public String getVanillaDerivativeKey() {
+        String resolved = namespacedBiomeKey(vanillaDerivative);
+        return resolved == null ? namespacedBiomeKey(derivative) : resolved;
+    }
+
+    private static String namespacedBiomeKey(String key) {
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        String trimmed = key.trim();
+        return trimmed.indexOf(':') >= 0 ? trimmed : "minecraft:" + trimmed;
+    }
+
     private KList<Biome> getBiomeScatterResolved() {
         return biomeScatterResolved.aquire(() -> resolveBiomeKeys(biomeScatter));
     }

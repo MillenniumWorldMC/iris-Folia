@@ -55,6 +55,10 @@ public class ChunkDataHunkHolder extends AtomicHunk<PlatformBlockState> {
 
     @Override
     public PlatformBlockState getRaw(int x, int y, int z) {
+        if (y < 0 || y >= getHeight()) {
+            return States.AIR;
+        }
+
         PlatformBlockState b = super.getRaw(x, y, z);
 
         return b != null ? b : States.AIR;

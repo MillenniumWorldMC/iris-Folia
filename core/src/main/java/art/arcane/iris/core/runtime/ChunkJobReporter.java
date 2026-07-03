@@ -20,6 +20,7 @@ package art.arcane.iris.core.runtime;
 
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.util.common.format.C;
+import art.arcane.iris.util.common.math.ChunkSpiral;
 import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.format.Form;
@@ -29,8 +30,6 @@ import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -61,19 +60,7 @@ public final class ChunkJobReporter {
     }
 
     public static List<int[]> orderedTargets(int centerChunkX, int centerChunkZ, int radius) {
-        List<int[]> targets = new ArrayList<>();
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dz = -radius; dz <= radius; dz++) {
-                targets.add(new int[]{centerChunkX + dx, centerChunkZ + dz});
-            }
-        }
-
-        targets.sort(Comparator.comparingInt(t -> {
-            int ox = t[0] - centerChunkX;
-            int oz = t[1] - centerChunkZ;
-            return ox * ox + oz * oz;
-        }));
-        return targets;
+        return ChunkSpiral.centerOut(centerChunkX, centerChunkZ, radius);
     }
 
     public void start() {

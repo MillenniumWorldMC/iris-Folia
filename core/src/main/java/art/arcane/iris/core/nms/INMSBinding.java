@@ -164,6 +164,9 @@ public interface INMSBinding {
         throw new UnsupportedOperationException("Active NMS binding does not support runtime LevelStem creation.");
     }
 
+    default void ensureServerLevelInjection() {
+    }
+
     int countCustomBiomes();
 
     default boolean supportsDataPacks() {
@@ -186,6 +189,13 @@ public interface INMSBinding {
 
     default boolean forceEvictChunk(World world, int chunkX, int chunkZ) {
         return false;
+    }
+
+    default boolean saveAndUnloadChunk(World world, int x, int z) {
+        return false;
+    }
+
+    default void flushChunkIO(World world) {
     }
 
     void injectBiomesFromMantle(Chunk e, Mantle<Matter> mantle);

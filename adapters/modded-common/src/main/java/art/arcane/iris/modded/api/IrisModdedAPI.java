@@ -22,17 +22,10 @@ import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.modded.IrisModdedChunkGenerator;
 import art.arcane.iris.modded.command.ModdedPregenJob;
-import art.arcane.iris.modded.command.ModdedPregenMode;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-
 public final class IrisModdedAPI {
-    private static final Map<ServerLevel, AtomicInteger> WORLD_MAINTENANCE_DEPTH = new ConcurrentHashMap<>();
-
     private IrisModdedAPI() {
     }
 
@@ -64,15 +57,15 @@ public final class IrisModdedAPI {
     }
 
     public static boolean pregenerate(ServerLevel level, int radiusBlocks) {
-        return pregenerate(level, radiusBlocks, 0, 0, ModdedPregenMode.ASYNC, false);
+        return pregenerate(level, radiusBlocks, 0, 0, false, true);
     }
 
-    public static boolean pregenerate(ServerLevel level, int radiusBlocks, int centerBlockX, int centerBlockZ, ModdedPregenMode mode, boolean cached) {
+    public static boolean pregenerate(ServerLevel level, int radiusBlocks, int centerBlockX, int centerBlockZ, boolean sync, boolean cached) {
         Engine engine = getEngine(level);
         if (engine == null) {
             return false;
         }
-        return ModdedPregenJob.start(level.getServer(), level, engine, radiusBlocks, centerBlockX, centerBlockZ, false, mode, cached);
+        return ModdedPregenJob.start(level.getServer(), level, engine, radiusBlocks, centerBlockX, centerBlockZ, false, sync, cached);
     }
 
     public static <T> T getMantleData(ServerLevel level, int x, int y, int z, Class<T> type) {
@@ -112,33 +105,5 @@ public final class IrisModdedAPI {
 
     public static void registerCustomBlockData(String namespace, String key, String state) {
         ModdedCustomContentRegistry.registerCustomBlockData(namespace, key, state);
-    }
-
-    public static void beginWorldMaintenance(ServerLevel level) {
-        if (level == null) {
-            return;
-        }
-        WORLD_MAINTENANCE_DEPTH.computeIfAbsent(level, (ServerLevel l) -> new AtomicInteger()).incrementAndGet();
-    }
-
-    public static void endWorldMaintenance(ServerLevel level) {
-        if (level == null) {
-            return;
-        }
-        AtomicInteger counter = WORLD_MAINTENANCE_DEPTH.get(level);
-        if (counter == null) {
-            return;
-        }
-        if (counter.decrementAndGet() <= 0) {
-            WORLD_MAINTENANCE_DEPTH.remove(level);
-        }
-    }
-
-    public static boolean isWorldMaintenanceActive(ServerLevel level) {
-        if (level == null) {
-            return false;
-        }
-        AtomicInteger counter = WORLD_MAINTENANCE_DEPTH.get(level);
-        return counter != null && counter.get() > 0;
     }
 }

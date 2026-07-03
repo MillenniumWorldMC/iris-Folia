@@ -57,12 +57,20 @@ public final class ModdedDimensionRegistryStore {
             for (int index = 0; index < entries.length(); index++) {
                 JSONObject entry = entries.getJSONObject(index);
                 String id = entry.optString("id", null);
-                String packKey = entry.optString("packKey", null);
-                if (id == null || packKey == null) {
+                if (id == null) {
                     continue;
                 }
-                long seed = entry.optLong("seed", 0L);
-                deduplicated.put(id, new PersistentDimension(id, packKey, seed));
+                String pack = entry.optString("pack", null);
+                String dimension = entry.optString("dimension", null);
+                if (pack == null || dimension == null) {
+                    LOGGER.error("Iris registry entry '{}' in {} has no pack/dimension fields; skipping it. Re-create the world with /iris world enable", id, file);
+                    continue;
+                }
+                if (!entry.has("seed")) {
+                    LOGGER.warn("Iris registry entry '{}' in {} has no seed; skipping it. Re-create the world with /iris world enable", id, file);
+                    continue;
+                }
+                deduplicated.put(id, new PersistentDimension(id, pack, dimension, entry.getLong("seed")));
             }
             return new ArrayList<>(deduplicated.values());
         } catch (RuntimeException | IOException e) {
@@ -98,7 +106,8 @@ public final class ModdedDimensionRegistryStore {
         for (PersistentDimension dimension : dimensions) {
             JSONObject entry = new JSONObject();
             entry.put("id", dimension.id());
-            entry.put("packKey", dimension.packKey());
+            entry.put("pack", dimension.pack());
+            entry.put("dimension", dimension.dimension());
             entry.put("seed", dimension.seed());
             entries.put(entry);
         }
@@ -118,6 +127,6 @@ public final class ModdedDimensionRegistryStore {
         return server.getWorldPath(LevelResource.ROOT).resolve("iris").resolve(FILE_NAME);
     }
 
-    public record PersistentDimension(String id, String packKey, long seed) {
+    public record PersistentDimension(String id, String pack, String dimension, long seed) {
     }
 }

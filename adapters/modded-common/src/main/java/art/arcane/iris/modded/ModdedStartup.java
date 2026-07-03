@@ -18,6 +18,10 @@
 
 package art.arcane.iris.modded;
 
+import art.arcane.iris.core.pack.PackValidationRegistry;
+import art.arcane.iris.core.pack.PackValidationResult;
+import art.arcane.iris.core.pack.PackValidator;
+import art.arcane.iris.modded.command.ModdedPackCommands;
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,8 +34,24 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class ModdedStartup {
     private static final Logger LOGGER = LoggerFactory.getLogger("Iris");
     private static final AtomicBoolean STARTED = new AtomicBoolean(false);
+    private static final Object PACK_LOCK = new Object();
 
     private ModdedStartup() {
+    }
+
+    public static void reset() {
+        STARTED.set(false);
+    }
+
+    public static void prefetchDefaultPack() {
+        ModdedScheduler scheduler = ModdedEngineBootstrap.schedulerOrNull();
+        if (scheduler != null) {
+            scheduler.async(ModdedStartup::ensureDefaultPack);
+            return;
+        }
+        Thread thread = new Thread(ModdedStartup::ensureDefaultPack, "iris-modded-pack-prefetch");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     public static void runOnce(MinecraftServer server) {
@@ -42,10 +62,44 @@ public final class ModdedStartup {
 
         ModdedScheduler scheduler = ModdedEngineBootstrap.schedulerOrNull();
         if (scheduler == null) {
+            validateAllPacks();
             ensureDefaultPack();
             return;
         }
-        scheduler.async(ModdedStartup::ensureDefaultPack);
+        scheduler.async(() -> {
+            validateAllPacks();
+            ensureDefaultPack();
+        });
+    }
+
+    public static void validateAllPacks() {
+        File packsRoot = ModdedPackCommands.packsRoot();
+        File[] packDirs = packsRoot.listFiles(File::isDirectory);
+        if (packDirs == null || packDirs.length == 0) {
+            return;
+        }
+        PackValidationRegistry.clear();
+        for (File packDir : packDirs) {
+            try {
+                PackValidationResult result = PackValidator.validate(packDir);
+                PackValidationRegistry.publish(result);
+                if (!result.isLoadable()) {
+                    LOGGER.error("Iris pack '{}' FAILED validation - world/studio creation will be refused. Reasons:", result.getPackName());
+                    for (String reason : result.getBlockingErrors()) {
+                        LOGGER.error("  - {}", reason);
+                    }
+                } else if (!result.getWarnings().isEmpty() || !result.getRemovedUnusedFiles().isEmpty()) {
+                    LOGGER.info("Iris pack '{}' validated ({} unused file(s) quarantined to .iris-trash/, {} warning(s)).", result.getPackName(), result.getRemovedUnusedFiles().size(), result.getWarnings().size());
+                    for (String warning : result.getWarnings()) {
+                        LOGGER.warn("  [{}] {}", result.getPackName(), warning);
+                    }
+                } else {
+                    LOGGER.info("Iris pack '{}' validated.", result.getPackName());
+                }
+            } catch (Throwable e) {
+                LOGGER.error("Iris pack validation failed for '{}'", packDir.getName(), e);
+            }
+        }
     }
 
     private static void reinjectPersistentDimensions(MinecraftServer server) {
@@ -56,30 +110,32 @@ public final class ModdedStartup {
         int injected = 0;
         for (ModdedDimensionRegistryStore.PersistentDimension dimension : dimensions) {
             try {
-                ModdedDimensionManager.create(server, dimension.id(), dimension.packKey(), dimension.seed());
+                ModdedDimensionManager.create(server, dimension.id(), dimension.pack(), dimension.dimension(), dimension.seed());
                 injected++;
             } catch (Throwable e) {
-                LOGGER.error("Iris failed to re-inject persistent dimension '{}' (pack={} seed={})", dimension.id(), dimension.packKey(), dimension.seed(), e);
+                LOGGER.error("Iris failed to re-inject persistent dimension '{}' (pack={} dim={} seed={})", dimension.id(), dimension.pack(), dimension.dimension(), dimension.seed(), e);
             }
         }
         LOGGER.info("Iris re-injected {} persistent dimension(s) at startup", injected);
     }
 
-    private static void ensureDefaultPack() {
-        ModdedModConfig config = ModdedModConfig.get();
-        if (!config.autoDownloadDefaultPack()) {
-            return;
-        }
-        String pack = config.defaultPack();
-        Path configDir = ModdedEngineBootstrap.loader().configDir();
-        File packFolder = configDir.resolve("irisworldgen").resolve("packs").resolve(pack).toFile();
-        if (new File(packFolder, "dimensions/" + pack + ".json").isFile()) {
-            return;
-        }
-        LOGGER.info("Iris default pack '{}' missing; downloading IrisDimensions/{} (master)", pack, pack);
-        boolean installed = ModdedPackInstaller.install(configDir, pack, "master", (String line) -> LOGGER.info("Iris: {}", line));
-        if (!installed) {
-            LOGGER.warn("Iris default pack '{}' could not be downloaded; install it with /iris download {}", pack, pack);
+    public static void ensureDefaultPack() {
+        synchronized (PACK_LOCK) {
+            ModdedModConfig config = ModdedModConfig.get();
+            if (!config.autoDownloadDefaultPack()) {
+                return;
+            }
+            String pack = config.defaultPack();
+            Path configDir = ModdedEngineBootstrap.loader().configDir();
+            File packFolder = new File(ModdedPackCommands.packsRoot(), pack);
+            if (new File(packFolder, "dimensions/" + pack + ".json").isFile()) {
+                return;
+            }
+            LOGGER.info("Iris default pack '{}' missing; downloading IrisDimensions/{} (master)", pack, pack);
+            boolean installed = ModdedPackInstaller.install(configDir, pack, "master", (String line) -> LOGGER.info("Iris: {}", line));
+            if (!installed) {
+                LOGGER.warn("Iris default pack '{}' could not be downloaded; install it with /iris download {}", pack, pack);
+            }
         }
     }
 }

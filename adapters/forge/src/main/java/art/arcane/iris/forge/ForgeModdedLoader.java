@@ -21,6 +21,7 @@ package art.arcane.iris.forge;
 import art.arcane.iris.modded.ModdedLoader;
 import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.fml.ModList;
+import net.minecraftforge.fml.loading.FMLEnvironment;
 import net.minecraftforge.fml.loading.FMLLoader;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraftforge.forgespi.language.IModFileInfo;
@@ -50,6 +51,11 @@ public final class ForgeModdedLoader implements ModdedLoader {
     @Override
     public MinecraftServer currentServer() {
         return ServerLifecycleHooks.getCurrentServer();
+    }
+
+    @Override
+    public boolean clientEnvironment() {
+        return FMLEnvironment.dist.isClient();
     }
 
     @Override

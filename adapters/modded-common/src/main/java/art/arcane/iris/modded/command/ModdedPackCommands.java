@@ -77,7 +77,7 @@ public final class ModdedPackCommands {
         return root;
     }
 
-    static File packsRoot() {
+    public static File packsRoot() {
         return ModdedEngineBootstrap.loader().configDir().resolve("irisworldgen").resolve("packs").toFile();
     }
 

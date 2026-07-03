@@ -33,7 +33,6 @@ import art.arcane.volmlib.util.mantle.runtime.Mantle;
 import art.arcane.volmlib.util.math.Position2;
 import art.arcane.volmlib.util.scheduling.ChronoLatch;
 import art.arcane.iris.util.common.scheduling.J;
-import org.bukkit.World;
 
 import java.awt.Color;
 import java.util.concurrent.ExecutorService;
@@ -63,12 +62,18 @@ public class PregeneratorJob implements PregenListener, PregenRenderSource {
     private final ChronoLatch cl = new ChronoLatch(TimeUnit.MINUTES.toMillis(1));
     private final Engine engine;
     private final ExecutorService service;
+    private final Thread worker;
     private PregenRenderer renderer;
     private Consumer2<Position2, Color> drawFunction;
     private int rgc = 0;
     private String[] info;
     private volatile double lastChunksPerSecond = 0D;
     private volatile long lastChunksRemaining = 0L;
+    private volatile long lastGenerated = 0L;
+    private volatile long lastTotalChunks = 0L;
+    private volatile long lastEta = 0L;
+    private volatile long lastElapsed = 0L;
+    private volatile String lastMethod = "Void";
 
     public PregeneratorJob(PregenTask task, PregeneratorMethod method, Engine engine) {
         instance.updateAndGet(old -> {
@@ -84,26 +89,32 @@ public class PregeneratorJob implements PregenListener, PregenRenderSource {
         info = new String[]{"Initializing..."};
         this.task = task;
         this.pregenerator = new IrisPregenerator(task, method, this);
-        max = new Position2(0, 0);
+        max = new Position2(Integer.MIN_VALUE, Integer.MIN_VALUE);
         min = new Position2(Integer.MAX_VALUE, Integer.MAX_VALUE);
+        service = Executors.newVirtualThreadPerTaskExecutor();
+
+        if (IrisSettings.get().getGui().isUseServerLaunchedGuis() && task.isGui()) {
+            open();
+        }
+
+        worker = new Thread(() -> {
+            J.sleep(1000);
+            computeBounds();
+            this.pregenerator.start();
+        }, "Iris Pregenerator");
+        worker.setPriority(Thread.MIN_PRIORITY);
+        worker.setDaemon(true);
+        worker.setUncaughtExceptionHandler((thread, ex) -> IrisLogging.reportError(ex));
+        worker.start();
+    }
+
+    private void computeBounds() {
         task.iterateAllChunks((xx, zz) -> {
             min.setX(Math.min(xx, min.getX()));
             min.setZ(Math.min(zz, min.getZ()));
             max.setX(Math.max(xx, max.getX()));
             max.setZ(Math.max(zz, max.getZ()));
         });
-
-        if (IrisSettings.get().getGui().isUseServerLaunchedGuis() && task.isGui()) {
-            open();
-        }
-
-        Thread t = new Thread(() -> {
-            J.sleep(1000);
-            this.pregenerator.start();
-        }, "Iris Pregenerator");
-        t.setPriority(Thread.MIN_PRIORITY);
-        t.start();
-        service = Executors.newVirtualThreadPerTaskExecutor();
     }
 
     public static boolean shutdownInstance() {
@@ -113,6 +124,23 @@ public class PregeneratorJob implements PregenListener, PregenRenderSource {
         }
 
         J.a(inst.pregenerator::close);
+        return true;
+    }
+
+    public static boolean shutdownAndWait(long timeoutMs) {
+        PregeneratorJob inst = instance.get();
+        if (inst == null) {
+            return false;
+        }
+
+        inst.pregenerator.close();
+        inst.worker.interrupt();
+        try {
+            inst.worker.join(timeoutMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        instance.compareAndSet(inst, null);
         return true;
     }
 
@@ -153,13 +181,36 @@ public class PregeneratorJob implements PregenListener, PregenRenderSource {
         return inst == null ? -1L : Math.max(0L, inst.lastChunksRemaining);
     }
 
-    public boolean targetsWorld(World world) {
-        if (world == null || engine == null || engine.getWorld() == null) {
-            return false;
+    public record PregenProgress(double percent, long generated, long totalChunks, double chunksPerSecond, long chunksRemaining, long eta, long elapsed, String method, boolean paused, long failed, String worldName) {
+    }
+
+    public static PregenProgress progressSnapshot() {
+        PregeneratorJob inst = instance.get();
+        if (inst == null) {
+            return null;
         }
 
-        String targetName = engine.getWorld().name();
-        return targetName != null && targetName.equalsIgnoreCase(world.getName());
+        double percent = inst.lastTotalChunks <= 0 ? 0D : ((double) inst.lastGenerated / (double) inst.lastTotalChunks) * 100D;
+        return new PregenProgress(
+                percent,
+                inst.lastGenerated,
+                inst.lastTotalChunks,
+                Math.max(0D, inst.lastChunksPerSecond),
+                Math.max(0L, inst.lastChunksRemaining),
+                inst.lastEta,
+                inst.lastElapsed,
+                inst.lastMethod,
+                inst.paused(),
+                inst.pregenerator.getFailedChunks(),
+                inst.worldName());
+    }
+
+    public String worldName() {
+        if (engine == null || engine.getWorld() == null) {
+            return null;
+        }
+
+        return engine.getWorld().name();
     }
 
     public boolean targetsWorldName(String worldName) {
@@ -252,6 +303,11 @@ public class PregeneratorJob implements PregenListener, PregenRenderSource {
     public void onTick(double chunksPerSecond, double chunksPerMinute, double regionsPerMinute, double percent, long generated, long totalChunks, long chunksRemaining, long eta, long elapsed, String method, boolean cached) {
         lastChunksPerSecond = chunksPerSecond;
         lastChunksRemaining = chunksRemaining;
+        lastGenerated = generated;
+        lastTotalChunks = totalChunks;
+        lastEta = eta;
+        lastElapsed = elapsed;
+        lastMethod = method;
 
         info = new String[]{
                 (paused() ? "PAUSED" : (saving ? "Saving... " : "Generating")) + " " + Form.f(generated) + " of " + Form.f(totalChunks) + " (" + Form.pc(percent, 0) + " Complete)",

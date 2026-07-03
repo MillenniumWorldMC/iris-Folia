@@ -105,11 +105,13 @@ public class IrisDecorantActuator extends EngineAssignedActuator<PlatformBlockSt
                             output, biome, height, getEngine().getHeight());
                 }
 
-                getSurfaceDecorator().decorate(i, j, realX, realZ, output, biome, height, getEngine().getHeight() - height);
+                if (height >= 0 && height < output.getHeight()) {
+                    getSurfaceDecorator().decorate(i, j, realX, realZ, output, biome, height, getEngine().getHeight() - height);
+                }
 
 
                 if (cave != null && cave.getDecorators().isNotEmpty()) {
-                    for (int k = height; k > 0; k--) {
+                    for (int k = Math.min(height, output.getHeight() - 1); k > 0; k--) {
                         solid = PREDICATE_SOLID.test(output.get(i, k, j));
 
                         if (solid) {

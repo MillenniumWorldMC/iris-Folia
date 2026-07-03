@@ -218,7 +218,9 @@ public class IrisEngine implements Engine {
             currentMode.close();
         }
 
-        J.a(() -> new IrisProject(getData().getDataFolder()).updateWorkspace());
+        if (getWorld().hasRealWorld()) {
+            J.a(() -> new IrisProject(getData().getDataFolder()).updateWorkspace());
+        }
     }
 
     private void setupEngine() {
@@ -406,11 +408,13 @@ public class IrisEngine implements Engine {
         getTarget().setDimension(getData().getDimensionLoader().load(getDimension().getLoadKey()));
         prehotload();
         setupEngine();
-        J.a(() -> {
-            synchronized (ServerConfigurator.class) {
-                ServerConfigurator.installDataPacks(false);
-            }
-        });
+        if (getWorld().hasRealWorld()) {
+            J.a(() -> {
+                synchronized (ServerConfigurator.class) {
+                    ServerConfigurator.installDataPacks(false);
+                }
+            });
+        }
     }
 
     @Override
@@ -608,7 +612,7 @@ public class IrisEngine implements Engine {
 
     private boolean isPregeneratorActiveForThisWorld() {
         PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
-        return pregeneratorJob != null && getWorld().hasRealWorld() && pregeneratorJob.targetsWorld(getWorld().realWorld());
+        return pregeneratorJob != null && pregeneratorJob.targetsWorldName(getWorld().name());
     }
 
     private void savePrefetchOnce() {

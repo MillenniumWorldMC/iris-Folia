@@ -85,8 +85,11 @@ public final class PregenRenderer extends JPanel implements KeyListener {
     }
 
     public void close() {
-        if (frame != null) {
-            frame.setVisible(false);
+        JFrame activeFrame = frame;
+        if (activeFrame != null) {
+            frame = null;
+            activeFrame.setVisible(false);
+            activeFrame.dispose();
         }
     }
 

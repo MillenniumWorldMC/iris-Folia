@@ -18,7 +18,10 @@
 
 package art.arcane.iris.modded;
 
+import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.framework.Engine;
+import art.arcane.iris.engine.object.IrisDimension;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
@@ -28,7 +31,9 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.Relative;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeManager;
@@ -45,9 +50,13 @@ import net.minecraft.world.level.storage.WorldData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 
@@ -55,6 +64,8 @@ public final class ModdedDimensionManager {
     private static final Logger LOGGER = LoggerFactory.getLogger("Iris");
     private static final Object LOCK = new Object();
     private static final ConcurrentHashMap<String, Handle> HANDLES = new ConcurrentHashMap<>();
+    private static final Set<String> TYPE_FALLBACK_WARNINGS = ConcurrentHashMap.newKeySet();
+    private static final TicketType TELEPORT_WARM_TICKET = new TicketType(TicketType.NO_TIMEOUT, TicketType.FLAG_LOADING);
     private static volatile ModdedServerAccess access;
 
     private ModdedDimensionManager() {
@@ -62,6 +73,10 @@ public final class ModdedDimensionManager {
 
     public static void bindAccess(ModdedServerAccess serverAccess) {
         access = serverAccess;
+    }
+
+    public static void clear() {
+        HANDLES.clear();
     }
 
     public static Handle handle(String dimensionId) {
@@ -97,14 +112,16 @@ public final class ModdedDimensionManager {
         return generator.commandEngine();
     }
 
-    public static Handle create(MinecraftServer server, String dimensionId, String packKey, long seed) {
+    public static Handle create(MinecraftServer server, String dimensionId, String pack, String packDimensionKey, long seed) {
         ModdedServerAccess serverAccess = requireAccess();
         synchronized (LOCK) {
             ResourceKey<Level> key = levelKey(dimensionId);
             Handle existing = HANDLES.get(dimensionId);
             if (existing != null && serverAccess.hasLevel(server, key)) {
-                existing.generator().repoint(packKey, seed);
-                return existing;
+                existing.generator().repoint(pack, packDimensionKey, seed);
+                Handle refreshed = new Handle(dimensionId, pack, packDimensionKey, seed, existing.level(), existing.generator());
+                HANDLES.put(dimensionId, refreshed);
+                return refreshed;
             }
             if (serverAccess.hasLevel(server, key)) {
                 ServerLevel present = level(server, dimensionId);
@@ -112,38 +129,34 @@ public final class ModdedDimensionManager {
                     throw new IllegalStateException("Iris cannot inject dimension '" + dimensionId + "': a non-Iris level with that id is already loaded");
                 }
                 LOGGER.warn("Iris dimension '{}' is already present in the running server; reusing it", dimensionId);
-                generator.repoint(packKey, seed);
-                Handle handle = new Handle(dimensionId, packKey, seed, present, generator);
+                generator.repoint(pack, packDimensionKey, seed);
+                Handle handle = new Handle(dimensionId, pack, packDimensionKey, seed, present, generator);
                 HANDLES.put(dimensionId, handle);
                 return handle;
             }
 
             try {
-                Handle handle = inject(server, serverAccess, dimensionId, key, packKey, seed);
+                Handle handle = inject(server, serverAccess, dimensionId, key, pack, packDimensionKey, seed);
                 HANDLES.put(dimensionId, handle);
-                LOGGER.info("Iris injected runtime dimension '{}' (pack={} seed={})", dimensionId, packKey, seed);
+                LOGGER.info("Iris injected runtime dimension '{}' (pack={} dim={} seed={})", dimensionId, pack, packDimensionKey, seed);
                 return handle;
             } catch (Throwable e) {
-                LOGGER.error("Iris failed to inject runtime dimension '{}' (pack={} seed={})", dimensionId, packKey, seed, e);
+                LOGGER.error("Iris failed to inject runtime dimension '{}' (pack={} dim={} seed={})", dimensionId, pack, packDimensionKey, seed, e);
                 throw new IllegalStateException("Iris runtime dimension injection failed for " + dimensionId, e);
             }
         }
     }
 
-    public static Handle createPersistent(MinecraftServer server, String dimensionId, String packKey, long seed) {
-        Handle handle = create(server, dimensionId, packKey, seed);
-        ModdedDimensionRegistryStore.put(server, new ModdedDimensionRegistryStore.PersistentDimension(dimensionId, packKey, seed));
+    public static Handle createPersistent(MinecraftServer server, String dimensionId, String pack, String packDimensionKey, long seed) {
+        Handle handle = create(server, dimensionId, pack, packDimensionKey, seed);
+        ModdedDimensionRegistryStore.put(server, new ModdedDimensionRegistryStore.PersistentDimension(dimensionId, pack, packDimensionKey, seed));
         return handle;
     }
 
-    public static boolean removePersistent(MinecraftServer server, String dimensionId) {
-        boolean removed = remove(server, dimensionId);
+    public static boolean removePersistent(MinecraftServer server, String dimensionId, boolean wipeStorage) {
+        boolean removed = remove(server, dimensionId, wipeStorage);
         ModdedDimensionRegistryStore.remove(server, dimensionId);
         return removed;
-    }
-
-    public static boolean remove(MinecraftServer server, String dimensionId) {
-        return remove(server, dimensionId, false);
     }
 
     public static boolean remove(MinecraftServer server, String dimensionId, boolean wipeStorage) {
@@ -153,6 +166,9 @@ public final class ModdedDimensionManager {
             ServerLevel level = level(server, dimensionId);
             if (level == null) {
                 HANDLES.remove(dimensionId);
+                if (wipeStorage) {
+                    ModdedDimensionStorage.wipe(server, key);
+                }
                 return false;
             }
             try {
@@ -184,29 +200,78 @@ public final class ModdedDimensionManager {
         }
         int blockX = (int) Math.floor(x);
         int blockZ = (int) Math.floor(z);
+        ChunkPos chunkPos = new ChunkPos(blockX >> 4, blockZ >> 4);
+        if (level.getChunkSource().hasChunk(chunkPos.x(), chunkPos.z())) {
+            completeTeleport(player, level, x, y, z, blockX, blockZ);
+            return true;
+        }
+        UUID playerId = player.getUUID();
+        CompletableFuture
+                .supplyAsync(() -> level.getChunkSource().addTicketAndLoadWithRadius(TELEPORT_WARM_TICKET, chunkPos, 1), server)
+                .thenCompose((CompletableFuture<?> inner) -> inner)
+                .whenComplete((Object result, Throwable error) -> server.execute(() -> {
+                    level.getChunkSource().removeTicketWithRadius(TELEPORT_WARM_TICKET, chunkPos, 1);
+                    if (error != null) {
+                        LOGGER.warn("Iris chunk warm for teleport into '{}' at {},{} failed: {}", dimensionId, chunkPos.x(), chunkPos.z(), error.toString());
+                    }
+                    ServerPlayer target = server.getPlayerList().getPlayer(playerId);
+                    if (target == null) {
+                        return;
+                    }
+                    completeTeleport(target, level, x, y, z, blockX, blockZ);
+                }));
+        return true;
+    }
+
+    private static void completeTeleport(ServerPlayer player, ServerLevel level, double x, double y, double z, int blockX, int blockZ) {
         double targetY = y;
         if (y == Double.MIN_VALUE) {
             targetY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, blockX, blockZ);
         }
         player.teleportTo(level, x, targetY, z, Set.<Relative>of(), player.getYRot(), player.getXRot(), false);
-        return true;
     }
 
-    private static Holder<DimensionType> resolveDimensionType(RegistryAccess registryAccess) {
+    private static Holder<DimensionType> resolveDimensionType(RegistryAccess registryAccess, String pack, String packDimensionKey) {
         Registry<DimensionType> registry = registryAccess.lookupOrThrow(Registries.DIMENSION_TYPE);
+        IrisDimension dimension = loadPackDimension(pack, packDimensionKey);
+        if (dimension != null) {
+            String typeRef = ModdedForcedDatapack.dimensionTypeRef(dimension);
+            ResourceKey<DimensionType> typeKey = ResourceKey.create(Registries.DIMENSION_TYPE, Identifier.parse(typeRef));
+            Optional<Holder.Reference<DimensionType>> packType = registry.get(typeKey);
+            if (packType.isPresent()) {
+                return packType.get();
+            }
+            if (TYPE_FALLBACK_WARNINGS.add(typeRef)) {
+                LOGGER.warn("Iris dimension type {} (pack {} dim {}) is not registered yet; injecting with fallback heights. Restart the server so the forced datapack installs it.", typeRef, pack, packDimensionKey);
+            }
+        }
         ResourceKey<DimensionType> studioPool = ResourceKey.create(Registries.DIMENSION_TYPE, Identifier.parse("irisworldgen:studio_pool"));
         return registry.get(studioPool)
                 .map(reference -> (Holder<DimensionType>) reference)
                 .orElseGet(() -> registry.getOrThrow(BuiltinDimensionTypes.OVERWORLD));
     }
 
-    private static Handle inject(MinecraftServer server, ModdedServerAccess serverAccess, String dimensionId, ResourceKey<Level> key, String packKey, long seed) {
+    private static IrisDimension loadPackDimension(String pack, String packDimensionKey) {
+        try {
+            File packFolder = ModdedWorldEngines.packFolder(pack);
+            if (!packFolder.isDirectory()) {
+                return null;
+            }
+            return IrisData.get(packFolder).getDimensionLoader().load(packDimensionKey);
+        } catch (Throwable e) {
+            LOGGER.warn("Iris could not load pack '{}' dimension '{}' for dimension type resolution: {}", pack, packDimensionKey, e.toString());
+            return null;
+        }
+    }
+
+    private static Handle inject(MinecraftServer server, ModdedServerAccess serverAccess, String dimensionId, ResourceKey<Level> key, String pack, String packDimensionKey, long seed) {
         RegistryAccess registryAccess = server.registryAccess();
-        Holder<DimensionType> dimensionType = resolveDimensionType(registryAccess);
+        Holder<DimensionType> dimensionType = resolveDimensionType(registryAccess, pack, packDimensionKey);
         Holder<Biome> plains = registryAccess.lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS);
         FixedBiomeSource biomeSource = new FixedBiomeSource(plains);
-        IrisModdedChunkGenerator generator = new IrisModdedChunkGenerator(biomeSource, packKey);
-        generator.repoint(packKey, seed);
+        String generatorRef = pack.equals(packDimensionKey) ? pack : pack + ":" + packDimensionKey;
+        IrisModdedChunkGenerator generator = new IrisModdedChunkGenerator(biomeSource, generatorRef);
+        generator.repoint(pack, packDimensionKey, seed);
         LevelStem stem = new LevelStem(dimensionType, generator);
 
         WorldData worldData = server.getWorldData();
@@ -231,20 +296,21 @@ public final class ModdedDimensionManager {
 
         serverAccess.putLevel(server, key, level);
         server.getPlayerList().addWorldborderListener(level);
-        return new Handle(dimensionId, packKey, seed, level, generator);
+        return new Handle(dimensionId, pack, packDimensionKey, seed, level, generator);
     }
 
-    private static void evacuate(MinecraftServer server, ServerLevel from) {
+    public static int evacuate(MinecraftServer server, ServerLevel from) {
         ServerLevel fallback = server.overworld();
         if (fallback == from) {
-            return;
+            return 0;
         }
-        int spawnX = 0;
-        int spawnZ = 0;
-        int spawnY = fallback.getHeight(Heightmap.Types.MOTION_BLOCKING, spawnX, spawnZ);
-        for (ServerPlayer player : new ArrayList<>(from.players())) {
-            player.teleportTo(fallback, spawnX + 0.5D, spawnY, spawnZ + 0.5D, Set.<Relative>of(), player.getYRot(), player.getXRot(), false);
+        BlockPos spawn = fallback.getRespawnData().pos();
+        int spawnY = fallback.getHeight(Heightmap.Types.MOTION_BLOCKING, spawn.getX(), spawn.getZ());
+        List<ServerPlayer> players = new ArrayList<>(from.players());
+        for (ServerPlayer player : players) {
+            player.teleportTo(fallback, spawn.getX() + 0.5D, spawnY, spawn.getZ() + 0.5D, Set.<Relative>of(), player.getYRot(), player.getXRot(), false);
         }
+        return players.size();
     }
 
     private static ResourceKey<Level> levelKey(String dimensionId) {
@@ -260,6 +326,6 @@ public final class ModdedDimensionManager {
         return bound;
     }
 
-    public record Handle(String dimensionId, String packKey, long seed, ServerLevel level, IrisModdedChunkGenerator generator) {
+    public record Handle(String dimensionId, String pack, String packDimensionKey, long seed, ServerLevel level, IrisModdedChunkGenerator generator) {
     }
 }

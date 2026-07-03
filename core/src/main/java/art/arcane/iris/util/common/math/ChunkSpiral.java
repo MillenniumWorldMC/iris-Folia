@@ -16,17 +16,29 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package art.arcane.iris.spi;
+package art.arcane.iris.util.common.math;
 
-/**
- * Hot-path chunk write surface backed by the fastest native section-write mechanism each adapter offers.
- */
-public interface ChunkWriteTarget {
-    void setBlock(int x, int y, int z, PlatformBlockState state);
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
-    void setBiome(int x, int y, int z, PlatformBiome biome);
+public final class ChunkSpiral {
+    private ChunkSpiral() {
+    }
 
-    int minHeight();
+    public static List<int[]> centerOut(int centerX, int centerZ, int radius) {
+        List<int[]> targets = new ArrayList<>();
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                targets.add(new int[]{centerX + dx, centerZ + dz});
+            }
+        }
 
-    int maxHeight();
+        targets.sort(Comparator.comparingInt((int[] t) -> {
+            int ox = t[0] - centerX;
+            int oz = t[1] - centerZ;
+            return ox * ox + oz * oz;
+        }));
+        return targets;
+    }
 }

@@ -503,7 +503,7 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
 
         World realWorld = this.world.realWorld();
         PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
-        return realWorld != null && pregeneratorJob != null && pregeneratorJob.targetsWorld(realWorld);
+        return realWorld != null && pregeneratorJob != null && pregeneratorJob.targetsWorldName(realWorld.getName());
     }
 
     @Override

@@ -67,6 +67,8 @@ public class IrisPregenerator {
     private final KSet<Position2> net;
     private final ChronoLatch cl;
     private final ChronoLatch saveLatch;
+    private final ChronoLatch heapReclaimLatch;
+    private final AtomicLong failed;
     private final IrisPackBenchmarking benchmarking;
 
     public IrisPregenerator(PregenTask task, PregeneratorMethod generator, PregenListener listener) {
@@ -74,6 +76,8 @@ public class IrisPregenerator {
         this.listener = listenify(listener);
         cl = new ChronoLatch(10000);
         saveLatch = new ChronoLatch(IrisSettings.get().getPregen().getSaveIntervalMs());
+        heapReclaimLatch = new ChronoLatch(1000);
+        failed = new AtomicLong(0);
         generatedRegions = new KSet<>();
         this.shutdown = new AtomicBoolean(false);
         this.paused = new AtomicBoolean(false);
@@ -95,7 +99,6 @@ public class IrisPregenerator {
         cachedLast = new AtomicLong(0);
         cachedLastMinute = new AtomicLong(0);
         totalChunks = new AtomicLong(0);
-        task.iterateAllChunks((_a, _b) -> totalChunks.incrementAndGet());
         startTime = new AtomicLong(M.ms());
         ticker = new Looper() {
             @Override
@@ -175,13 +178,27 @@ public class IrisPregenerator {
 
     public void start() {
         init();
+        task.iterateAllChunks((_a, _b) -> totalChunks.incrementAndGet());
+        startTime.set(M.ms());
         ticker.start();
         checkRegions();
         PrecisionStopwatch p = PrecisionStopwatch.start();
-        task.iterateRegions((x, z) -> visitRegion(x, z, true));
-        task.iterateRegions((x, z) -> visitRegion(x, z, false));
-        IrisLogging.info("Pregen took " + Form.duration((long) p.getMilliseconds()));
-        shutdown();
+        try {
+            int[] regionBounds = task.regionBounds();
+            generator.onRegionBounds(regionBounds[0], regionBounds[1], regionBounds[2], regionBounds[3]);
+            task.iterateRegions((x, z) -> visitRegion(x, z, true));
+            task.iterateRegions((x, z) -> visitRegion(x, z, false));
+            long failedCount = failed.get();
+            if (failedCount > 0) {
+                IrisLogging.warn("Pregen finished with " + Form.f(failedCount) + " failed chunk(s); failures are not cached, rerun to fill them");
+            }
+            IrisLogging.info("Pregen took " + Form.duration((long) p.getMilliseconds()));
+        } catch (Throwable e) {
+            IrisLogging.reportError(e);
+            IrisLogging.error("Pregen aborted after " + Form.duration((long) p.getMilliseconds()) + " due to " + e.getClass().getSimpleName() + ": " + e.getMessage());
+        } finally {
+            shutdown();
+        }
         if (benchmarking == null) {
             IrisLogging.info(C.IRIS + "Pregen stopped.");
         } else {
@@ -266,12 +283,20 @@ public class IrisPregenerator {
             hit = true;
             listener.onRegionGenerating(x, z);
             task.iterateChunks(x, z, (xx, zz) -> {
-                while (paused.get() && !shutdown.get()) {
+                while ((paused.get() || MantleHeapPressure.overHighWater()) && !shutdown.get()) {
+                    if (!paused.get()) {
+                        reclaimHeapPressure();
+                    }
                     J.sleep(50);
+                }
+
+                if (shutdown.get()) {
+                    return;
                 }
 
                 generator.generateChunk(xx, zz, listener);
             });
+            generator.onRegionSubmitted(x, z);
         }
 
         if (hit) {
@@ -280,14 +305,38 @@ public class IrisPregenerator {
             if (saveLatch.flip()) {
                 listener.onSaving();
                 generator.save();
-                Mantle mantle = getMantle();
-                if (mantle != null) {
-                    mantle.trim(0, 0);
+                try {
+                    Mantle mantle = getMantle();
+                    if (mantle != null) {
+                        mantle.trim(0, 0);
+                    }
+                } catch (Throwable e) {
+                    IrisLogging.reportError(e);
                 }
             }
 
             generatedRegions.add(pos);
             checkRegions();
+        }
+    }
+
+    private void reclaimHeapPressure() {
+        if (!heapReclaimLatch.flip()) {
+            return;
+        }
+
+        try {
+            Mantle mantle = getMantle();
+            if (mantle != null) {
+                mantle.trim(0, 0);
+                mantle.unloadTectonicPlate(0);
+            }
+        } catch (Throwable e) {
+            IrisLogging.reportError(e);
+        }
+
+        if (MantleHeapPressure.overPanicWater()) {
+            MantleHeapPressure.requestPanicReclaim();
         }
     }
 
@@ -297,6 +346,10 @@ public class IrisPregenerator {
         }
 
         generator.supportsRegions(x, z, listener);
+    }
+
+    public long getFailedChunks() {
+        return failed.get();
     }
 
     public void pause() {
@@ -324,6 +377,12 @@ public class IrisPregenerator {
                 listener.onChunkGenerated(x, z, c);
                 generated.addAndGet(1);
                 if (c) cached.addAndGet(1);
+            }
+
+            @Override
+            public void onChunkFailed(int x, int z) {
+                failed.addAndGet(1);
+                listener.onChunkFailed(x, z);
             }
 
             @Override

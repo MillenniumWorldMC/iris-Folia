@@ -18,6 +18,7 @@
 
 package art.arcane.iris.modded.command;
 
+import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.mantle.EngineMantle;
 import art.arcane.iris.modded.IrisModdedChunkGenerator;
@@ -25,6 +26,7 @@ import art.arcane.iris.modded.ModdedBlockBuffer;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.iris.spi.PlatformBlockState;
+import art.arcane.iris.util.common.math.ChunkSpiral;
 import art.arcane.iris.util.common.parallel.MultiBurst;
 import art.arcane.iris.util.project.hunk.Hunk;
 import art.arcane.volmlib.util.format.Form;
@@ -54,7 +56,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
@@ -105,9 +106,11 @@ public final class ModdedRegen {
 
     private void run() {
         long startedAt = M.ms();
+        String worldName = engine.getWorld() == null ? null : engine.getWorld().name();
+        IrisToolbelt.beginWorldMaintenance(worldName, "regen");
         try {
             resetMantleMargin();
-            List<int[]> targets = orderedTargets(centerX, centerZ, radius);
+            List<int[]> targets = ChunkSpiral.centerOut(centerX, centerZ, radius);
             int applied = regenerate(targets);
             ok("Regen finished: " + applied + "/" + targets.size() + " chunk(s) in " + Form.duration(M.ms() - startedAt, 2));
             LOGGER.info("Iris regen done: {}/{} chunks in {}ms", applied, targets.size(), M.ms() - startedAt);
@@ -117,6 +120,7 @@ public final class ModdedRegen {
             LOGGER.error("Iris regen failed", e);
             fail("Regen failed: " + e);
         } finally {
+            IrisToolbelt.endWorldMaintenance(worldName, "regen");
             ACTIVE.set(false);
         }
     }
@@ -257,21 +261,6 @@ public final class ModdedRegen {
         for (Entity entity : level.getEntities((Entity) null, box, (Entity e) -> !(e instanceof ServerPlayer))) {
             entity.discard();
         }
-    }
-
-    private static List<int[]> orderedTargets(int centerX, int centerZ, int radius) {
-        List<int[]> targets = new ArrayList<>();
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dz = -radius; dz <= radius; dz++) {
-                targets.add(new int[]{centerX + dx, centerZ + dz});
-            }
-        }
-        targets.sort(Comparator.comparingInt((int[] t) -> {
-            int ox = t[0] - centerX;
-            int oz = t[1] - centerZ;
-            return ox * ox + oz * oz;
-        }));
-        return targets;
     }
 
     private void ok(String message) {

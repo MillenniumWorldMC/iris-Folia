@@ -255,6 +255,14 @@ public class FastNoiseDouble {
         m_seed = seed;
     }
 
+    public double getFrequency() {
+        return m_frequency;
+    }
+
+    public double getFractalBounding() {
+        return m_fractalBounding;
+    }
+
     // Sets frequency for all noise types
     // Default: 0.01
     public void setFrequency(double frequency) {

@@ -38,8 +38,8 @@ import org.bukkit.TreeType;
 public class IrisTree {
     @Required
     @Desc("The types of trees overwritten by this object")
-    @ArrayType(min = 1, type = TreeType.class)
-    private KList<TreeType> treeTypes;
+    @ArrayType(min = 1, type = String.class)
+    private KList<String> treeTypes = new KList<>();
 
     @Desc("If enabled, overrides any TreeType")
     private boolean anyTree = false;
@@ -71,6 +71,17 @@ public class IrisTree {
     }
 
     private boolean matchesType(TreeType type) {
-        return getTreeTypes().contains(type);
+        if (type == null) {
+            return false;
+        }
+
+        String name = type.name();
+        for (String i : getTreeTypes()) {
+            if (i != null && i.equalsIgnoreCase(name)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -19,6 +19,7 @@
 package art.arcane.iris.fabric;
 
 import art.arcane.iris.modded.ModdedLoader;
+import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.server.MinecraftServer;
@@ -50,6 +51,11 @@ public final class FabricModdedLoader implements ModdedLoader {
     public MinecraftServer currentServer() {
         Object instance = FabricLoader.getInstance().getGameInstance();
         return instance instanceof MinecraftServer server ? server : null;
+    }
+
+    @Override
+    public boolean clientEnvironment() {
+        return FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
     }
 
     @Override

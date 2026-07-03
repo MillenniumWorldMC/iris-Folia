@@ -1,5 +1,6 @@
 package art.arcane.iris.core.lifecycle;
 
+import art.arcane.iris.core.nms.INMS;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
@@ -30,6 +31,8 @@ final class BukkitPublicBackend implements WorldLifecycleBackend {
             WorldLifecycleStaging.stageGenerator(request.worldName(), request.generator(), request.biomeProvider());
             WorldLifecycleStaging.stageStemGenerator(request.worldName(), request.generator());
         }
+
+        INMS.get().ensureServerLevelInjection();
 
         try {
             World world = creator.createWorld();

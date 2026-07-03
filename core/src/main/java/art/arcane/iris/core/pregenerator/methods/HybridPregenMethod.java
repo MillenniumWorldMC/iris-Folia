@@ -68,6 +68,16 @@ public class HybridPregenMethod implements PregeneratorMethod {
     }
 
     @Override
+    public void onRegionBounds(int minRegionX, int minRegionZ, int maxRegionX, int maxRegionZ) {
+        inWorld.onRegionBounds(minRegionX, minRegionZ, maxRegionX, maxRegionZ);
+    }
+
+    @Override
+    public void onRegionSubmitted(int regionX, int regionZ) {
+        inWorld.onRegionSubmitted(regionX, regionZ);
+    }
+
+    @Override
     public Mantle getMantle() {
         return inWorld.getMantle();
     }

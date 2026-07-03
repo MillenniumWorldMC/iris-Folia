@@ -32,6 +32,8 @@ public interface ModdedLoader {
 
     MinecraftServer currentServer();
 
+    boolean clientEnvironment();
+
     Path configDir();
 
     File modJar();

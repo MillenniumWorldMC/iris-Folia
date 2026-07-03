@@ -52,18 +52,24 @@ final class ModdedCommandHelp {
         SECTIONS.put("", List.of(
                 Entry.command("version", "", "Print version information"),
                 Entry.command("info", "[dimension]", "List loaded Iris dimensions and pack details"),
-                Entry.command("what", "", "Inspect the Iris biome, region, cave biome, surface and chunk at your position"),
+                Entry.command("what", "[block|hand|markers]", "Inspect the Iris biome, region, cave biome, surface and chunk at your position, the block you look at, your held item, or nearby markers"),
                 Entry.group("find", "Find and teleport to Iris biomes, regions, objects, structures and points of interest", "goto"),
+                Entry.command("tp", "<dimension> [player]", "Teleport yourself or a named player into a loaded Iris dimension"),
+                Entry.command("evacuate", "[dimension]", "Teleport every player out of an Iris dimension to the primary world spawn"),
                 Entry.command("seed", "", "Print world and engine seed information"),
+                Entry.command("debug", "", "Toggle Iris debug logging and save settings.json"),
+                Entry.command("reload", "", "Reload settings.json (also hotloaded automatically every 3s)"),
                 Entry.command("download", "<pack> [branch]", "Download a pack project", "dl"),
                 Entry.command("metrics", "", "Print generation metrics for your current Iris dimension", "measure"),
                 Entry.command("regen", "[radius]", "Delete and regenerate nearby chunks in place", "rg"),
                 Entry.group("pregen", "Pregenerate an Iris dimension", "pregenerate"),
                 Entry.command("wand", "", "Get an Iris object wand"),
                 Entry.group("object", "Object wand, save, paste, analyze and undo tools", "o"),
+                Entry.group("edit", "Open pack biome, region and dimension json files in your desktop editor"),
+                Entry.command("create", "<name> <pack|pack:dimensionKey> [seed]", "Create and inject a persistent Iris dimension; quote pack:dimensionKey to pick a specific pack dimension"),
                 Entry.group("studio", "Pack project creation, packaging and reports", "std", "s"),
                 Entry.group("pack", "Pack validation and maintenance", "pk"),
-                Entry.group("world", "Explicit Iris dimension enablement and removal", "w"),
+                Entry.group("world", "Runtime Iris dimension creation, removal and status", "w"),
                 Entry.group("datapack", "World datapack install and status helpers", "datapacks", "dp"),
                 Entry.group("structure", "Iris structure index, info and placement tools", "struct", "str"),
                 Entry.command("goldenhash", "[radius] [threads] [capture|verify]", "Generate deterministic block hashes for parity testing", "gold")
@@ -76,8 +82,13 @@ final class ModdedCommandHelp {
                 Entry.command("poi", "<type>", "Find a supported point of interest")
         ));
         SECTIONS.put("goto", SECTIONS.get("find"));
+        SECTIONS.put("edit", List.of(
+                Entry.command("biome", "[key]", "Open a biome json in your desktop editor; no key opens the biome at your position"),
+                Entry.command("region", "[key]", "Open a region json in your desktop editor; no key opens the region at your position"),
+                Entry.command("dimension", "", "Open the current pack's dimension json in your desktop editor")
+        ));
         SECTIONS.put("pregen", List.of(
-                Entry.command("start", "<radius> [x] [z]", "Start pregeneration"),
+                Entry.command("start", "<radius> [dimension] [at] [x] [z] [gui] [sync] [nocache]", "Start pregeneration; radius in blocks, resumable checkpoint cache on by default, center via 'at <x> <z>', flags compose in any order"),
                 Entry.command("stop", "", "Stop the active pregeneration task", "x"),
                 Entry.command("pause", "", "Pause or resume pregeneration", "resume"),
                 Entry.command("status", "", "Show pregeneration status")
@@ -86,15 +97,15 @@ final class ModdedCommandHelp {
         SECTIONS.put("object", List.of(
                 Entry.command("wand", "", "Get an Iris object wand"),
                 Entry.command("dust", "", "Get dust that reveals object placements", "d"),
-                Entry.command("save", "<name>", "Save the selected wand volume as an object"),
-                Entry.command("paste", "<key>", "Paste an object at your position"),
+                Entry.command("save", "[overwrite] <name>", "Save the selected wand volume as an object"),
+                Entry.command("paste", "[at] [x] [y] [z] [rotate] [degrees] <key>", "Paste an object at your position or a given position, optionally rotated"),
                 Entry.command("expand", "[amount]", "Expand the wand selection in your looking direction"),
                 Entry.command("contract", "[amount]", "Contract the wand selection in your looking direction", "-"),
                 Entry.command("shift", "[amount]", "Shift the wand selection in your looking direction"),
                 Entry.command("position1", "[look]", "Set selection point 1", "p1"),
                 Entry.command("position2", "[look]", "Set selection point 2", "p2"),
-                Entry.command("x+y", "", "Autoselect up and out"),
-                Entry.command("x&y", "", "Autoselect up, down and out"),
+                Entry.command("x+y", "", "Autoselect up and out", "xpy"),
+                Entry.command("x&y", "", "Autoselect up, down and out", "xay"),
                 Entry.command("analyze", "<key>", "Show object composition"),
                 Entry.command("shrink", "<key>", "Shrink an object to its minimum size"),
                 Entry.command("undo", "[amount]", "Undo pasted objects", "u")
@@ -105,10 +116,14 @@ final class ModdedCommandHelp {
                 Entry.command("package", "[pack]", "Package a dimension into a compressed format"),
                 Entry.command("version", "[pack]", "Print a pack version"),
                 Entry.command("regions", "[radius]", "Calculate nearby region distribution"),
-                Entry.command("open", "<pack> [seed]", "Open or prepare a dimension pack studio workflow"),
-                Entry.command("close", "", "Explain modded studio workflow"),
-                Entry.command("vscode", "", "Explain editor workflow"),
-                Entry.command("update", "", "Explain workspace regeneration workflow"),
+                Entry.command("open", "<pack> [seed]", "Open a temporary studio dimension for a pack", "o"),
+                Entry.command("close", "", "Close the open studio dimension and discard its world", "x"),
+                Entry.command("tpstudio", "", "Teleport into the open studio dimension", "stp"),
+                Entry.command("status", "", "Show the open studio dimension and its pack"),
+                Entry.command("noise", "[generator] [seed]", "Open the Noise Explorer GUI on the server display", "nmap"),
+                Entry.command("map", "", "Open the Vision map GUI on the server display", "render"),
+                Entry.command("vscode", "[pack]", "Regenerate the .code-workspace for a pack and open it in your desktop editor", "vsc"),
+                Entry.command("update", "[pack]", "Regenerate the .code-workspace for a pack"),
                 Entry.command("importvanilla", "", "Explain vanilla import workflow", "importv", "iv")
         ));
         SECTIONS.put("std", SECTIONS.get("studio"));
@@ -120,11 +135,12 @@ final class ModdedCommandHelp {
         ));
         SECTIONS.put("pk", SECTIONS.get("pack"));
         SECTIONS.put("world", List.of(
-                Entry.command("enable", "<dimension> <pack> [packDimension]", "Create an Iris dimension in world/datapacks/iris", "create"),
-                Entry.command("replace-overworld", "<pack> [packDimension]", "Explicitly make minecraft:overworld use an Iris pack"),
-                Entry.command("disable", "<dimension>", "Remove an Iris dimension definition from the world datapack", "remove", "rm"),
-                Entry.command("list", "", "List Iris dimensions staged in the world datapack", "ls"),
-                Entry.command("status", "", "Show staged and currently loaded Iris dimensions")
+                Entry.command("enable", "<dimension> <pack|pack:dimensionKey> [seed|random]", "Create and inject a persistent Iris dimension at runtime; downloads the pack if missing, quote pack:dimensionKey to pick a specific pack dimension", "create"),
+                Entry.command("replace-overworld", "<pack|pack:dimensionKey> [seed|random]", "Inject an Iris primary world and route players there instead of the vanilla overworld"),
+                Entry.command("disable", "<dimension>", "Evacuate and unload an Iris dimension; world data on disk is kept for re-enabling"),
+                Entry.command("delete", "<dimension>", "Disable an Iris dimension and wipe its chunk and mantle data from disk", "remove", "rm"),
+                Entry.command("list", "", "List loaded Iris dimensions", "ls"),
+                Entry.command("status", "", "Show loaded Iris dimensions and the configured primary world")
         ));
         SECTIONS.put("w", SECTIONS.get("world"));
         SECTIONS.put("datapack", List.of(

@@ -24,7 +24,6 @@ import art.arcane.iris.spi.IrisPlatform;
 import art.arcane.iris.spi.LogLevel;
 import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.iris.spi.PlatformBiomeWriter;
-import art.arcane.iris.spi.PlatformCapabilities;
 import art.arcane.iris.spi.PlatformRegistries;
 import art.arcane.iris.spi.PlatformScheduler;
 import art.arcane.iris.spi.PlatformStructureHooks;
@@ -32,7 +31,6 @@ import art.arcane.iris.spi.PlatformWorld;
 import art.arcane.iris.util.common.misc.Bindings;
 import art.arcane.iris.util.common.plugin.VolmitPlugin;
 import art.arcane.iris.util.common.plugin.VolmitSender;
-import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.math.Vector3d;
 import org.bukkit.Bukkit;
@@ -45,7 +43,6 @@ import org.bukkit.block.Biome;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.inventory.ItemStack;
@@ -90,7 +87,6 @@ public final class BukkitPlatform implements IrisPlatform {
 
     private final BukkitRegistries registries = new BukkitRegistries();
     private final BukkitScheduler scheduler = new BukkitScheduler();
-    private final PlatformCapabilities capabilities = new BukkitCapabilities();
     private final BukkitStructureHooks structureHooks = new BukkitStructureHooks();
     private final BukkitBiomeWriter biomeWriter = new BukkitBiomeWriter();
 
@@ -245,11 +241,6 @@ public final class BukkitPlatform implements IrisPlatform {
     }
 
     @Override
-    public PlatformCapabilities capabilities() {
-        return capabilities;
-    }
-
-    @Override
     public PlatformStructureHooks structureHooks() {
         return structureHooks;
     }
@@ -312,18 +303,6 @@ public final class BukkitPlatform implements IrisPlatform {
     }
 
     @Override
-    public boolean giveItem(Object player, String itemKey, int amount) {
-        if (!(player instanceof Player bukkitPlayer) || itemKey == null || amount <= 0) {
-            return false;
-        }
-        Material material = Material.matchMaterial(itemKey);
-        if (material == null) {
-            return false;
-        }
-        return bukkitPlayer.getInventory().addItem(new ItemStack(material, amount)).isEmpty();
-    }
-
-    @Override
     public void log(LogLevel level, String message) {
         bridge().logSink().accept(level, message);
     }
@@ -336,27 +315,5 @@ public final class BukkitPlatform implements IrisPlatform {
     @Override
     public void reportError(Throwable error) {
         bridge().errorSink().accept(error);
-    }
-
-    private static final class BukkitCapabilities implements PlatformCapabilities {
-        @Override
-        public boolean customBiomes() {
-            return INMS.get().supportsCustomBiomes();
-        }
-
-        @Override
-        public boolean dataPacks() {
-            return INMS.get().supportsDataPacks();
-        }
-
-        @Override
-        public boolean structurePlacement() {
-            return true;
-        }
-
-        @Override
-        public boolean regionizedThreading() {
-            return J.isFolia();
-        }
     }
 }

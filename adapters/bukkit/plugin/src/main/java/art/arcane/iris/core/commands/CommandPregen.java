@@ -26,6 +26,7 @@ import art.arcane.iris.util.common.director.DirectorExecutor;
 import art.arcane.volmlib.util.director.annotations.Director;
 import art.arcane.volmlib.util.director.annotations.Param;
 import art.arcane.iris.util.common.format.C;
+import art.arcane.volmlib.util.format.Form;
 import art.arcane.volmlib.util.math.Position2;
 import org.bukkit.World;
 import org.bukkit.util.Vector;
@@ -82,5 +83,24 @@ public class CommandPregen implements DirectorExecutor {
         } else {
             sender().sendMessage(C.YELLOW + "No active pregeneration tasks to pause/unpause.");
         }
+    }
+
+    @Director(description = "Show the active pregeneration status")
+    public void status() {
+        PregeneratorJob.PregenProgress progress = PregeneratorJob.progressSnapshot();
+        if (progress == null) {
+            sender().sendMessage(C.YELLOW + "No active pregeneration task.");
+            return;
+        }
+
+        String world = progress.worldName() == null ? "?" : progress.worldName();
+        sender().sendMessage(C.GREEN + "Pregen " + C.GOLD + world + C.GREEN + ": " + C.GOLD + Form.f(progress.generated()) + "/" + Form.f(progress.totalChunks())
+                + C.GREEN + " (" + C.GOLD + String.format("%.1f", progress.percent()) + "%" + C.GREEN + ")"
+                + (progress.paused() ? C.YELLOW + " PAUSED" : ""));
+        sender().sendMessage(C.GREEN + "Speed: " + C.GOLD + Form.f((int) progress.chunksPerSecond()) + "/s" + C.GREEN
+                + " ETA: " + C.GOLD + Form.duration(progress.eta(), 2) + C.GREEN
+                + " Elapsed: " + C.GOLD + Form.duration(progress.elapsed(), 2) + C.GREEN
+                + " Method: " + C.GOLD + progress.method()
+                + (progress.failed() > 0 ? C.RED + " Failed: " + Form.f(progress.failed()) : ""));
     }
 }

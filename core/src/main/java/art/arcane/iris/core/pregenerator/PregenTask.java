@@ -19,7 +19,6 @@
 package art.arcane.iris.core.pregenerator;
 
 import art.arcane.volmlib.util.collection.KList;
-import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.math.PowerOfTwoCoordinates;
 import art.arcane.volmlib.util.math.Position2;
 import art.arcane.volmlib.util.math.Spiraled;
@@ -29,12 +28,20 @@ import lombok.Data;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Builder
 @Data
 public class PregenTask {
-    private static final KMap<Long, int[]> ORDERS = new KMap<>();
+    private static final int MAX_CACHED_ORDERS = 512;
+    private static final LinkedHashMap<Long, int[]> ORDERS = new LinkedHashMap<>(64, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<Long, int[]> eldest) {
+            return size() > MAX_CACHED_ORDERS;
+        }
+    };
 
     @Builder.Default
     private final boolean gui = false;
@@ -71,7 +78,18 @@ public class PregenTask {
 
     private static int[] orderForPull(int pullX, int pullZ) {
         long key = orderKey(pullX, pullZ);
-        return ORDERS.computeIfAbsent(key, PregenTask::computeOrder);
+        synchronized (ORDERS) {
+            int[] cached = ORDERS.get(key);
+            if (cached != null) {
+                return cached;
+            }
+        }
+
+        int[] computed = computeOrder(key);
+        synchronized (ORDERS) {
+            ORDERS.put(key, computed);
+        }
+        return computed;
     }
 
     private static int[] computeOrder(long key) {
@@ -117,6 +135,11 @@ public class PregenTask {
         iterateRegion(rX, rZ, ((x, z) -> {
             if (bound.check(x, z)) s.on(x, z);
         }));
+    }
+
+    public int[] regionBounds() {
+        Bound bound = bounds.region();
+        return new int[]{bound.minX(), bound.minZ(), bound.maxX(), bound.maxZ()};
     }
 
     @FunctionalInterface

@@ -21,7 +21,7 @@ package art.arcane.iris;
 import art.arcane.iris.engine.IrisWorldManager;
 
 import art.arcane.iris.engine.framework.EngineWorldManagerProvider;
-import art.arcane.iris.core.splash.IrisSplashPackScanner;
+import art.arcane.iris.core.splash.IrisSplashComposer;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.IrisWorlds;
 import art.arcane.iris.core.ServerConfigurator;
@@ -1265,55 +1265,8 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
 
     private void printPacks() {
         File packFolder = Iris.service(StudioSVC.class).getWorkspaceFolder();
-        List<SplashPackMetadata> packs = collectSplashPacks(packFolder);
-        if (packs.isEmpty())
-            return;
-        Iris.info("Custom Dimensions: " + packs.size());
-        for (SplashPackMetadata pack : packs) {
-            printPack(pack);
-        }
-    }
-
-    static List<SplashPackMetadata> collectSplashPacks(File packFolder) {
-        List<IrisSplashPackScanner.SplashPackMetadata> scanned = IrisSplashPackScanner.collect(packFolder, Iris::reportError);
-        if (scanned.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        List<SplashPackMetadata> packs = new ArrayList<>(scanned.size());
-        for (IrisSplashPackScanner.SplashPackMetadata metadata : scanned) {
-            packs.add(new SplashPackMetadata(metadata.name(), metadata.version()));
-        }
-        return packs;
-    }
-
-    static SplashPackMetadata readSplashPack(File pack) {
-        IrisSplashPackScanner.SplashPackMetadata metadata = IrisSplashPackScanner.read(pack, Iris::reportError);
-        if (metadata == null) {
-            return null;
-        }
-        return new SplashPackMetadata(metadata.name(), metadata.version());
-    }
-
-    private void printPack(SplashPackMetadata pack) {
-        Iris.info("  " + pack.name() + " v" + pack.version());
-    }
-
-    static final class SplashPackMetadata {
-        private final String name;
-        private final String version;
-
-        SplashPackMetadata(String name, String version) {
-            this.name = name;
-            this.version = version;
-        }
-
-        String name() {
-            return name;
-        }
-
-        String version() {
-            return version;
+        for (String line : IrisSplashComposer.composePackLines(packFolder, Iris::reportError)) {
+            Iris.info(line);
         }
     }
 

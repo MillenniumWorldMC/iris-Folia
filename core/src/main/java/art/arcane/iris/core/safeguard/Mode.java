@@ -1,16 +1,13 @@
 package art.arcane.iris.core.safeguard;
 
-import art.arcane.iris.BuildConstants;
 import art.arcane.iris.core.IrisSettings;
+import art.arcane.iris.core.splash.IrisSplashComposer;
 import art.arcane.iris.core.splash.IrisSplashRenderer;
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.util.common.format.C;
-import art.arcane.volmlib.util.format.Form;
 import org.bukkit.Bukkit;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
 public enum Mode {
@@ -54,36 +51,44 @@ public enum Mode {
     }
 
     public void splash() {
-        String padd = Form.repeat(" ", 4);
-        String padd2 = Form.repeat(" ", 4);
         String version = BukkitPlatform.plugin().getDescription().getVersion();
-        String releaseTrain = getReleaseTrain(version);
-        String serverVersion = getServerVersion();
-        String startupDate = getStartupDate();
-        int javaVersion = getJavaVersion();
-
         String[] splash = IrisSplashRenderer.render(this::splashTone);
+        String[] info = IrisSplashComposer.composeInfo(version, getServerVersion(), infoStyle());
+        IrisLogging.info(IrisSplashComposer.compose(splash, info));
+    }
 
-        String[] info = new String[]{
-                "",
-                padd2 + color + " Iris, " + C.AQUA + "Dimension Engine " + C.RED + "[" + releaseTrain + " RC.1.1.6]",
-                padd2 + C.GRAY + " Version: " + color + version,
-                padd2 + C.GRAY + " By: " + color + "Volmit Software (Arcane Arts)",
-                padd2 + C.GRAY + " Server: " + color + serverVersion,
-                padd2 + C.GRAY + " Java: " + color + javaVersion + C.GRAY + " | Date: " + color + startupDate,
-                padd2 + C.GRAY + " Commit: " + color + BuildConstants.COMMIT + C.GRAY + "/" + color + BuildConstants.ENVIRONMENT,
-                "",
-                "",
-                "",
-                ""
+    private IrisSplashComposer.InfoStyle infoStyle() {
+        return new IrisSplashComposer.InfoStyle() {
+            @Override
+            public String linePrefix() {
+                return " ".repeat(4);
+            }
+
+            @Override
+            public String title(String text) {
+                return color + text;
+            }
+
+            @Override
+            public String subtitle(String text) {
+                return C.AQUA + text;
+            }
+
+            @Override
+            public String tag(String text) {
+                return C.RED + text;
+            }
+
+            @Override
+            public String label(String text) {
+                return C.GRAY + text;
+            }
+
+            @Override
+            public String value(String text) {
+                return color + text;
+            }
         };
-
-        StringBuilder builder = new StringBuilder("\n\n");
-        for (int i = 0; i < splash.length; i++) {
-            builder.append(padd).append(splash[i]).append(info[i]).append("\n");
-        }
-
-        IrisLogging.info(builder.toString());
     }
 
     private String splashTone(char glyph) {
@@ -107,35 +112,5 @@ public enum Mode {
             return version.substring(0, marker);
         }
         return version;
-    }
-
-    private int getJavaVersion() {
-        String version = System.getProperty("java.version");
-        if (version.startsWith("1.")) {
-            version = version.substring(2, 3);
-        } else {
-            int dot = version.indexOf('.');
-            if (dot != -1) {
-                version = version.substring(0, dot);
-            }
-        }
-        return Integer.parseInt(version);
-    }
-
-    private String getStartupDate() {
-        return LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-    }
-
-    private String getReleaseTrain(String version) {
-        String value = version;
-        int suffixIndex = value.indexOf('-');
-        if (suffixIndex >= 0) {
-            value = value.substring(0, suffixIndex);
-        }
-        String[] split = value.split("\\.");
-        if (split.length >= 2) {
-            return split[0] + "." + split[1];
-        }
-        return value;
     }
 }

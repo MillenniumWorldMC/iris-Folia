@@ -23,9 +23,13 @@ import art.arcane.iris.core.IrisPaperLikeBackendMode;
 import art.arcane.iris.core.IrisRuntimeSchedulerMode;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.pregenerator.PregenListener;
+import art.arcane.iris.core.pregenerator.PregenMantleBackpressure;
 import art.arcane.iris.core.pregenerator.PregeneratorMethod;
 import art.arcane.iris.core.tools.IrisToolbelt;
+import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.engine.framework.Engine;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
+import art.arcane.volmlib.util.collection.KSet;
 import art.arcane.volmlib.util.mantle.runtime.Mantle;
 import art.arcane.volmlib.util.math.M;
 import art.arcane.iris.util.common.parallel.MultiBurst;
@@ -37,15 +41,16 @@ import org.bukkit.World;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
-import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -53,8 +58,6 @@ public class AsyncPregenMethod implements PregeneratorMethod {
     private static final AtomicInteger THREAD_COUNT = new AtomicInteger();
     private static final int ADAPTIVE_TIMEOUT_STEP = 3;
     private static final int ADAPTIVE_RECOVERY_INTERVAL = 8;
-    private static final long CHUNK_CLEANUP_INTERVAL_MS = 10_000L;
-    private static final long CHUNK_CLEANUP_MIN_AGE_MS = 5_000L;
     private final World world;
     private final IrisRuntimeSchedulerMode runtimeSchedulerMode;
     private final IrisPaperLikeBackendMode paperLikeBackendMode;
@@ -73,12 +76,20 @@ public class AsyncPregenMethod implements PregeneratorMethod {
     private final int timeoutSeconds;
     private final int timeoutWarnIntervalMs;
     private final boolean urgent;
-    private final Map<Chunk, Long> lastUse;
-    private final ConcurrentLinkedQueue<ChunkUse> chunkUseQueue;
+    private final ConcurrentHashMap<Long, AtomicInteger> regionPending;
+    private final ConcurrentHashMap<Long, Queue<Chunk>> regionChunks;
+    private final KSet<Long> drainedRegions;
+    private final KSet<Long> evictedRegions;
+    private volatile int evictionWindowRegions;
+    private volatile int boundsMinRegionX;
+    private volatile int boundsMinRegionZ;
+    private volatile int boundsMaxRegionX;
+    private volatile int boundsMaxRegionZ;
     private final AtomicInteger adaptiveInFlightLimit;
     private final int adaptiveMinInFlightLimit;
     private final AtomicInteger timeoutStreak = new AtomicInteger();
     private final AtomicLong lastTimeoutLogAt = new AtomicLong(0L);
+    private final AtomicLong lastFailedReleaseLogAt = new AtomicLong(0L);
     private final AtomicInteger suppressedTimeoutLogs = new AtomicInteger();
     private final AtomicLong lastAdaptiveLogAt = new AtomicLong(0L);
     private final AtomicInteger inFlight = new AtomicInteger();
@@ -86,14 +97,10 @@ public class AsyncPregenMethod implements PregeneratorMethod {
     private final AtomicLong completed = new AtomicLong();
     private final AtomicLong failed = new AtomicLong();
     private final AtomicLong lastProgressAt = new AtomicLong(M.ms());
-    private final AtomicLong lastChunkCleanup = new AtomicLong(M.ms());
-    private final AtomicBoolean chunkCleanupRunning = new AtomicBoolean(false);
     private final Object permitMonitor = new Object();
     private volatile Engine metricsEngine;
     private volatile Mantle cachedMantle;
-    private final int maxResidentTectonicPlates;
-    private final int mantleBackpressureWaitMs;
-    private final long mantleBackpressureTimeoutMs;
+    private final PregenMantleBackpressure backpressure;
 
     public AsyncPregenMethod(World world, int unusedThreads) {
         if (!PaperLib.isPaper()) {
@@ -140,13 +147,25 @@ public class AsyncPregenMethod implements PregeneratorMethod {
         this.timeoutSeconds = pregen.getChunkLoadTimeoutSeconds();
         this.timeoutWarnIntervalMs = pregen.getTimeoutWarnIntervalMs();
         this.urgent = false;
-        this.lastUse = new ConcurrentHashMap<>();
-        this.chunkUseQueue = new ConcurrentLinkedQueue<>();
+        this.regionPending = new ConcurrentHashMap<>();
+        this.regionChunks = new ConcurrentHashMap<>();
+        this.drainedRegions = new KSet<>();
+        this.evictedRegions = new KSet<>();
+        this.evictionWindowRegions = -1;
+        this.boundsMinRegionX = Integer.MIN_VALUE;
+        this.boundsMinRegionZ = Integer.MIN_VALUE;
+        this.boundsMaxRegionX = Integer.MAX_VALUE;
+        this.boundsMaxRegionZ = Integer.MAX_VALUE;
         this.adaptiveInFlightLimit = new AtomicInteger(this.threads);
         this.adaptiveMinInFlightLimit = Math.max(4, Math.min(16, Math.max(1, this.threads / 4)));
-        this.maxResidentTectonicPlates = pregen.getMaxResidentTectonicPlates();
-        this.mantleBackpressureWaitMs = pregen.getMantleBackpressureWaitMs();
-        this.mantleBackpressureTimeoutMs = pregen.getMantleBackpressureTimeoutMs();
+        int pregenWorldHeight = world.getMaxHeight() - world.getMinHeight();
+        this.backpressure = new PregenMantleBackpressure(
+                this::resolveMantle,
+                pregen.getEffectiveResidentTectonicPlates(pregenWorldHeight),
+                pregen.getMantleBackpressureWaitMs(),
+                pregen.getMantleBackpressureTimeoutMs(),
+                this::lowerAdaptiveInFlightLimit,
+                this::metricsSnapshot);
     }
 
     private IrisPaperLikeBackendMode resolvePaperLikeBackendMode(IrisSettings.IrisSettingsPregen pregen) {
@@ -173,122 +192,240 @@ public class AsyncPregenMethod implements PregeneratorMethod {
         return -1;
     }
 
-    private void unloadAndSaveAllChunks() {
-        if (foliaRuntime) {
-            lastUse.clear();
-            chunkUseQueue.clear();
+    private static long rkey(int rx, int rz) {
+        return (((long) rx) << 32) | (rz & 0xFFFFFFFFL);
+    }
+
+    private int evictionWindow() {
+        int cached = evictionWindowRegions;
+        if (cached > 0) {
+            return cached;
+        }
+
+        Engine engine = resolveMetricsEngine();
+        if (engine == null) {
+            return 2;
+        }
+
+        try {
+            int radius = engine.getMantle().getRadius();
+            int resolved = radius > 0 ? Math.max(1, (int) Math.ceil(radius / 32.0)) : 2;
+            evictionWindowRegions = resolved;
+            return resolved;
+        } catch (Throwable ignored) {
+            return 2;
+        }
+    }
+
+    private void onChunkCompleted(int x, int z, Chunk chunk) {
+        if (chunk == null) {
             return;
         }
 
-        if (lastUse.isEmpty()) {
+        try {
+            long rk = rkey(x >> 5, z >> 5);
+            regionChunks.computeIfAbsent(rk, k -> new ConcurrentLinkedQueue<>()).add(chunk);
+            AtomicInteger pending = regionPending.get(rk);
+            if (pending != null && pending.decrementAndGet() == 0) {
+                onRegionDrained(rk);
+            }
+        } catch (Throwable e) {
+            IrisLogging.reportError(e);
+        }
+    }
+
+    private void onChunkFailedToLoad(int x, int z) {
+        try {
+            long rk = rkey(x >> 5, z >> 5);
+            AtomicInteger pending = regionPending.get(rk);
+            if (pending != null && pending.decrementAndGet() == 0) {
+                onRegionDrained(rk);
+            }
+        } catch (Throwable e) {
+            IrisLogging.reportError(e);
+        }
+
+        long now = M.ms();
+        long last = lastFailedReleaseLogAt.get();
+        if (now - last >= timeoutWarnIntervalMs && lastFailedReleaseLogAt.compareAndSet(last, now)) {
+            IrisLogging.warn("Released region slot for failed or timed out chunk at " + x + "," + z + ". " + metricsSnapshot());
+        }
+    }
+
+    @Override
+    public void onRegionBounds(int minRegionX, int minRegionZ, int maxRegionX, int maxRegionZ) {
+        boundsMinRegionX = minRegionX;
+        boundsMinRegionZ = minRegionZ;
+        boundsMaxRegionX = maxRegionX;
+        boundsMaxRegionZ = maxRegionZ;
+    }
+
+    private boolean inBounds(int rx, int rz) {
+        return rx >= boundsMinRegionX && rx <= boundsMaxRegionX && rz >= boundsMinRegionZ && rz <= boundsMaxRegionZ;
+    }
+
+    @Override
+    public void onRegionSubmitted(int regionX, int regionZ) {
+        try {
+            long rk = rkey(regionX, regionZ);
+            AtomicInteger pending = regionPending.get(rk);
+            if (pending == null || pending.decrementAndGet() == 0) {
+                onRegionDrained(rk);
+            }
+        } catch (Throwable e) {
+            IrisLogging.reportError(e);
+        }
+    }
+
+    private void onRegionDrained(long rk) {
+        if (!drainedRegions.add(rk)) {
+            return;
+        }
+
+        int w = evictionWindow();
+        int rx = (int) (rk >> 32);
+        int rz = (int) rk;
+        for (int dx = -w; dx <= w; dx++) {
+            for (int dz = -w; dz <= w; dz++) {
+                int cx = rx + dx;
+                int cz = rz + dz;
+                long candidate = rkey(cx, cz);
+                if (evictedRegions.contains(candidate)) {
+                    continue;
+                }
+                if (!drainedRegions.contains(candidate)) {
+                    continue;
+                }
+                if (allNeighborsDrained(cx, cz, w)) {
+                    evictRegion(candidate);
+                }
+            }
+        }
+    }
+
+    private boolean allNeighborsDrained(int rx, int rz, int w) {
+        for (int dx = -w; dx <= w; dx++) {
+            for (int dz = -w; dz <= w; dz++) {
+                int nx = rx + dx;
+                int nz = rz + dz;
+                if (!inBounds(nx, nz)) {
+                    continue;
+                }
+
+                if (!drainedRegions.contains(rkey(nx, nz))) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private void evictRegion(long c) {
+        if (!evictedRegions.add(c)) {
+            return;
+        }
+
+        regionPending.remove(c);
+        Queue<Chunk> chunks = regionChunks.remove(c);
+        if (chunks == null || chunks.isEmpty()) {
+            return;
+        }
+
+        try {
+            if (foliaRuntime) {
+                Chunk anchor = null;
+                for (Chunk chunk : chunks) {
+                    if (chunk == null) {
+                        continue;
+                    }
+
+                    if (anchor == null) {
+                        anchor = chunk;
+                    }
+
+                    int cx = chunk.getX();
+                    int cz = chunk.getZ();
+                    if (!J.runRegion(world, cx, cz, () -> unloadChunkSafely(cx, cz))) {
+                        unloadChunkSafely(cx, cz);
+                    }
+                }
+
+                if (anchor != null) {
+                    int ax = anchor.getX();
+                    int az = anchor.getZ();
+                    if (!J.runRegion(world, ax, az, () -> INMS.get().flushChunkIO(world))) {
+                        INMS.get().flushChunkIO(world);
+                    }
+                }
+                return;
+            }
+
+            J.s(() -> {
+                for (Chunk chunk : chunks) {
+                    if (chunk != null) {
+                        unloadChunkSafely(chunk.getX(), chunk.getZ());
+                    }
+                }
+
+                INMS.get().flushChunkIO(world);
+            });
+        } catch (Throwable e) {
+            IrisLogging.reportError(e);
+        }
+    }
+
+    private void unloadChunkSafely(int cx, int cz) {
+        try {
+            world.removePluginChunkTicket(cx, cz, BukkitPlatform.plugin());
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            if (!INMS.get().saveAndUnloadChunk(world, cx, cz)) {
+                world.unloadChunk(cx, cz, true);
+            }
+        } catch (Throwable e) {
+            IrisLogging.reportError(e);
+        }
+    }
+
+    private void flushAllRemainingChunks() {
+        List<Long> keys = new ArrayList<>(regionChunks.keySet());
+
+        if (foliaRuntime) {
+            for (Long rk : keys) {
+                evictRegion(rk);
+            }
             return;
         }
 
         try {
             J.sfut(() -> {
-                if (world == null) {
-                    IrisLogging.warn("World was null somehow...");
-                    return;
+                for (Long rk : keys) {
+                    if (!evictedRegions.add(rk)) {
+                        continue;
+                    }
+
+                    regionPending.remove(rk);
+                    Queue<Chunk> chunks = regionChunks.remove(rk);
+                    if (chunks == null) {
+                        continue;
+                    }
+
+                    for (Chunk chunk : chunks) {
+                        if (chunk != null) {
+                            unloadChunkSafely(chunk.getX(), chunk.getZ());
+                        }
+                    }
                 }
 
-                long minTime = M.ms() - 10_000;
-                AtomicBoolean unloaded = new AtomicBoolean(false);
-                lastUse.entrySet().removeIf(i -> {
-                    final Chunk chunk = i.getKey();
-                    final Long lastUseTime = i.getValue();
-                    if (!chunk.isLoaded() || lastUseTime == null)
-                        return true;
-                    if (lastUseTime < minTime) {
-                        chunk.unload();
-                        unloaded.set(true);
-                        return true;
-                    }
-                    return false;
-                });
-                if (unloaded.get()) {
-                    world.save();
-                }
-                if (lastUse.isEmpty()) {
-                    chunkUseQueue.clear();
-                }
+                world.save();
+                INMS.get().flushChunkIO(world);
             }).get();
         } catch (Throwable e) {
-            e.printStackTrace();
+            IrisLogging.reportError(e);
         }
-    }
-
-    private void periodicChunkCleanup() {
-        long now = M.ms();
-        long lastCleanup = lastChunkCleanup.get();
-        if (now - lastCleanup < CHUNK_CLEANUP_INTERVAL_MS) {
-            return;
-        }
-
-        if (!lastChunkCleanup.compareAndSet(lastCleanup, now)) {
-            return;
-        }
-
-        if (foliaRuntime) {
-            int sizeBefore = lastUse.size();
-            if (sizeBefore > 0) {
-                lastUse.clear();
-                chunkUseQueue.clear();
-                IrisLogging.info("Periodic chunk cleanup: cleared " + sizeBefore + " Folia chunk references");
-            }
-            return;
-        }
-
-        int sizeBefore = lastUse.size();
-        if (sizeBefore == 0) {
-            return;
-        }
-
-        if (!chunkCleanupRunning.compareAndSet(false, true)) {
-            return;
-        }
-
-        long minTime = now - CHUNK_CLEANUP_MIN_AGE_MS;
-        J.a(() -> {
-            try {
-                int removedCount = cleanupQueuedChunkUses(minTime);
-                if (removedCount > 0) {
-                    IrisLogging.info("Periodic chunk cleanup: removed " + removedCount + "/" + sizeBefore + " stale chunk references");
-                }
-            } finally {
-                chunkCleanupRunning.set(false);
-            }
-        });
-    }
-
-    private int cleanupQueuedChunkUses(long minTime) {
-        int removed = 0;
-        while (true) {
-            ChunkUse chunkUse = chunkUseQueue.peek();
-            if (chunkUse == null) {
-                return removed;
-            }
-
-            Long latestUse = lastUse.get(chunkUse.chunk());
-            if (latestUse != null && latestUse > chunkUse.lastUseTime()) {
-                chunkUseQueue.poll();
-                continue;
-            }
-
-            if (latestUse != null && latestUse >= minTime) {
-                return removed;
-            }
-
-            chunkUseQueue.poll();
-            if (latestUse != null && lastUse.remove(chunkUse.chunk(), latestUse)) {
-                removed++;
-            }
-        }
-    }
-
-    private void recordChunkUse(Chunk chunk) {
-        long now = M.ms();
-        lastUse.put(chunk, now);
-        chunkUseQueue.offer(new ChunkUse(chunk, now));
     }
 
     private Chunk onChunkFutureFailure(int x, int z, Throwable throwable) {
@@ -527,56 +664,6 @@ public class AsyncPregenMethod implements PregeneratorMethod {
         return resolved;
     }
 
-    private void enforceMantleBudget() {
-        int cap = maxResidentTectonicPlates;
-        if (cap <= 0) {
-            return;
-        }
-
-        Mantle mantle = resolveMantle();
-        if (mantle == null) {
-            return;
-        }
-
-        int hardCap = cap * 2;
-        if (mantle.getLoadedRegionCount() <= hardCap) {
-            return;
-        }
-
-        long waitStart = M.ms();
-        long lastLog = 0L;
-        while (mantle.getLoadedRegionCount() > hardCap) {
-            mantle.trim(0L, 0);
-            int freed = mantle.unloadTectonicPlate(0);
-            int resident = mantle.getLoadedRegionCount();
-            if (resident <= hardCap) {
-                break;
-            }
-
-            long elapsed = M.ms() - waitStart;
-            if (elapsed >= mantleBackpressureTimeoutMs) {
-                IrisLogging.warn("Pregen mantle backpressure exceeded " + mantleBackpressureTimeoutMs + "ms with " + resident
-                        + " tectonic plates resident (hard cap " + hardCap + "); proceeding to avoid deadlock. "
-                        + "Raise pregen.maxResidentTectonicPlates if this persists. " + metricsSnapshot());
-                return;
-            }
-
-            long logNow = M.ms();
-            if (logNow - lastLog >= 5_000L) {
-                lastLog = logNow;
-                IrisLogging.warn("Pregen mantle backpressure: " + resident + " tectonic plates resident (hard cap " + hardCap
-                        + "), freed " + freed + " last pass, waited " + elapsed + "ms.");
-            }
-
-            try {
-                Thread.sleep(mantleBackpressureWaitMs);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-        }
-    }
-
     @Override
     public void init() {
         IrisLogging.info("Async pregen init: world=" + world.getName()
@@ -591,7 +678,6 @@ public class AsyncPregenMethod implements PregeneratorMethod {
                 + ", recommendedCap=" + recommendedRuntimeConcurrencyCap
                 + ", urgent=" + urgent
                 + ", timeout=" + timeoutSeconds + "s");
-        unloadAndSaveAllChunks();
         if (workerPoolThreads > 0) {
             increaseWorkerThreads();
         }
@@ -610,14 +696,13 @@ public class AsyncPregenMethod implements PregeneratorMethod {
     @Override
     public void close() {
         semaphore.acquireUninterruptibly(threads);
-        unloadAndSaveAllChunks();
+        flushAllRemainingChunks();
         executor.shutdown();
         resetWorkerThreads();
     }
 
     @Override
     public void save() {
-        unloadAndSaveAllChunks();
     }
 
     @Override
@@ -633,8 +718,8 @@ public class AsyncPregenMethod implements PregeneratorMethod {
     @Override
     public void generateChunk(int x, int z, PregenListener listener) {
         listener.onChunkGenerating(x, z);
-        periodicChunkCleanup();
-        enforceMantleBudget();
+        backpressure.enforceMantleBudget();
+        backpressure.awaitHeapHeadroom();
         try {
             long waitStart = M.ms();
             synchronized (permitMonitor) {
@@ -659,6 +744,7 @@ public class AsyncPregenMethod implements PregeneratorMethod {
             return;
         }
 
+        regionPending.computeIfAbsent(rkey(x >> 5, z >> 5), k -> new AtomicInteger(1)).incrementAndGet();
         markSubmitted();
         executor.generate(x, z, listener);
     }
@@ -833,6 +919,7 @@ public class AsyncPregenMethod implements PregeneratorMethod {
                     .whenComplete((chunk, throwable) -> completeFoliaChunk(x, z, listener, chunk, throwable)))) {
                 markFinished(false);
                 semaphore.release();
+                listener.onChunkFailed(x, z);
                 IrisLogging.warn("Failed to schedule Folia region pregen task at " + x + "," + z + ". " + metricsSnapshot());
             }
         }
@@ -842,17 +929,21 @@ public class AsyncPregenMethod implements PregeneratorMethod {
             try {
                 if (throwable != null) {
                     onChunkFutureFailure(x, z, throwable);
+                    onChunkFailedToLoad(x, z);
+                    listener.onChunkFailed(x, z);
                     return;
                 }
 
                 if (chunk == null) {
+                    onChunkFailedToLoad(x, z);
+                    listener.onChunkFailed(x, z);
                     return;
                 }
 
                 listener.onChunkGenerated(x, z);
                 cleanupMantleChunk(x, z);
                 listener.onChunkCleaned(x, z);
-                recordChunkUse(chunk);
+                onChunkCompleted(x, z, chunk);
                 success = true;
             } catch (Throwable e) {
                 IrisLogging.reportError(e);
@@ -877,13 +968,15 @@ public class AsyncPregenMethod implements PregeneratorMethod {
                             .get();
 
                     if (i == null) {
+                        onChunkFailedToLoad(x, z);
+                        listener.onChunkFailed(x, z);
                         return;
                     }
 
                     listener.onChunkGenerated(x, z);
                     cleanupMantleChunk(x, z);
                     listener.onChunkCleaned(x, z);
-                    recordChunkUse(i);
+                    onChunkCompleted(x, z, i);
                     success = true;
                 } catch (InterruptedException ignored) {
                     Thread.currentThread().interrupt();
@@ -913,13 +1006,15 @@ public class AsyncPregenMethod implements PregeneratorMethod {
                         boolean success = false;
                         try {
                             if (i == null) {
+                                onChunkFailedToLoad(x, z);
+                                listener.onChunkFailed(x, z);
                                 return;
                             }
 
                             listener.onChunkGenerated(x, z);
                             cleanupMantleChunk(x, z);
                             listener.onChunkCleaned(x, z);
-                            recordChunkUse(i);
+                            onChunkCompleted(x, z, i);
                             success = true;
                         } finally {
                             markFinished(success);
@@ -927,9 +1022,6 @@ public class AsyncPregenMethod implements PregeneratorMethod {
                         }
                     });
         }
-    }
-
-    private record ChunkUse(Chunk chunk, long lastUseTime) {
     }
 
     private record ChunkAsyncMethodSelection(Method urgentMethod, Method standardMethod, String mode) {

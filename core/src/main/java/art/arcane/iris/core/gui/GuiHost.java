@@ -25,8 +25,17 @@ import java.awt.GraphicsEnvironment;
 public final class GuiHost {
     private static volatile Provider provider = new Provider() {
     };
+    private static volatile boolean desktopSuppressed = false;
 
     private GuiHost() {
+    }
+
+    public static void suppressDesktop(boolean suppress) {
+        desktopSuppressed = suppress;
+    }
+
+    public static boolean isDesktopSuppressed() {
+        return desktopSuppressed;
     }
 
     public interface Provider {
@@ -56,6 +65,6 @@ public final class GuiHost {
     }
 
     public static boolean isAvailable() {
-        return !GraphicsEnvironment.isHeadless();
+        return !desktopSuppressed && !GraphicsEnvironment.isHeadless();
     }
 }

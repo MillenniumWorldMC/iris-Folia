@@ -20,12 +20,7 @@ package art.arcane.iris.fabric;
 
 import art.arcane.iris.modded.IrisModdedChunkGenerator;
 import art.arcane.iris.modded.ModdedEngineBootstrap;
-import art.arcane.iris.modded.ModdedIrisLog;
-import art.arcane.iris.modded.ModdedParityProbe;
-import art.arcane.iris.modded.ModdedWorldCheck;
-import art.arcane.iris.modded.ModdedWorldEngines;
 import art.arcane.iris.modded.command.IrisModdedCommands;
-import art.arcane.iris.modded.command.ModdedObjectUndo;
 import art.arcane.iris.modded.command.ModdedWandService;
 import com.mojang.brigadier.CommandDispatcher;
 import net.fabricmc.api.ModInitializer;
@@ -34,8 +29,6 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -54,26 +47,10 @@ import net.minecraft.world.phys.BlockHitResult;
 public final class IrisFabricBootstrap implements ModInitializer {
     @Override
     public void onInitialize() {
-        ModdedEngineBootstrap.initialize(new FabricModdedLoader());
-        FabricLoader loader = FabricLoader.getInstance();
-        String modVersion = loader.getModContainer("irisworldgen")
-            .map((ModContainer container) -> container.getMetadata().getVersion().getFriendlyString())
-            .orElse("unknown");
-        String minecraftVersion = loader.getModContainer("minecraft")
-            .map((ModContainer container) -> container.getMetadata().getVersion().getFriendlyString())
-            .orElse("unknown");
-        ModdedIrisLog.info("Iris " + modVersion + " bootstrapping on Minecraft " + minecraftVersion + " (Fabric)");
-
-        ModdedEngineBootstrap.selfTest(IrisFabricBootstrap.class.getClassLoader());
-        ModdedEngineBootstrap.bind();
-        Registry.register(BuiltInRegistries.CHUNK_GENERATOR, Identifier.fromNamespaceAndPath("irisworldgen", "iris"), IrisModdedChunkGenerator.CODEC);
-        ModdedIrisLog.info("Iris chunk generator registered as irisworldgen:iris");
-        ServerLifecycleEvents.SERVER_STOPPING.register((MinecraftServer server) -> {
-            ModdedObjectUndo.clearAll();
-            ModdedWandService.clearAll();
-            ModdedWorldEngines.shutdown();
-            ModdedEngineBootstrap.stop();
-        });
+        ModdedEngineBootstrap.bootCommon(new FabricModdedLoader(), "Fabric",
+            () -> Registry.register(BuiltInRegistries.CHUNK_GENERATOR, Identifier.fromNamespaceAndPath("irisworldgen", "iris"), IrisModdedChunkGenerator.CODEC));
+        ServerLifecycleEvents.SERVER_STARTING.register((MinecraftServer server) -> ModdedEngineBootstrap.start(server));
+        ServerLifecycleEvents.SERVER_STOPPING.register((MinecraftServer server) -> ModdedEngineBootstrap.stop());
         CommandRegistrationCallback.EVENT.register((CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext buildContext, Commands.CommandSelection selection) -> IrisModdedCommands.register(dispatcher));
         AttackBlockCallback.EVENT.register((Player player, Level level, InteractionHand hand, BlockPos pos, Direction direction) ->
                 ModdedWandService.attackBlock(player, level, hand, pos) ? InteractionResult.SUCCESS : InteractionResult.PASS);
@@ -83,17 +60,5 @@ public final class IrisFabricBootstrap implements ModInitializer {
             ModdedEngineBootstrap.tick(server);
             ModdedWandService.serverTick(server);
         });
-
-        String parity = System.getProperty("iris.parity");
-        if (parity != null) {
-            ModdedIrisLog.info("Iris parity probe armed: " + parity);
-            ModdedParityProbe.schedule(parity);
-        }
-
-        String worldCheck = System.getProperty("iris.worldcheck");
-        if (worldCheck != null) {
-            ModdedIrisLog.info("Iris world check armed");
-            ModdedWorldCheck.schedule();
-        }
     }
 }

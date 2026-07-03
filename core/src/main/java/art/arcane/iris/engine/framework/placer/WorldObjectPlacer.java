@@ -57,9 +57,11 @@ public class WorldObjectPlacer implements IObjectPlacer {
     @Override
     public void set(int x, int y, int z, PlatformBlockState state) {
         BlockData d = (BlockData) state.nativeHandle();
-        Block block = world.getBlockAt(x, y + world.getMinHeight(), z);
+        int worldY = y + world.getMinHeight();
+        if (worldY < world.getMinHeight() || worldY >= world.getMaxHeight()) return;
+        Block block = world.getBlockAt(x, worldY, z);
 
-        if (y <= world.getMinHeight() || block.getType() == Material.BEDROCK) return;
+        if (block.getType() == Material.BEDROCK) return;
         InventorySlotType slot = null;
         if (BukkitBlockResolution.isStorageChest(d)) {
             slot = InventorySlotType.STORAGE;
@@ -128,7 +130,9 @@ public class WorldObjectPlacer implements IObjectPlacer {
 
     @Override
     public void setTile(int xx, int yy, int zz, TileData tile) {
-        tile.toBukkitTry(world.getBlockAt(xx, yy + world.getMinHeight(), zz));
+        int worldY = yy + world.getMinHeight();
+        if (worldY < world.getMinHeight() || worldY >= world.getMaxHeight()) return;
+        tile.toBukkitTry(world.getBlockAt(xx, worldY, zz));
     }
 
     @Override

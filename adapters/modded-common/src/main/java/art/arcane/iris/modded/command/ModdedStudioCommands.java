@@ -23,6 +23,7 @@ import art.arcane.iris.core.gui.GuiHost;
 import art.arcane.iris.core.gui.NoiseExplorerGUI;
 import art.arcane.iris.core.gui.VisionGUI;
 import art.arcane.iris.core.loader.IrisData;
+import art.arcane.iris.core.project.IrisProjectCopier;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisBiomeGeneratorLink;
@@ -41,6 +42,7 @@ import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.format.Form;
 import art.arcane.volmlib.util.function.Function2;
 import art.arcane.volmlib.util.io.IO;
+import art.arcane.volmlib.util.json.JSONArray;
 import art.arcane.volmlib.util.json.JSONObject;
 import art.arcane.volmlib.util.math.M;
 import art.arcane.volmlib.util.math.RNG;
@@ -63,13 +65,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.zeroturnaround.zip.ZipUtil;
 
+import java.awt.Desktop;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -80,7 +79,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 public final class ModdedStudioCommands {
     private static final Logger LOGGER = LoggerFactory.getLogger("Iris");
@@ -150,9 +148,9 @@ public final class ModdedStudioCommands {
                 .executes((CommandContext<CommandSourceStack> context) -> tpStudio(context.getSource())));
         root.then(Commands.literal("status")
                 .executes((CommandContext<CommandSourceStack> context) -> status(context.getSource())));
-        root.then(message("vscode", "VSCode launch and workspace generation are desktop features of the Bukkit studio toolchain; edit config/irisworldgen/packs/<pack> directly in your editor."));
-        root.then(message("vsc", "VSCode launch and workspace generation are desktop features of the Bukkit studio toolchain; edit config/irisworldgen/packs/<pack> directly in your editor."));
-        root.then(message("update", "Workspace regeneration (.code-workspace + JSON schemas) reads Bukkit registries (SchemaBuilder); run /iris studio update on a Bukkit server against this pack."));
+        root.then(workspaceTree("vscode", true));
+        root.then(workspaceTree("vsc", true));
+        root.then(workspaceTree("update", false));
         root.then(message("importvanilla", "Vanilla tree/object/structure capture generates features in throwaway Bukkit worlds via NMS; run /iris studio importvanilla on a Bukkit server against this pack, then copy the pack folder over."));
         root.then(message("importv", "Vanilla tree/object/structure capture generates features in throwaway Bukkit worlds via NMS; run /iris studio importvanilla on a Bukkit server against this pack, then copy the pack folder over."));
         root.then(message("iv", "Vanilla tree/object/structure capture generates features in throwaway Bukkit worlds via NMS; run /iris studio importvanilla on a Bukkit server against this pack, then copy the pack folder over."));
@@ -168,6 +166,10 @@ public final class ModdedStudioCommands {
         root.then(message("find-objects", "The chunk object report reads Bukkit chunk data and is not ported to modded servers."));
 
         return root;
+    }
+
+    public static void clear() {
+        STUDIOS.clear();
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> openTree(String name) {
@@ -206,7 +208,8 @@ public final class ModdedStudioCommands {
             return 0;
         }
         if (engine != null) {
-            ModdedGuiHost.bindContext(source.getServer(), level, engine);
+            ServerPlayer player = source.getPlayer();
+            ModdedGuiHost.bindContext(source.getServer(), level, engine, player == null ? null : player.getUUID());
         }
         if (generatorKey == null || generatorKey.isBlank()) {
             NoiseExplorerGUI.launch();
@@ -240,13 +243,91 @@ public final class ModdedStudioCommands {
             IrisModdedCommands.fail(source, guiUnavailableMessage());
             return 0;
         }
-        ModdedGuiHost.bindContext(source.getServer(), level, engine);
+        ServerPlayer player = source.getPlayer();
+        ModdedGuiHost.bindContext(source.getServer(), level, engine, player == null ? null : player.getUUID());
         VisionGUI.launch(engine);
         IrisModdedCommands.ok(source, "Opening the Vision map for " + level.dimension().identifier() + " on the server display.");
         return 1;
     }
 
+    private static LiteralArgumentBuilder<CommandSourceStack> workspaceTree(String name, boolean open) {
+        return Commands.literal(name)
+                .executes((CommandContext<CommandSourceStack> context) -> workspace(context.getSource(), null, open))
+                .then(Commands.argument("pack", StringArgumentType.word()).suggests(IrisModdedCommands.PACK_NAMES)
+                        .executes((CommandContext<CommandSourceStack> context) -> workspace(context.getSource(), StringArgumentType.getString(context, "pack"), open)));
+    }
+
+    private static int workspace(CommandSourceStack source, String pack, boolean open) {
+        File folder = resolvePack(source, pack);
+        if (folder == null) {
+            return 0;
+        }
+        File workspace = new File(folder, folder.getName() + ".code-workspace");
+        try {
+            IO.writeAll(workspace, workspaceConfig().toString(4));
+        } catch (IOException e) {
+            LOGGER.error("Iris workspace write failed for {}", workspace, e);
+            IrisModdedCommands.fail(source, "Failed to write " + workspace.getAbsolutePath() + ": " + e.getMessage());
+            return 0;
+        }
+        IrisModdedCommands.ok(source, "Workspace regenerated: " + workspace.getAbsolutePath() + " (JSON schemas require the Bukkit studio toolchain).");
+        if (!open) {
+            return 1;
+        }
+        if (!GuiHost.isAvailable() || !Desktop.isDesktopSupported()) {
+            IrisModdedCommands.fail(source, guiUnavailableMessage());
+            return 0;
+        }
+        try {
+            Desktop.getDesktop().open(workspace);
+        } catch (Throwable e) {
+            LOGGER.error("Iris workspace open failed for {}", workspace, e);
+            IrisModdedCommands.fail(source, "Could not open " + workspace.getName() + ": " + e.getClass().getSimpleName());
+            return 0;
+        }
+        IrisModdedCommands.ok(source, "Opening " + workspace.getName() + " in your editor.");
+        return 1;
+    }
+
+    private static JSONObject workspaceConfig() {
+        JSONObject ws = new JSONObject();
+        JSONArray folders = new JSONArray();
+        JSONObject folder = new JSONObject();
+        folder.put("path", ".");
+        folders.put(folder);
+        ws.put("folders", folders);
+        JSONObject settings = new JSONObject();
+        settings.put("workbench.colorTheme", "Monokai");
+        settings.put("workbench.preferredDarkColorTheme", "Solarized Dark");
+        settings.put("workbench.tips.enabled", false);
+        settings.put("workbench.tree.indent", 24);
+        settings.put("files.autoSave", "onFocusChange");
+        JSONObject json = new JSONObject();
+        json.put("editor.autoIndent", "brackets");
+        json.put("editor.acceptSuggestionOnEnter", "smart");
+        json.put("editor.cursorSmoothCaretAnimation", true);
+        json.put("editor.dragAndDrop", false);
+        json.put("files.trimTrailingWhitespace", true);
+        json.put("diffEditor.ignoreTrimWhitespace", true);
+        json.put("files.trimFinalNewlines", true);
+        json.put("editor.suggest.showKeywords", false);
+        json.put("editor.suggest.showSnippets", false);
+        json.put("editor.suggest.showWords", false);
+        JSONObject quick = new JSONObject();
+        quick.put("strings", true);
+        json.put("editor.quickSuggestions", quick);
+        json.put("editor.suggest.insertMode", "replace");
+        settings.put("[json]", json);
+        settings.put("json.maxItemsComputed", 30000);
+        settings.put("json.schemas", new JSONArray());
+        ws.put("settings", settings);
+        return ws;
+    }
+
     private static String guiUnavailableMessage() {
+        if (GuiHost.isDesktopSuppressed()) {
+            return "Iris desktop GUIs are disabled in singleplayer/client to avoid crashing the game client; use the in-game map and chat output instead.";
+        }
         if (!GuiHost.isAvailable()) {
             return "This server has no display (headless JVM); the Iris desktop GUIs need an AWT-capable session.";
         }
@@ -346,7 +427,7 @@ public final class ModdedStudioCommands {
     private static void injectConsole(CommandSourceStack source, MinecraftServer server, String dimensionId, String pack, long seed) {
         ModdedDimensionManager.Handle handle;
         try {
-            handle = ModdedDimensionManager.create(server, dimensionId, pack, seed);
+            handle = ModdedDimensionManager.create(server, dimensionId, pack, pack, seed);
         } catch (Throwable e) {
             LOGGER.error("Iris console studio injection failed for {} ({})", dimensionId, pack, e);
             IrisModdedCommands.fail(source, "Studio injection failed: " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " - " + e.getMessage()));
@@ -376,7 +457,7 @@ public final class ModdedStudioCommands {
         }
         ModdedDimensionManager.Handle handle;
         try {
-            handle = ModdedDimensionManager.create(server, dimensionId, pack, seed);
+            handle = ModdedDimensionManager.create(server, dimensionId, pack, pack, seed);
         } catch (Throwable e) {
             LOGGER.error("Iris studio injection failed for {} ({})", dimensionId, pack, e);
             IrisModdedCommands.fail(source, "Studio injection failed: " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " - " + e.getMessage()));
@@ -434,7 +515,7 @@ public final class ModdedStudioCommands {
         for (ModdedDimensionManager.Handle handle : studios) {
             UUID owner = ownerOf(handle.dimensionId());
             String ownerName = owner == null ? "unclaimed" : ownerName(server, owner);
-            IrisModdedCommands.ok(source, "  " + handle.dimensionId() + ": pack '" + handle.packKey() + "' seed " + handle.seed() + " owner " + ownerName);
+            IrisModdedCommands.ok(source, "  " + handle.dimensionId() + ": pack '" + handle.pack() + "' seed " + handle.seed() + " owner " + ownerName);
         }
         return 1;
     }
@@ -529,7 +610,7 @@ public final class ModdedStudioCommands {
                         return;
                     }
                 }
-                copyProject(templateFolder, target, template, name);
+                IrisProjectCopier.copyProject(templateFolder, target, template, name);
                 server.execute(() -> {
                     IrisModdedCommands.ok(source, "Created project '" + name + "' at " + target.getAbsolutePath());
                     IrisModdedCommands.ok(source, "Edit dimensions/" + name + ".json and the rest of the pack, then create a world with it. VSCode workspaces are generated by the Bukkit studio toolchain only.");
@@ -542,39 +623,6 @@ public final class ModdedStudioCommands {
         thread.setDaemon(true);
         thread.start();
         return 1;
-    }
-
-    private static void copyProject(File templateFolder, File target, String template, String name) throws IOException {
-        Path source = templateFolder.toPath();
-        try (Stream<Path> walk = Files.walk(source)) {
-            for (Path path : walk.sorted(Comparator.naturalOrder()).toList()) {
-                String relative = source.relativize(path).toString();
-                if (relative.isEmpty() || relative.equals(".git") || relative.startsWith(".git" + File.separator) || relative.endsWith(".code-workspace")) {
-                    continue;
-                }
-                Path destination = target.toPath().resolve(relative);
-                if (Files.isDirectory(path)) {
-                    Files.createDirectories(destination);
-                } else {
-                    Files.createDirectories(destination.getParent());
-                    Files.copy(path, destination, StandardCopyOption.REPLACE_EXISTING);
-                }
-            }
-        }
-
-        File oldDimension = new File(target, "dimensions/" + template + ".json");
-        File newDimension = new File(target, "dimensions/" + name + ".json");
-        if (oldDimension.isFile()) {
-            Files.copy(oldDimension.toPath(), newDimension.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            Files.delete(oldDimension.toPath());
-        }
-        if (newDimension.isFile()) {
-            JSONObject json = new JSONObject(IO.readAll(newDimension));
-            if (json.has("name")) {
-                json.put("name", Form.capitalizeWords(name.replaceAll("\\Q-\\E", " ")));
-                IO.writeAll(newDimension, json.toString(4));
-            }
-        }
     }
 
     private static int pkg(CommandSourceStack source, String pack) {
@@ -738,7 +786,7 @@ public final class ModdedStudioCommands {
                 new Spiraler(diameter, diameter, (int x, int z) -> executor.queue(() -> {
                     IrisRegion region = engine.getRegion((x << 4) + 8, (z << 4) + 8);
                     counts.computeIfAbsent(region.getLoadKey(), (String key) -> new AtomicInteger(0)).incrementAndGet();
-                })).setOffset(blockX, blockZ).drain();
+                })).setOffset(blockX >> 4, blockZ >> 4).drain();
                 executor.complete();
                 burst.close();
                 server.execute(() -> counts.forEach((String key, AtomicInteger count) -> {

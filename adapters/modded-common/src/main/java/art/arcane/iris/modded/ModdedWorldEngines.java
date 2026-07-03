@@ -43,12 +43,12 @@ public final class ModdedWorldEngines {
     private ModdedWorldEngines() {
     }
 
-    public static Engine get(ServerLevel level, String dimensionKey, long seedOverride) {
+    public static Engine get(ServerLevel level, String pack, String dimensionKey, long seedOverride) {
         Engine existing = ENGINES.get(level);
         if (existing != null) {
             return existing;
         }
-        return ENGINES.computeIfAbsent(level, (ServerLevel l) -> create(l, dimensionKey, seedOverride));
+        return ENGINES.computeIfAbsent(level, (ServerLevel l) -> create(l, pack, dimensionKey, seedOverride));
     }
 
     public static Collection<Engine> activeEngines() {
@@ -70,15 +70,15 @@ public final class ModdedWorldEngines {
         }
     }
 
-    private static Engine create(ServerLevel level, String dimensionKey, long seedOverride) {
+    private static Engine create(ServerLevel level, String pack, String dimensionKey, long seedOverride) {
         ModdedEngineBootstrap.bind();
-        File pack = resolvePack(dimensionKey);
-        IrisData data = IrisData.get(pack);
+        File packDir = resolvePack(pack, dimensionKey);
+        IrisData data = IrisData.get(packDir);
         IrisDimension dimension = data.getDimensionLoader().load(dimensionKey);
         if (dimension == null) {
-            LOGGER.error("Iris pack at {} does not contain dimension '{}' (expected dimensions/{}.json). Install a matching Iris pack and restart.",
-                    pack.getAbsolutePath(), dimensionKey, dimensionKey);
-            throw new IllegalStateException("Iris dimension '" + dimensionKey + "' missing from pack " + pack.getAbsolutePath());
+            LOGGER.error("Iris pack '{}' at {} does not contain dimension '{}' (expected dimensions/{}.json). Install a matching Iris pack and restart.",
+                    pack, packDir.getAbsolutePath(), dimensionKey, dimensionKey);
+            throw new IllegalStateException("Iris dimension '" + dimensionKey + "' missing from pack " + packDir.getAbsolutePath());
         }
 
         long seed = seedOverride == Long.MIN_VALUE ? level.getSeed() : seedOverride;
@@ -94,24 +94,28 @@ public final class ModdedWorldEngines {
 
         int levelMinY = level.getMinY();
         int levelMaxY = level.getMinY() + level.getHeight();
-        if (dimension.getMinHeight() != levelMinY || dimension.getMaxHeight() != levelMaxY) {
-            LOGGER.error("Iris pack height mismatch for {}: pack generates {}..{} but the level is {}..{}. Terrain outside the level range will be clipped; ship a matching dimension_type.",
+        if (dimension.getMinHeight() < levelMinY || dimension.getMaxHeight() > levelMaxY) {
+            LOGGER.warn("Iris pack height range for {} exceeds the level: pack generates {}..{} but the level is {}..{}. Terrain outside the level range will be clipped; restart so the forced datapack registers the pack dimension type.",
                     level.dimension().identifier(), dimension.getMinHeight(), dimension.getMaxHeight(), levelMinY, levelMaxY);
         }
 
         LOGGER.info("Iris engine up for {}: pack={} dim={} seed={} height={}..{}",
-                level.dimension().identifier(), pack.getAbsolutePath(), dimension.getLoadKey(), seed, dimension.getMinHeight(), dimension.getMaxHeight());
+                level.dimension().identifier(), packDir.getAbsolutePath(), dimension.getLoadKey(), seed, dimension.getMinHeight(), dimension.getMaxHeight());
         return engine;
     }
 
-    private static File resolvePack(String dimensionKey) {
-        File pack = ModdedEngineBootstrap.loader().configDir()
+    public static File packFolder(String pack) {
+        return ModdedEngineBootstrap.loader().configDir()
                 .resolve("irisworldgen")
                 .resolve("packs")
-                .resolve(dimensionKey)
+                .resolve(pack)
                 .toFile();
-        if (pack.isDirectory()) {
-            return pack;
+    }
+
+    private static File resolvePack(String pack, String dimensionKey) {
+        File packDir = packFolder(pack);
+        if (packDir.isDirectory()) {
+            return packDir;
         }
 
         String parity = System.getProperty("iris.parity");
@@ -127,17 +131,17 @@ public final class ModdedWorldEngines {
             }
             File parityPack = new File(parityPath);
             if (parityPack.isDirectory()) {
-                LOGGER.warn("Iris pack missing at {}; falling back to parity pack {}", pack.getAbsolutePath(), parityPack.getAbsolutePath());
+                LOGGER.warn("Iris pack missing at {}; falling back to parity pack {}", packDir.getAbsolutePath(), parityPack.getAbsolutePath());
                 return parityPack;
             }
         }
 
         LOGGER.error("===============================================================");
-        LOGGER.error("Iris pack for dimension '{}' is not installed.", dimensionKey);
-        LOGGER.error("Expected a pack folder at: {}", pack.getAbsolutePath());
+        LOGGER.error("Iris pack '{}' is not installed.", pack);
+        LOGGER.error("Expected a pack folder at: {}", packDir.getAbsolutePath());
         LOGGER.error("Install an Iris pack there (the folder must contain dimensions/{}.json) and restart the server.", dimensionKey);
         LOGGER.error("===============================================================");
-        throw new IllegalStateException("Iris pack not installed: " + pack.getAbsolutePath());
+        throw new IllegalStateException("Iris pack not installed: " + packDir.getAbsolutePath());
     }
 
     public static void shutdown() {

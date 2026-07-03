@@ -98,11 +98,11 @@ public final class ModdedBiomeWriter implements PlatformBiomeWriter {
         if (owner == null) {
             return -1;
         }
-        org.bukkit.block.Biome derivative = owner.getVanillaDerivative();
-        if (derivative == null || derivative.getKey() == null) {
+        String derivativeKey = owner.getVanillaDerivativeKey();
+        if (derivativeKey == null) {
             return -1;
         }
-        return idForKey(registry, derivative.getKey().toString());
+        return idForKey(registry, derivativeKey);
     }
 
     private IrisBiome findCustomBiomeOwner(String dimensionLoadKey, String customBiomeId) {

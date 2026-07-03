@@ -94,7 +94,7 @@ public class CommandWhat implements DirectorExecutor {
     @Director(description = "What region am i in?", origin = DirectorOrigin.PLAYER)
     public void region() {
         try {
-            Chunk chunk = world().getChunkAt(player().getLocation().getBlockZ() / 16, player().getLocation().getBlockZ() /  16);
+            Chunk chunk = world().getChunkAt(player().getLocation().getBlockX() >> 4, player().getLocation().getBlockZ() >> 4);
             IrisRegion r = EngineBukkitOps.getRegion(engine(), chunk);
             sender().sendMessage("IRegion: " + r.getLoadKey() + " (" + r.getName() + ")");
 

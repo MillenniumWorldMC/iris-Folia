@@ -20,6 +20,7 @@ import art.arcane.iris.util.project.stream.utility.CachedDoubleStream2D;
 import art.arcane.iris.util.project.stream.utility.CachedStream2D;
 import art.arcane.iris.util.project.stream.utility.CachedStream3D;
 import art.arcane.iris.core.gui.PregeneratorJob;
+import art.arcane.iris.core.pregenerator.MantleHeapPressure;
 import lombok.Synchronized;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
@@ -317,7 +318,11 @@ public class IrisEngineSVC implements IrisService {
                     }
 
                     try {
-                        engine.getMantle().trim(activeIdleDuration(engine), activeTectonicLimit(engine));
+                        if (pregenTargets(engine) && MantleHeapPressure.overHighWater()) {
+                            engine.getMantle().trim(0L, 0);
+                        } else {
+                            engine.getMantle().trim(activeIdleDuration(engine), activeTectonicLimit(engine));
+                        }
                     } catch (Throwable e) {
                         if (isMantleClosed(e)) {
                             close();
@@ -349,7 +354,12 @@ public class IrisEngineSVC implements IrisService {
 
                     try {
                         long unloadStart = System.currentTimeMillis();
-                        int count = engine.getMantle().unloadTectonicPlate(IrisSettings.get().getPerformance().getEngineSVC().forceMulticoreWrite ? 0 : activeTectonicLimit(engine));
+                        boolean heapPressure = pregenTargets(engine) && MantleHeapPressure.overHighWater();
+                        int unloadLimit = (heapPressure || IrisSettings.get().getPerformance().getEngineSVC().forceMulticoreWrite) ? 0 : activeTectonicLimit(engine);
+                        int count = engine.getMantle().unloadTectonicPlate(unloadLimit);
+                        if (heapPressure && MantleHeapPressure.overPanicWater()) {
+                            MantleHeapPressure.requestPanicReclaim();
+                        }
                         if (count > 0) {
                             IrisLogging.debug(C.GOLD + "Unloaded " + C.YELLOW + count + " TectonicPlates in " + C.RED + Form.duration(System.currentTimeMillis() - unloadStart, 2));
                         }
@@ -385,7 +395,7 @@ public class IrisEngineSVC implements IrisService {
                 return limit;
             }
 
-            return Math.max(limit, IrisSettings.get().getPregen().getMaxResidentTectonicPlates());
+            return Math.max(limit, IrisSettings.get().getPregen().getEffectiveResidentTectonicPlates(engine.getHeight()));
         }
 
         private long activeIdleDuration(Engine engine) {
@@ -433,7 +443,7 @@ public class IrisEngineSVC implements IrisService {
             }
 
             PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
-            boolean pregeneratorTargetsWorld = pregeneratorJob != null && pregeneratorJob.targetsWorld(world);
+            boolean pregeneratorTargetsWorld = pregeneratorJob != null && pregeneratorJob.targetsWorldName(world.getName());
             return shouldSkipMantleReductionForMaintenance(maintenanceActive, pregeneratorTargetsWorld);
         }
     }

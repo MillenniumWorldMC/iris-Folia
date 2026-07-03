@@ -23,7 +23,6 @@ import art.arcane.iris.spi.LogLevel;
 import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.iris.spi.PlatformBiomeWriter;
 import art.arcane.iris.spi.PlatformBlockState;
-import art.arcane.iris.spi.PlatformCapabilities;
 import art.arcane.iris.spi.PlatformEntityType;
 import art.arcane.iris.spi.PlatformItem;
 import art.arcane.iris.spi.PlatformRegistries;
@@ -50,8 +49,6 @@ public final class StubPlatform implements IrisPlatform {
 
     private final StubRegistries registries = new StubRegistries();
     private final StubScheduler scheduler = new StubScheduler();
-    private final PlatformCapabilities capabilities = new PlatformCapabilities() {
-    };
     private final StubStructureHooks structureHooks = new StubStructureHooks();
     private final StubBiomeWriter biomeWriter = new StubBiomeWriter();
 
@@ -380,11 +377,6 @@ public final class StubPlatform implements IrisPlatform {
     }
 
     @Override
-    public PlatformCapabilities capabilities() {
-        return capabilities;
-    }
-
-    @Override
     public PlatformStructureHooks structureHooks() {
         return structureHooks;
     }
@@ -429,11 +421,6 @@ public final class StubPlatform implements IrisPlatform {
 
     @Override
     public boolean spawnEntity(Object world, String entityKey, double x, double y, double z) {
-        return false;
-    }
-
-    @Override
-    public boolean giveItem(Object player, String itemKey, int amount) {
         return false;
     }
 
