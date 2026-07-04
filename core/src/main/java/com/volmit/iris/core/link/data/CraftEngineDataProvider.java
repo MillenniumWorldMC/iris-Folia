@@ -85,9 +85,10 @@ public class CraftEngineDataProvider extends ExternalDataProvider {
     @Override
     public void processUpdate(@NotNull Engine engine, @NotNull Block block, @NotNull Identifier blockId) {
         var pair = ExternalDataSVC.parseState(blockId);
-        var key = Key.of(blockId.namespace(), blockId.key());
         var state = pair.getB();
+        blockId = pair.getA();
 
+        var key = Key.of(blockId.namespace(), blockId.key());
         var customBlock = CraftEngineBlocks.byId(key);
         if (customBlock != null) {
             ImmutableBlockState blockState = customBlock.defaultState();
