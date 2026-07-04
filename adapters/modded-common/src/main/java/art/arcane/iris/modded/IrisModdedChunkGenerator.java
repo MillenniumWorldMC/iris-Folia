@@ -68,7 +68,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class IrisModdedChunkGenerator extends ChunkGenerator {
     private static final Logger LOGGER = LoggerFactory.getLogger("Iris");
@@ -76,6 +81,41 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
             BiomeSource.CODEC.fieldOf("biome_source").forGetter((IrisModdedChunkGenerator generator) -> generator.biomeSource),
             Codec.STRING.fieldOf("dimension").forGetter((IrisModdedChunkGenerator generator) -> generator.dimensionKey)
     ).apply(instance, IrisModdedChunkGenerator::new));
+
+    private static final AtomicInteger GEN_THREAD_SEQ = new AtomicInteger();
+    private static final boolean PARALLEL_CHUNK_SYSTEM = detectParallelChunkSystem();
+    private static final ExecutorService GEN_POOL = createGenPool();
+
+    private static boolean detectParallelChunkSystem() {
+        String[] markers = {
+                "com.ishland.c2me.base.ModProperties",
+                "com.ishland.c2me.base.common.config.C2MEConfig",
+                "com.ishland.c2me.opts.chunkio.ModProperties",
+                "ca.spottedleaf.moonrise.common.util.MoonriseCommon"
+        };
+        for (String marker : markers) {
+            try {
+                Class.forName(marker, false, IrisModdedChunkGenerator.class.getClassLoader());
+                return true;
+            } catch (Throwable ignored) {
+            }
+        }
+        return false;
+    }
+
+    private static ExecutorService createGenPool() {
+        int threads = Math.max(2, Runtime.getRuntime().availableProcessors());
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(
+                threads, threads, 30L, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(),
+                runnable -> {
+                    Thread thread = new Thread(runnable, "Iris ModGen-" + GEN_THREAD_SEQ.incrementAndGet());
+                    thread.setDaemon(true);
+                    return thread;
+                });
+        pool.allowCoreThreadTimeOut(true);
+        return pool;
+    }
 
     private final String dimensionKey;
     private final String defaultPack;
@@ -221,6 +261,20 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
         int dimMaxY = generationEngine.getMaxHeight();
         int height = dimMaxY - dimMinY;
         PlatformBlockState air = IrisPlatforms.get().registries().air();
+        Registry<Biome> biomeRegistry = structureManager.registryAccess().lookupOrThrow(Registries.BIOME);
+
+        if (PARALLEL_CHUNK_SYSTEM) {
+            return CompletableFuture.completedFuture(
+                    generateTerrain(chunk, generationEngine, pos, dimMinY, height, air, biomeRegistry, randomState));
+        }
+        return CompletableFuture.supplyAsync(
+                () -> generateTerrain(chunk, generationEngine, pos, dimMinY, height, air, biomeRegistry, randomState),
+                GEN_POOL);
+    }
+
+    private ChunkAccess generateTerrain(ChunkAccess chunk, Engine generationEngine, ChunkPos pos,
+                                        int dimMinY, int height, PlatformBlockState air,
+                                        Registry<Biome> biomeRegistry, RandomState randomState) {
         ModdedBlockBuffer blocks = new ModdedBlockBuffer(height, air);
         Hunk<PlatformBiome> biomes = Hunk.newArrayHunk(16, height, 16);
         try {
@@ -228,7 +282,7 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
         } catch (GenerationSessionException e) {
             if (e.isExpectedTeardown()) {
                 LOGGER.debug("Iris chunk {},{} skipped: engine sealed for hotload/teardown", pos.x(), pos.z());
-                return CompletableFuture.completedFuture(chunk);
+                return chunk;
             }
             LOGGER.error("Iris failed to generate chunk {},{}", pos.x(), pos.z(), e);
             throw new IllegalStateException("Iris generation failed for chunk " + pos.x() + "," + pos.z(), e);
@@ -239,9 +293,8 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
 
         writeBlocks(chunk, blocks, dimMinY, height);
         Heightmap.primeHeightmaps(chunk, EnumSet.of(Heightmap.Types.WORLD_SURFACE_WG, Heightmap.Types.OCEAN_FLOOR_WG));
-        Registry<Biome> biomeRegistry = structureManager.registryAccess().lookupOrThrow(Registries.BIOME);
         chunk.fillBiomesFromNoise(new HunkBiomeResolver(this, biomes, biomeRegistry, pos, dimMinY, height), randomState.sampler());
-        return CompletableFuture.completedFuture(chunk);
+        return chunk;
     }
 
     private Holder<Biome> fallbackBiome(Registry<Biome> registry) {

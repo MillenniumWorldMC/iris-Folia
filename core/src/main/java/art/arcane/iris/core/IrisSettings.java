@@ -154,9 +154,19 @@ public class IrisSettings {
         public int maxResidentTectonicPlates = 96;
         public int mantleBackpressureWaitMs = 25;
         public int mantleBackpressureTimeoutMs = 60_000;
+        public int moddedPregenInFlight = 0;
 
         public int getChunkLoadTimeoutSeconds() {
             return Math.max(5, Math.min(chunkLoadTimeoutSeconds, 120));
+        }
+
+        public int getModdedPregenInFlight() {
+            if (moddedPregenInFlight > 0) {
+                return Math.min(512, moddedPregenInFlight);
+            }
+
+            int cpu = Math.max(1, Runtime.getRuntime().availableProcessors());
+            return Math.max(16, Math.min(48, cpu * 2));
         }
 
         public int getMaxResidentTectonicPlates() {

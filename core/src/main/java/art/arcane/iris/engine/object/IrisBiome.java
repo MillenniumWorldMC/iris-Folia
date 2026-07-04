@@ -32,7 +32,7 @@ import art.arcane.volmlib.util.collection.KSet;
 import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.common.data.DataProvider;
 import art.arcane.iris.util.common.data.registry.RegistryUtil;
-import art.arcane.volmlib.util.data.VanillaBiomeMap;
+import art.arcane.volmlib.util.data.VanillaBiomeColors;
 import art.arcane.volmlib.util.inventorygui.RandomColor;
 import art.arcane.volmlib.util.json.JSONObject;
 import art.arcane.volmlib.util.math.RNG;
@@ -296,6 +296,10 @@ public class IrisBiome extends IrisRegistrant implements IRare {
     public String getVanillaDerivativeKey() {
         String resolved = namespacedBiomeKey(vanillaDerivative);
         return resolved == null ? namespacedBiomeKey(derivative) : resolved;
+    }
+
+    public String getDerivativeKey() {
+        return namespacedBiomeKey(derivative);
     }
 
     private static String namespacedBiomeKey(String key) {
@@ -802,6 +806,30 @@ public class IrisBiome extends IrisRegistrant implements IRare {
         return getBiomeGenerator(rng).fit(getBiomeScatterResolved(), x, y, z);
     }
 
+    public String getSkyBiomeKey(RNG rng, double x, double y, double z) {
+        if (biomeSkyScatter.size() == 1) {
+            return namespacedBiomeKey(biomeSkyScatter.get(0));
+        }
+
+        if (biomeSkyScatter.isEmpty()) {
+            return getGroundBiomeKey(rng, x, y, z);
+        }
+
+        return namespacedBiomeKey(biomeSkyScatter.get(getBiomeGenerator(rng).fit(0, biomeSkyScatter.size() - 1, x, y, z)));
+    }
+
+    public String getGroundBiomeKey(RNG rng, double x, double y, double z) {
+        if (biomeScatter.isEmpty()) {
+            return namespacedBiomeKey(derivative);
+        }
+
+        if (biomeScatter.size() == 1) {
+            return namespacedBiomeKey(biomeScatter.get(0));
+        }
+
+        return namespacedBiomeKey(biomeScatter.get(getBiomeGenerator(rng).fit(0, biomeScatter.size() - 1, x, y, z)));
+    }
+
     public PlatformBlockState getSurfaceBlock(int x, int z, RNG rng, IrisData idm) {
         if (getLayers().isEmpty()) {
             return B.getState("AIR");
@@ -816,13 +844,14 @@ public class IrisBiome extends IrisRegistrant implements IRare {
                 return this.cacheColor.aquire(() -> {
                     if (this.color == null) {
                         RandomColor randomColor = new RandomColor(getName().hashCode());
-                        if (this.getVanillaDerivative() == null) {
+                        String vanillaKey = this.getVanillaDerivativeKey();
+                        RandomColor.Color col = vanillaKey == null ? null : VanillaBiomeColors.getColorType(vanillaKey);
+                        if (col == null) {
                             IrisLogging.warn("No vanilla biome found for " + getName());
                             return new Color(randomColor.randomColor());
                         }
-                        RandomColor.Color col = VanillaBiomeMap.getColorType(this.getVanillaDerivative());
-                        RandomColor.Luminosity lum = VanillaBiomeMap.getColorLuminosity(this.getVanillaDerivative());
-                        RandomColor.SaturationType sat = VanillaBiomeMap.getColorSaturatiom(this.getVanillaDerivative());
+                        RandomColor.Luminosity lum = VanillaBiomeColors.getColorLuminosity(vanillaKey);
+                        RandomColor.SaturationType sat = VanillaBiomeColors.getColorSaturation(vanillaKey);
                         int newColorI = randomColor.randomColor(col, col == RandomColor.Color.MONOCHROME ? RandomColor.SaturationType.MONOCHROME : sat, lum);
 
                         return new Color(newColorI);

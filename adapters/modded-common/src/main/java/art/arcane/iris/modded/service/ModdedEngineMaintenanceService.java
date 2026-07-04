@@ -119,6 +119,9 @@ public final class ModdedEngineMaintenanceService implements ModdedTickableServi
         if (engine == null || engine.isClosed() || engine.getMantle().getMantle().isClosed()) {
             return;
         }
+        if (pregenTargets(engine)) {
+            return;
+        }
         if (flush) {
             try {
                 engine.save();

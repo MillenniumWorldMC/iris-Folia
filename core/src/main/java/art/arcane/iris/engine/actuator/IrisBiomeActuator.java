@@ -22,7 +22,6 @@ import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineAssignedActuator;
 import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisBiomeCustom;
-import art.arcane.iris.platform.bukkit.BukkitBiome;
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.volmlib.util.documentation.BlockCoordinates;
 import art.arcane.iris.util.project.hunk.Hunk;
@@ -33,7 +32,6 @@ import art.arcane.volmlib.util.scheduling.ChronoLatch;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.PlatformBiome;
-import org.bukkit.block.Biome;
 
 public class IrisBiomeActuator extends EngineAssignedActuator<PlatformBiome> {
     private final RNG rng;
@@ -62,11 +60,9 @@ public class IrisBiomeActuator extends EngineAssignedActuator<PlatformBiome> {
                         biome = IrisPlatforms.get().registries().biome(key);
                         matter = BiomeInjectMatter.get(IrisPlatforms.get().biomeWriter().biomeIdFor(key));
                     } else {
-                        Biome v = ib.getSkyBiome(rng, x, 0, z);
-                        PlatformBiome fallback = BukkitBiome.of(v);
-                        PlatformBiome resolved = IrisPlatforms.get().registries().biome(fallback.key());
-                        biome = resolved == null ? fallback : resolved;
-                        matter = BiomeInjectMatter.get(v);
+                        String skyKey = ib.getSkyBiomeKey(rng, x, 0, z);
+                        biome = IrisPlatforms.get().registries().biome(skyKey);
+                        matter = BiomeInjectMatter.get(IrisPlatforms.get().biomeWriter().biomeIdFor(skyKey));
                     }
 
                     if (biome != null) {

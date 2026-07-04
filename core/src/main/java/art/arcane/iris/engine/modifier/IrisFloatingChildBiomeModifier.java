@@ -18,7 +18,6 @@
 
 package art.arcane.iris.engine.modifier;
 
-import art.arcane.iris.platform.bukkit.BukkitBlockResolution;
 
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.IrisComplex;
@@ -46,11 +45,8 @@ import art.arcane.volmlib.util.math.RNG;
 import art.arcane.volmlib.util.matter.MatterBiomeInject;
 import art.arcane.volmlib.util.matter.slices.BiomeInjectMatter;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
-import art.arcane.iris.platform.bukkit.BukkitBlockState;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.PlatformBlockState;
-import org.bukkit.block.Biome;
-import org.bukkit.block.data.BlockData;
 
 import java.util.IdentityHashMap;
 
@@ -261,11 +257,10 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Platf
                 IrisFloatingChildBiomes entry = sample.entry;
                 Integer localFluidHeight = entry.getLocalFluidHeight();
                 if (localFluidHeight != null && localFluidHeight > 0) {
-                    BlockData rawFluid = BukkitBlockResolution.get(entry.getFluidBlock());
-                    if (rawFluid == null) {
-                        rawFluid = BukkitBlockResolution.get("minecraft:water");
+                    PlatformBlockState fluid = B.getStateOrNull(entry.getFluidBlock());
+                    if (fluid == null) {
+                        fluid = B.getState("minecraft:water");
                     }
-                    PlatformBlockState fluid = BukkitBlockState.of(rawFluid);
                     int fluidCap = Math.min(sample.thickness - 1, localFluidHeight);
                     for (int k = 1; k <= fluidCap; k++) {
                         if (sample.solidMask[k]) {
@@ -324,7 +319,7 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Platf
                 int max = Math.max(1, chunkHeight - topY);
                 if (topY + 1 < chunkHeight) {
                     PlatformBlockState above = output.get(xf, topY + 1, zf);
-                    if (above == null || BukkitBlockResolution.isAir((BlockData) above.nativeHandle())) {
+                    if (above == null || above.isAir()) {
                         try {
                             RNG colRng = rng.nextParallelRNG((int) FloatingIslandSample.columnSeed(baseSeed, wx, wz));
                             FloatingDecorator.decorateColumn(getEngine(), target, IrisDecorationPart.NONE, xf, zf, wx, wz, topY, max, output, colRng, NOOP_DECORATION_MISS);
@@ -357,7 +352,7 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Platf
                             fluidTopY = y;
                         }
                     }
-                    if (fluidTopY > 0 && fluidTopY + 1 < chunkHeight && BukkitBlockResolution.isAir(unwrap(output.get(xf, fluidTopY + 1, zf)))) {
+                    if (fluidTopY > 0 && fluidTopY + 1 < chunkHeight && B.isAir(output.get(xf, fluidTopY + 1, zf))) {
                         try {
                             seaSurfaceDecorator.decorate(xf, zf, wx, wx + 1, wx - 1, wz, wz + 1, wz - 1, output, target, fluidTopY, chunkHeight);
                         } catch (Throwable e) {
@@ -397,17 +392,12 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Platf
         }
     }
 
-    private static BlockData unwrap(PlatformBlockState state) {
-        return state == null ? null : (BlockData) state.nativeHandle();
-    }
-
     private MatterBiomeInject createSkyBiomeMatter(IrisBiome target, int wx, int wz) {
         if (target.isCustom()) {
             IrisBiomeCustom custom = target.getCustomBiome(rng, wx, 0, wz);
             return BiomeInjectMatter.get(IrisPlatforms.get().biomeWriter().biomeIdFor(getDimension().getLoadKey() + ":" + custom.getId()));
         }
 
-        Biome v = target.getSkyBiome(rng, wx, 0, wz);
-        return BiomeInjectMatter.get(v);
+        return BiomeInjectMatter.get(IrisPlatforms.get().biomeWriter().biomeIdFor(target.getSkyBiomeKey(rng, wx, 0, wz)));
     }
 }

@@ -29,7 +29,7 @@ import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.collection.KSet;
 import art.arcane.iris.util.common.data.DataProvider;
-import art.arcane.volmlib.util.data.VanillaBiomeMap;
+import art.arcane.volmlib.util.data.VanillaBiomeColors;
 import art.arcane.volmlib.util.inventorygui.RandomColor;
 import art.arcane.volmlib.util.json.JSONObject;
 import art.arcane.volmlib.util.math.RNG;
@@ -448,10 +448,11 @@ public class IrisRegion extends IrisRegistrant implements IRare {
                     int index = rand.nextInt(biomes.size());
                     IrisBiome biome = biomes.get(index);
 
-                    if (biome.getVanillaDerivative() != null) {
-                        RandomColor.Color col = VanillaBiomeMap.getColorType(biome.getVanillaDerivative());
-                        RandomColor.Luminosity lum = VanillaBiomeMap.getColorLuminosity(biome.getVanillaDerivative());
-                        RandomColor.SaturationType sat = VanillaBiomeMap.getColorSaturatiom(biome.getVanillaDerivative());
+                    String vanillaKey = biome.getVanillaDerivativeKey();
+                    RandomColor.Color col = vanillaKey == null ? null : VanillaBiomeColors.getColorType(vanillaKey);
+                    if (col != null) {
+                        RandomColor.Luminosity lum = VanillaBiomeColors.getColorLuminosity(vanillaKey);
+                        RandomColor.SaturationType sat = VanillaBiomeColors.getColorSaturation(vanillaKey);
                         int newColorI = randomColor.randomColor(col, col == RandomColor.Color.MONOCHROME ? RandomColor.SaturationType.MONOCHROME : sat, lum);
                         return new Color(newColorI);
                     }
