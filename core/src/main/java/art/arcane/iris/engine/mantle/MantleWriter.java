@@ -23,7 +23,7 @@ import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.util.project.matter.TileWrapper;
 import com.google.common.collect.ImmutableList;
 import art.arcane.iris.core.IrisSettings;
-import art.arcane.iris.core.tools.IrisToolbelt;
+import art.arcane.iris.core.tools.WorldMaintenance;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.data.cache.Cache;
 import art.arcane.iris.engine.framework.Engine;
@@ -74,7 +74,7 @@ public class MantleWriter implements IObjectPlacer, AutoCloseable {
         this.z = z;
 
         final boolean foliaMaintenance = J.isFolia()
-                && IrisToolbelt.isWorldMaintenanceActive(engineMantle.getEngine().getWorld().realWorld());
+                && WorldMaintenance.isWorldMaintenanceActive(engineMantle.getEngine().getWorld().name());
         final int parallelism = foliaMaintenance ? 1 : (multicore ? Runtime.getRuntime().availableProcessors() / 2 : 4);
         if (foliaMaintenance && IrisSettings.get().getGeneral().isDebug()) {
             IrisLogging.info("MantleWriter using sequential chunk prefetch for maintenance regen at " + x + "," + z + ".");

@@ -22,7 +22,7 @@ import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.gui.PregeneratorJob;
 import art.arcane.iris.core.pregenerator.MantleHeapPressure;
 import art.arcane.iris.core.runtime.GoldenHashEngine;
-import art.arcane.iris.core.tools.IrisToolbelt;
+import art.arcane.iris.core.tools.WorldMaintenance;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.modded.ModdedWorldEngines;
 import art.arcane.iris.spi.IrisLogging;
@@ -166,7 +166,7 @@ public final class ModdedEngineMaintenanceService implements ModdedTickableServi
     }
 
     private boolean shouldSkipForMaintenance(Engine engine) {
-        if (engine.getWorld() == null || !IrisToolbelt.isWorldMaintenanceActive(engine.getWorld().name())) {
+        if (engine.getWorld() == null || !WorldMaintenance.isWorldMaintenanceActive(engine.getWorld().name())) {
             return false;
         }
         return !pregenTargets(engine);

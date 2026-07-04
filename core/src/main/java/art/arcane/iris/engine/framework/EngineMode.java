@@ -18,7 +18,7 @@
 
 package art.arcane.iris.engine.framework;
 
-import art.arcane.iris.core.tools.IrisToolbelt;
+import art.arcane.iris.core.tools.WorldMaintenance;
 import art.arcane.iris.core.gui.PregeneratorJob;
 import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.mantle.EngineMantle;
@@ -92,7 +92,7 @@ public interface EngineMode extends Staged {
     }
 
     private boolean shouldDisableContextCacheForMaintenance() {
-        boolean maintenanceActive = IrisToolbelt.isWorldMaintenanceActive(getEngine().getWorld().realWorld());
+        boolean maintenanceActive = WorldMaintenance.isWorldMaintenanceActive(getEngine().getWorld().name());
         if (!maintenanceActive) {
             return false;
         }

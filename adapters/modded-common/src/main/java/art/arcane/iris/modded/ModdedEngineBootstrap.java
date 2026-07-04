@@ -30,6 +30,7 @@ import art.arcane.iris.engine.object.TileData;
 import art.arcane.iris.modded.api.ModdedCustomContentRegistry;
 import art.arcane.iris.modded.command.ModdedGuiHost;
 import art.arcane.iris.modded.command.ModdedObjectUndo;
+import art.arcane.iris.modded.command.ModdedPregenBossBar;
 import art.arcane.iris.modded.command.ModdedPregenJob;
 import art.arcane.iris.modded.command.ModdedStudioCommands;
 import art.arcane.iris.modded.command.ModdedWandService;
@@ -79,6 +80,7 @@ public final class ModdedEngineBootstrap {
         ModdedStartup.runOnce(server);
         ModdedPrimaryWorldRouter.tick(server);
         SERVICE_MANAGER.tick(server);
+        ModdedPregenBossBar.tick(server);
     }
 
     public static void start(MinecraftServer server) {

@@ -140,25 +140,53 @@ public final class WorldRuntimeControlService {
             skipAmount += 24000L;
         }
 
-        TimeSkipEvent event = new TimeSkipEvent(world, TimeSkipEvent.SkipReason.CUSTOM, skipAmount);
-        PluginManager pluginManager = Bukkit.getPluginManager();
-        if (pluginManager != null) {
-            pluginManager.callEvent(event);
-        }
-        if (event.isCancelled()) {
-            return false;
+        long effectiveSkip = skipAmount;
+        if (TIME_SKIP_EVENT_AVAILABLE) {
+            long fired = fireTimeSkipEvent(world, skipAmount);
+            if (fired == TIME_SKIP_CANCELLED) {
+                return false;
+            }
+            effectiveSkip = fired;
         }
 
         try {
-            boolean written = backend.writeDayTime(world, currentTime.getAsLong() + event.getSkipAmount());
+            boolean written = backend.writeDayTime(world, currentTime.getAsLong() + effectiveSkip);
             if (!written) {
                 return false;
             }
             backend.syncTime(world);
             return true;
         } catch (Throwable e) {
-            IrisLogging.reportError("Runtime time control failed for world \"" + world.getName() + "\".", e);
+            IrisLogging.debug("Runtime time lock skipped for world \"" + world.getName() + "\": " + e.getMessage());
             return false;
+        }
+    }
+
+    private static final long TIME_SKIP_CANCELLED = Long.MIN_VALUE;
+    private static final boolean TIME_SKIP_EVENT_AVAILABLE = probeTimeSkipEvent();
+
+    private static boolean probeTimeSkipEvent() {
+        try {
+            Class.forName("org.bukkit.event.world.TimeSkipEvent$SkipReason");
+            return true;
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    private long fireTimeSkipEvent(World world, long skipAmount) {
+        try {
+            TimeSkipEvent event = new TimeSkipEvent(world, TimeSkipEvent.SkipReason.CUSTOM, skipAmount);
+            PluginManager pluginManager = Bukkit.getPluginManager();
+            if (pluginManager != null) {
+                pluginManager.callEvent(event);
+            }
+            if (event.isCancelled()) {
+                return TIME_SKIP_CANCELLED;
+            }
+            return event.getSkipAmount();
+        } catch (Throwable e) {
+            return skipAmount;
         }
     }
 

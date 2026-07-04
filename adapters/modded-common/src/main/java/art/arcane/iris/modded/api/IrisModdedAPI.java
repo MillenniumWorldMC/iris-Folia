@@ -18,7 +18,7 @@
 
 package art.arcane.iris.modded.api;
 
-import art.arcane.iris.core.tools.IrisToolbelt;
+import art.arcane.iris.core.tools.WorldMaintenance;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.modded.IrisModdedChunkGenerator;
 import art.arcane.iris.modded.command.ModdedPregenJob;
@@ -96,7 +96,7 @@ public final class IrisModdedAPI {
         if (sliceType == null) {
             return;
         }
-        IrisToolbelt.retainMantleDataForSlice(sliceType.getCanonicalName());
+        WorldMaintenance.retainMantleDataForSlice(sliceType.getCanonicalName());
     }
 
     public static void registerProvider(ModdedDataProvider provider) {

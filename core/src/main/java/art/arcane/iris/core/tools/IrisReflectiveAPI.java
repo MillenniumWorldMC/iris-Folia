@@ -24,7 +24,7 @@ public class IrisReflectiveAPI {
     }
 
     public static void retainMantleData(String classname) {
-        IrisToolbelt.retainMantleDataForSlice(classname);
+        WorldMaintenance.retainMantleDataForSlice(classname);
     }
 
     public static void setMantleData(World world, int x, int y, int z, Object data) {

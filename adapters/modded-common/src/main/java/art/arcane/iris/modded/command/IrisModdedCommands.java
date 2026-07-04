@@ -557,6 +557,7 @@ public final class IrisModdedCommands {
             fail(source, "A pregeneration task is already running. Stop it first with /iris pregen stop.");
             return 0;
         }
+        ModdedPregenBossBar.begin(source.getPlayer());
         String guiNote;
         if (!gui) {
             guiNote = "";
@@ -573,6 +574,7 @@ public final class IrisModdedCommands {
 
     private static int pregenStop(CommandSourceStack source) {
         if (ModdedPregenJob.stop()) {
+            ModdedPregenBossBar.clear();
             ok(source, "Stopping pregeneration; finishing up the current region...");
             return 1;
         }

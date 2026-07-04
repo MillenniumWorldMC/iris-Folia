@@ -63,7 +63,7 @@ public final class Tasks {
     });
 
     private static final Task SOFTWARE = Task.of("software", () -> {
-        Set<String> supported = Set.of("canvas", "folia", "purpur", "pufferfish", "paper", "spigot", "bukkit");
+        Set<String> supported = Set.of("canvas", "folia", "purpur", "pufferfish", "leaf", "paper", "spigot", "bukkit");
         String serverName = server().getName().toLowerCase(Locale.ROOT);
         boolean supportedServer = isCanvasServer();
         if (!supportedServer) {
@@ -81,7 +81,7 @@ public final class Tasks {
 
         return withDiagnostics(Mode.WARNING,
                 Diagnostic.Logger.WARN.create("Unsupported Server Software"),
-                Diagnostic.Logger.WARN.create("- Please consider using Canvas, Folia, Paper, or Purpur instead."));
+                Diagnostic.Logger.WARN.create("- Please consider using Canvas, Folia, Leaf, Paper, or Purpur instead."));
     });
 
     private static final Task VERSION = Task.of("version", () -> {

@@ -35,7 +35,9 @@ import art.arcane.volmlib.util.math.RNG;
 import art.arcane.iris.util.project.noise.CNG;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.Accessors;
 import org.bukkit.DyeColor;
 import org.bukkit.Material;
@@ -57,6 +59,8 @@ import java.util.Optional;
 @AllArgsConstructor
 @Desc("Represents a loot entry")
 @Data
+@EqualsAndHashCode(doNotUseGetters = true)
+@ToString(doNotUseGetters = true)
 public class IrisLoot {
     private final transient AtomicCache<CNG> chance = new AtomicCache<>();
     private final transient AtomicCache<DyeColor> dyeColorResolved = new AtomicCache<>();

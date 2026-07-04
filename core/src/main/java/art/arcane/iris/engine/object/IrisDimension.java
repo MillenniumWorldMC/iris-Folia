@@ -43,6 +43,7 @@ import art.arcane.iris.util.common.plugin.VolmitSender;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.Accessors;
 import org.bukkit.World.Environment;
 import org.bukkit.block.Biome;
@@ -56,7 +57,8 @@ import java.util.Map;
 @NoArgsConstructor
 @Desc("Represents a dimension")
 @Data
-@EqualsAndHashCode(callSuper = false)
+@EqualsAndHashCode(callSuper = false, doNotUseGetters = true)
+@ToString(doNotUseGetters = true)
 public class IrisDimension extends IrisRegistrant {
     private final transient AtomicCache<Position2> parallaxSize = new AtomicCache<>();
     private final transient AtomicCache<CNG> rockLayerGenerator = new AtomicCache<>();

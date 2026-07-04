@@ -20,7 +20,7 @@ package art.arcane.iris.engine;
 
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.core.IrisSettings;
-import art.arcane.iris.core.tools.IrisToolbelt;
+import art.arcane.iris.core.tools.WorldMaintenance;
 import art.arcane.iris.engine.EnginePanic;
 import art.arcane.iris.core.nms.container.Pair;
 import art.arcane.iris.engine.data.cache.AtomicCache;
@@ -327,7 +327,7 @@ public class IrisEngineMantle implements EngineMantle {
 
             @Override
             public boolean shouldRetainSlice(Class<?> sliceType) {
-                return IrisToolbelt.isRetainingMantleDataForSlice(sliceType.getCanonicalName());
+                return WorldMaintenance.isRetainingMantleDataForSlice(sliceType.getCanonicalName());
             }
 
             @Override

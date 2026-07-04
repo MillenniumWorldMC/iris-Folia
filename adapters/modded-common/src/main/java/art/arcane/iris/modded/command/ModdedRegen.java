@@ -18,7 +18,7 @@
 
 package art.arcane.iris.modded.command;
 
-import art.arcane.iris.core.tools.IrisToolbelt;
+import art.arcane.iris.core.tools.WorldMaintenance;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.mantle.EngineMantle;
 import art.arcane.iris.modded.IrisModdedChunkGenerator;
@@ -107,7 +107,7 @@ public final class ModdedRegen {
     private void run() {
         long startedAt = M.ms();
         String worldName = engine.getWorld() == null ? null : engine.getWorld().name();
-        IrisToolbelt.beginWorldMaintenance(worldName, "regen");
+        WorldMaintenance.beginWorldMaintenance(worldName, "regen");
         try {
             resetMantleMargin();
             List<int[]> targets = ChunkSpiral.centerOut(centerX, centerZ, radius);
@@ -120,7 +120,7 @@ public final class ModdedRegen {
             LOGGER.error("Iris regen failed", e);
             fail("Regen failed: " + e);
         } finally {
-            IrisToolbelt.endWorldMaintenance(worldName, "regen");
+            WorldMaintenance.endWorldMaintenance(worldName, "regen");
             ACTIVE.set(false);
         }
     }

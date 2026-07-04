@@ -27,7 +27,7 @@ import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.loader.IrisRegistrant;
 import art.arcane.iris.core.nms.container.BlockPos;
 import art.arcane.iris.core.nms.container.Pair;
-import art.arcane.iris.core.tools.IrisToolbelt;
+import art.arcane.iris.core.tools.WorldMaintenance;
 import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.UpperDimensionContext;
 import art.arcane.iris.engine.data.chunk.TerrainChunk;
@@ -673,7 +673,7 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
             return false;
         }
         String worldName = world.name();
-        if (!IrisToolbelt.isWorldMaintenanceActive(worldName)) {
+        if (!WorldMaintenance.isWorldMaintenanceActive(worldName)) {
             return false;
         }
         PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
