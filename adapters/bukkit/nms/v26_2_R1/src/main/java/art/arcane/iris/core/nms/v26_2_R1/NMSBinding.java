@@ -750,7 +750,11 @@ public class NMSBinding implements INMSBinding {
                     chunk.setNoiseBiome(x, y, z, getCustomBiomeRegistry().get(b.getBiomeId()).get());
                     c.getAndIncrement();
                 } else {
-                    chunk.setNoiseBiome(x, y, z, (Holder<net.minecraft.world.level.biome.Biome>) getBiomeBase(e.getWorld(), b.getBiome()));
+                    chunk.setNoiseBiome(x, y, z, getCustomBiomeRegistry()
+                            .get(net.minecraft.resources.Identifier.parse(b.getBiomeKey()))
+                            .orElseGet(() -> getCustomBiomeRegistry()
+                                    .get(net.minecraft.resources.Identifier.parse("minecraft:plains"))
+                                    .orElseThrow()));
                     r.getAndIncrement();
                 }
             }

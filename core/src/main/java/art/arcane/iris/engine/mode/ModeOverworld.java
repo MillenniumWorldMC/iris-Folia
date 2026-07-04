@@ -90,6 +90,7 @@ public class ModeOverworld extends IrisEngineMode implements EngineMode {
         };
 
         registerStage(burst(
+                sBiome,
                 sGenMatter,
                 sTerrain
         ));
