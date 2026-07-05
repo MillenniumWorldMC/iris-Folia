@@ -110,6 +110,11 @@ public final class ModdedForcedDatapack {
     }
 
     private static Path write() throws IOException {
+        try {
+            ModdedStartup.ensureDefaultPack();
+        } catch (Throwable e) {
+            LOGGER.warn("Iris could not ensure the default pack before building the forced datapack", e);
+        }
         Path packDirectory = packDirectory();
         clean(packDirectory);
         Files.createDirectories(packDirectory);
@@ -137,6 +142,9 @@ public final class ModdedForcedDatapack {
             writeWorldPresetTag(packDirectory, presetIds);
         }
         LOGGER.info("Iris forced startup datapack regenerated: {} pack(s), {} world preset(s), {} custom biome(s) at {}", packCount, presetIds.size(), seenBiomes.size(), packDirectory);
+        if (packCount == 0) {
+            LOGGER.warn("Iris installed NO worldgen packs into the forced datapack - custom biomes and their colors will NOT generate. Install a pack (e.g. /iris download overworld) and restart the server before creating an Iris world.");
+        }
         return packDirectory;
     }
 
