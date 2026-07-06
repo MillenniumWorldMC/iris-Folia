@@ -1,5 +1,6 @@
 package com.volmit.iris.core.link.data;
 
+import com.volmit.iris.Iris;
 import com.volmit.iris.core.link.ExternalDataProvider;
 import com.volmit.iris.core.link.Identifier;
 import com.volmit.iris.core.nms.container.BlockProperty;
@@ -77,7 +78,29 @@ public class CraftEngineDataProvider extends ExternalDataProvider {
     @Override
     public @NotNull BlockData getBlockData(@NotNull Identifier blockId, @NotNull KMap<String, String> state) throws MissingResourceException {
         var key = Key.of(blockId.namespace(), blockId.key());
-        if (CraftEngineBlocks.byId(key) == null && CraftEngineFurniture.byId(key) == null)
+        var customBlock = CraftEngineBlocks.byId(key);
+        if (customBlock != null) {
+            ImmutableBlockState blockState = customBlock.defaultState();
+
+            for (var entry : state.entrySet()) {
+                var property = customBlock.getProperty(entry.getKey());
+                if (property == null) {
+                    Iris.warn("Invalid property %s for block %s", entry.getKey(), key);
+                    continue;
+                }
+                var tag = property.optional(entry.getValue());
+                if (tag.isEmpty()) {
+                    Iris.warn("Invalid property %s=%s for block %s", entry.getKey(), entry.getValue(), key);
+                    continue;
+                }
+
+                blockState = ImmutableBlockState.with(blockState, property, tag.get());
+            }
+
+            return CraftEngineBlocks.getBukkitBlockData(blockState);
+        }
+
+        if (CraftEngineFurniture.byId(key) == null)
             throw new MissingResourceException("Failed to find BlockData!", blockId.namespace(), blockId.key());
         return IrisCustomData.of(B.getAir(), ExternalDataSVC.buildState(blockId, state));
     }
@@ -89,23 +112,10 @@ public class CraftEngineDataProvider extends ExternalDataProvider {
         blockId = pair.getA();
 
         var key = Key.of(blockId.namespace(), blockId.key());
-        var customBlock = CraftEngineBlocks.byId(key);
-        if (customBlock != null) {
-            ImmutableBlockState blockState = customBlock.defaultState();
-
-            for (var entry : state.entrySet()) {
-                var property = customBlock.getProperty(entry.getKey());
-                if (property == null) continue;
-                var tag = property.optional(entry.getValue()).orElse(null);
-                if (tag == null) continue;
-                blockState = ImmutableBlockState.with(blockState, property, tag);
-            }
-            CraftEngineBlocks.place(block.getLocation(), blockState, false);
-            return;
-        }
-
         var furniture = CraftEngineFurniture.byId(key);
-        if (furniture == null) return;
+        if (furniture == null)
+            return;
+
         var location = parseYawAndPitch(engine, block, state);
         String variant = state.getOrDefault("variant", furniture.anyVariantName());
         CraftEngineFurniture.place(location, furniture, variant, false);
