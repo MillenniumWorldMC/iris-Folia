@@ -116,6 +116,7 @@ public final class ModdedEngineBootstrap {
         ModdedIrisLog.info("Iris " + moddedLoader.modVersion() + " bootstrapping on Minecraft " + moddedLoader.minecraftVersion() + " (" + loaderDescription + ")");
         selfTest(moddedLoader.getClass().getClassLoader());
         bind();
+        MainWorldService.reconcileEarly();
         chunkGeneratorRegistration.run();
         ModdedIrisLog.info("Iris chunk generator registered as irisworldgen:iris");
         armParityProbe();

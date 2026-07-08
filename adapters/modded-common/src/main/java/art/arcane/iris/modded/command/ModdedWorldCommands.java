@@ -23,6 +23,7 @@ import art.arcane.iris.core.pack.PackValidationRegistry;
 import art.arcane.iris.core.pack.PackValidationResult;
 import art.arcane.iris.engine.object.IrisDimension;
 import art.arcane.iris.modded.IrisModdedChunkGenerator;
+import art.arcane.iris.modded.MainWorldService;
 import art.arcane.iris.modded.ModdedDimensionManager;
 import art.arcane.iris.modded.ModdedEngineBootstrap;
 import art.arcane.iris.modded.ModdedModConfig;
@@ -75,6 +76,7 @@ public final class ModdedWorldCommands {
         root.then(enableTree("enable"));
         root.then(enableTree("create"));
         root.then(replaceOverworldTree());
+        root.then(mainWorldTree());
 
         root.then(disableTree());
         root.then(deleteTree("delete"));
@@ -119,6 +121,20 @@ public final class ModdedWorldCommands {
                                 null))
                         .then(Commands.argument("seed", StringArgumentType.word())
                                 .executes((CommandContext<CommandSourceStack> context) -> replaceOverworld(context.getSource(),
+                                        StringArgumentType.getString(context, "pack"),
+                                        StringArgumentType.getString(context, "seed")))));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> mainWorldTree() {
+        return Commands.literal("mainworld")
+                .then(Commands.literal("off")
+                        .executes((CommandContext<CommandSourceStack> context) -> clearMainWorld(context.getSource())))
+                .then(Commands.argument("pack", StringArgumentType.string()).suggests(IrisModdedCommands.PACK_NAMES)
+                        .executes((CommandContext<CommandSourceStack> context) -> mainWorld(context.getSource(),
+                                StringArgumentType.getString(context, "pack"),
+                                null))
+                        .then(Commands.argument("seed", StringArgumentType.word())
+                                .executes((CommandContext<CommandSourceStack> context) -> mainWorld(context.getSource(),
                                         StringArgumentType.getString(context, "pack"),
                                         StringArgumentType.getString(context, "seed")))));
     }
@@ -220,6 +236,87 @@ public final class ModdedWorldCommands {
         IrisModdedCommands.ok(source, "Iris primary world set to " + dimensionId + " (pack '" + pack + "' dimension '" + packDimension + "' seed " + seed + ").");
         IrisModdedCommands.ok(source, "The vanilla overworld generator cannot be hot-swapped, so this does NOT regenerate the existing overworld.");
         IrisModdedCommands.ok(source, "Instead, " + dimensionId + " is now the configured primary world: players in the vanilla overworld are routed there on join, and it re-injects on every startup.");
+        return 1;
+    }
+
+    private static int clearMainWorld(CommandSourceStack source) {
+        ModdedModConfig.setMainWorld("", 0L);
+        MainWorldService.clearOverride();
+        IrisModdedCommands.ok(source, "Iris main world override cleared. The overworld keeps its current generator; edit server.properties level-type and restart to change it back.");
+        return 1;
+    }
+
+    private static int mainWorld(CommandSourceStack source, String packRaw, String seedRaw) {
+        MinecraftServer server = source.getServer();
+        long seed;
+        if (seedRaw == null || seedRaw.isBlank()) {
+            seed = 0L;
+        } else if (seedRaw.equalsIgnoreCase("random")) {
+            long rolled = ThreadLocalRandom.current().nextLong();
+            seed = rolled == 0L ? 1L : rolled;
+        } else {
+            try {
+                seed = Long.parseLong(seedRaw.trim());
+            } catch (NumberFormatException e) {
+                IrisModdedCommands.fail(source, "Invalid seed '" + seedRaw + "'. Use a number or 'random'.");
+                return 0;
+            }
+        }
+        String[] packRef = parsePackRef(packRaw);
+        String pack = packRef[0];
+        String packDimension = packRef[1];
+        if (!validPackRef(source, pack, packDimension)) {
+            return 0;
+        }
+        File packFolder = new File(ModdedPackCommands.packsRoot(), pack);
+        if (packFolder.isDirectory()) {
+            return applyMainWorld(source, pack, packDimension, packRaw, seed);
+        }
+        IrisModdedCommands.ok(source, "Pack '" + pack + "' is not installed; downloading IrisDimensions/" + pack + "...");
+        Thread thread = new Thread(() -> {
+            boolean installed = ModdedPackInstaller.install(ModdedEngineBootstrap.loader().configDir(), pack, "master",
+                    (String line) -> server.execute(() -> IrisModdedCommands.ok(source, line)));
+            server.execute(() -> {
+                if (!installed || !packFolder.isDirectory()) {
+                    IrisModdedCommands.fail(source, "Pack '" + pack + "' could not be downloaded; check the name or install it with /iris download " + pack + ".");
+                    return;
+                }
+                applyMainWorld(source, pack, packDimension, packRaw, seed);
+            });
+        }, "Iris Main World Pack Download");
+        thread.setDaemon(true);
+        thread.start();
+        return 1;
+    }
+
+    private static int applyMainWorld(CommandSourceStack source, String pack, String packDimension, String packRef, long seed) {
+        try {
+            if (!loadPackDimension(source, pack, packDimension)) {
+                return 0;
+            }
+        } catch (Throwable e) {
+            LOGGER.error("Iris main world pack load failed for {} (dim={})", pack, packDimension, e);
+            IrisModdedCommands.fail(source, "Pack '" + pack + "' is not ready yet (still loading or validating). Try the command again in a moment.");
+            return 0;
+        }
+        if (blockIfPackBroken(source, "the main world", pack)) {
+            return 0;
+        }
+        ModdedModConfig.setMainWorld(packRef, seed);
+        if (!MainWorldService.stage(packRef, seed)) {
+            IrisModdedCommands.fail(source, "Failed to write server.properties; check file permissions and set level-type manually.");
+            return 0;
+        }
+        String preset = MainWorldService.presetIdFor(packRef);
+        IrisModdedCommands.ok(source, "Iris main world set to '" + pack + "' (preset " + preset + ", seed " + (seed == 0L ? "random" : Long.toString(seed)) + ").");
+        IrisModdedCommands.ok(source, "server.properties level-type is now " + preset + ". On the next restart the overworld, nether, and end regenerate as this Iris world.");
+        IrisModdedCommands.ok(source, "Player data (inventories, advancements, stats) is kept; existing terrain in those dimensions is replaced. This applies once.");
+        if (ModdedModConfig.get().mainWorldAutoRestart()) {
+            IrisModdedCommands.ok(source, "mainWorldAutoRestart is enabled - stopping the server now so your restart wrapper brings it back on the new main world.");
+            source.getServer().halt(false);
+        } else {
+            IrisModdedCommands.ok(source, "Restart the server now to generate it. (Set mainWorldAutoRestart=true in modded.json to have Iris stop the server for you.)");
+        }
         return 1;
     }
 

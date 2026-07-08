@@ -36,12 +36,19 @@ public final class ModdedModConfig {
     private final boolean autoDownloadDefaultPack;
     private final String primaryWorld;
     private final boolean routePlayersToPrimaryWorld;
+    private final String mainWorldPack;
+    private final long mainWorldSeed;
+    private final boolean mainWorldAutoRestart;
 
-    private ModdedModConfig(String defaultPack, boolean autoDownloadDefaultPack, String primaryWorld, boolean routePlayersToPrimaryWorld) {
+    private ModdedModConfig(String defaultPack, boolean autoDownloadDefaultPack, String primaryWorld, boolean routePlayersToPrimaryWorld,
+                           String mainWorldPack, long mainWorldSeed, boolean mainWorldAutoRestart) {
         this.defaultPack = defaultPack;
         this.autoDownloadDefaultPack = autoDownloadDefaultPack;
         this.primaryWorld = primaryWorld == null ? "" : primaryWorld.trim();
         this.routePlayersToPrimaryWorld = routePlayersToPrimaryWorld;
+        this.mainWorldPack = mainWorldPack == null ? "" : mainWorldPack.trim();
+        this.mainWorldSeed = mainWorldSeed;
+        this.mainWorldAutoRestart = mainWorldAutoRestart;
     }
 
     public static ModdedModConfig get() {
@@ -61,7 +68,18 @@ public final class ModdedModConfig {
     public static void setPrimaryWorld(String dimensionId) {
         synchronized (LOCK) {
             ModdedModConfig current = get();
-            ModdedModConfig updated = new ModdedModConfig(current.defaultPack, current.autoDownloadDefaultPack, dimensionId, current.routePlayersToPrimaryWorld);
+            ModdedModConfig updated = new ModdedModConfig(current.defaultPack, current.autoDownloadDefaultPack, dimensionId, current.routePlayersToPrimaryWorld,
+                    current.mainWorldPack, current.mainWorldSeed, current.mainWorldAutoRestart);
+            instance = updated;
+            write(configFile(), updated);
+        }
+    }
+
+    public static void setMainWorld(String packRef, long seed) {
+        synchronized (LOCK) {
+            ModdedModConfig current = get();
+            ModdedModConfig updated = new ModdedModConfig(current.defaultPack, current.autoDownloadDefaultPack, current.primaryWorld, current.routePlayersToPrimaryWorld,
+                    packRef == null ? "" : packRef.trim(), seed, current.mainWorldAutoRestart);
             instance = updated;
             write(configFile(), updated);
         }
@@ -83,13 +101,25 @@ public final class ModdedModConfig {
         return routePlayersToPrimaryWorld;
     }
 
+    public String mainWorldPack() {
+        return mainWorldPack;
+    }
+
+    public long mainWorldSeed() {
+        return mainWorldSeed;
+    }
+
+    public boolean mainWorldAutoRestart() {
+        return mainWorldAutoRestart;
+    }
+
     private static Path configFile() {
         return ModdedEngineBootstrap.loader().configDir().resolve("irisworldgen").resolve("modded.json");
     }
 
     private static ModdedModConfig load() {
         Path file = configFile();
-        ModdedModConfig defaults = new ModdedModConfig("overworld", true, "", true);
+        ModdedModConfig defaults = new ModdedModConfig("overworld", true, "", true, "", 0L, false);
         if (!Files.isRegularFile(file)) {
             write(file, defaults);
             return defaults;
@@ -100,7 +130,10 @@ public final class ModdedModConfig {
                     json.optString("defaultPack", defaults.defaultPack),
                     json.optBoolean("autoDownloadDefaultPack", defaults.autoDownloadDefaultPack),
                     json.optString("primaryWorld", defaults.primaryWorld),
-                    json.optBoolean("routePlayersToPrimaryWorld", defaults.routePlayersToPrimaryWorld));
+                    json.optBoolean("routePlayersToPrimaryWorld", defaults.routePlayersToPrimaryWorld),
+                    json.optString("mainWorldPack", defaults.mainWorldPack),
+                    json.optLong("mainWorldSeed", defaults.mainWorldSeed),
+                    json.optBoolean("mainWorldAutoRestart", defaults.mainWorldAutoRestart));
         } catch (RuntimeException | IOException e) {
             LOGGER.error("Iris modded config at {} is invalid; using defaults", file, e);
             return defaults;
@@ -113,6 +146,9 @@ public final class ModdedModConfig {
         json.put("autoDownloadDefaultPack", config.autoDownloadDefaultPack);
         json.put("primaryWorld", config.primaryWorld);
         json.put("routePlayersToPrimaryWorld", config.routePlayersToPrimaryWorld);
+        json.put("mainWorldPack", config.mainWorldPack);
+        json.put("mainWorldSeed", config.mainWorldSeed);
+        json.put("mainWorldAutoRestart", config.mainWorldAutoRestart);
         try {
             Files.createDirectories(file.getParent());
             Files.writeString(file, json.toString(4), StandardCharsets.UTF_8);
