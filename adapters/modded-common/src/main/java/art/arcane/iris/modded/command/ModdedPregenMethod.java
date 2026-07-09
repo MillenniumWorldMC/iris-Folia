@@ -186,6 +186,7 @@ public final class ModdedPregenMethod implements PregeneratorMethod {
                 listener.onChunkFailed(x, z);
                 return;
             }
+            markCompleted();
             listener.onChunkGenerated(x, z);
             cleanupMantleChunk(x, z);
             listener.onChunkCleaned(x, z);
@@ -236,6 +237,7 @@ public final class ModdedPregenMethod implements PregeneratorMethod {
                     return;
                 }
                 onSuccess();
+                markCompleted();
                 listener.onChunkGenerated(x, z);
                 cleanupMantleChunk(x, z);
                 listener.onChunkCleaned(x, z);
@@ -253,10 +255,13 @@ public final class ModdedPregenMethod implements PregeneratorMethod {
 
     private void markFinished() {
         inFlight.decrementAndGet();
-        completed.incrementAndGet();
         synchronized (permitMonitor) {
             permitMonitor.notifyAll();
         }
+    }
+
+    private void markCompleted() {
+        completed.incrementAndGet();
     }
 
     private void onTimeout() {

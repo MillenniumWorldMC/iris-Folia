@@ -35,6 +35,18 @@ public class AsyncOrMedievalPregenMethod implements PregeneratorMethod {
         }
     }
 
+    private AsyncOrMedievalPregenMethod(PregeneratorMethod method) {
+        this.method = method;
+    }
+
+    public static AsyncOrMedievalPregenMethod strictSerial(World world) {
+        if (!PaperLib.isPaper()) {
+            throw new UnsupportedOperationException("Strict serial pregeneration requires Paper or a Paper-compatible server.");
+        }
+
+        return new AsyncOrMedievalPregenMethod(AsyncPregenMethod.strictSerial(world));
+    }
+
     @Override
     public void init() {
         method.init();

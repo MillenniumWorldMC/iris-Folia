@@ -80,8 +80,10 @@ public interface Locator<T> {
         return (e, c) -> {
             AtomicBoolean found = new AtomicBoolean(false);
             try (GenerationSessionLease lease = e.acquireGenerationLease("locator_generate_matter")) {
-                IrisContext.getOr(e).setGenerationSessionId(lease.sessionId());
-                e.generateMatter(c.getX(), c.getZ(), true, new ChunkContext(c.getX() << 4, c.getZ() << 4, e.getComplex(), lease.sessionId(), false, ChunkContext.PrefillPlan.NONE, null));
+                ChunkContext chunkContext = new ChunkContext(c.getX() << 4, c.getZ() << 4, e.getComplex(), lease.sessionId(), false, ChunkContext.PrefillPlan.NONE, null);
+                try (IrisContext.Scope locatorScope = IrisContext.open(e, lease.sessionId(), chunkContext)) {
+                    e.generateMatter(c.getX(), c.getZ(), true, chunkContext);
+                }
             } catch (GenerationSessionException sessionException) {
                 throw new IllegalStateException(sessionException);
             }

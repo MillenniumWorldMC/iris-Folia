@@ -18,8 +18,10 @@
 
 package art.arcane.iris.util.project.matter.slices;
 
+import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.loader.IrisRegistrant;
-import art.arcane.iris.util.project.context.IrisContext;
+import art.arcane.iris.core.loader.ResourceLoader;
+import art.arcane.iris.util.project.matter.IrisMatterContext;
 import art.arcane.volmlib.util.data.palette.Palette;
 import art.arcane.volmlib.util.matter.slices.RawMatter;
 
@@ -44,7 +46,12 @@ public class RegistryMatter<T extends IrisRegistrant> extends RawMatter<T> {
 
     @Override
     public T readNode(DataInputStream din) throws IOException {
-        IrisContext context = IrisContext.get();
-        return (T) context.getData().getLoaders().get(getType()).load(din.readUTF());
+        String key = din.readUTF();
+        IrisData data = IrisMatterContext.require();
+        ResourceLoader<? extends IrisRegistrant> loader = data.getLoaders().get(getType());
+        if (loader == null) {
+            throw new IOException("No Iris registry loader is available for matter type " + getType().getName() + " while reading key " + key + ".");
+        }
+        return (T) loader.load(key);
     }
 }

@@ -31,6 +31,7 @@ file('../../gradle.properties').withInputStream { InputStream stream -> rootProp
 String irisVersion = providers.gradleProperty('irisVersion').getOrElse(rootProperties.getProperty('irisVersion', '4.0.0-26.2'))
 String minecraftVersion = providers.gradleProperty('minecraftVersion').getOrElse(rootProperties.getProperty('minecraftVersion', '26.2'))
 String neoForgeVersion = providers.gradleProperty('neoForgeVersion').getOrElse(rootProperties.getProperty('neoForgeVersion', '26.2.0.6-beta'))
+String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate').getOrElse(rootProperties.getProperty('volmLibCoordinate', 'com.github.VolmitSoftware:VolmLib:cdf7e8bb880199734dacd386a6616bda799fcde1'))
 Closure<String> irisArtifactName = { String platform, String targetVersion ->
     return "Iris v${project.version} [${platform}] ${targetVersion}.jar"
 }
@@ -103,7 +104,7 @@ dependencies {
     List<Object> shared = [
         "art.arcane:core:${irisVersion}".toString(),
         "art.arcane:spi:${irisVersion}".toString(),
-        'com.github.VolmitSoftware:VolmLib:master-SNAPSHOT',
+        volmLibCoordinate,
         libs.paralithic,
         libs.lru,
         libs.kotlin.stdlib,

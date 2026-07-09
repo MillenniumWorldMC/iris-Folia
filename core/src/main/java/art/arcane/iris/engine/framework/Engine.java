@@ -51,7 +51,6 @@ import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.iris.util.project.context.ChunkContext;
-import art.arcane.iris.util.project.context.IrisContext;
 import art.arcane.iris.util.common.data.DataProvider;
 import art.arcane.iris.util.common.data.B;
 import art.arcane.volmlib.util.documentation.BlockCoordinates;
@@ -110,8 +109,6 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
     default boolean isClosing() {
         return isClosed();
     }
-
-    IrisContext getContext();
 
     double getMaxBiomeObjectDensity();
 
@@ -214,7 +211,6 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
         Color ibc = biome.getColor(this, RenderType.BIOME);
         Color rc = irc != null ? irc : Color.GREEN.darker();
         Color bc = ibc != null ? ibc : biome.isAquatic() ? Color.BLUE : Color.YELLOW;
-        Color f = IrisColor.blend(rc, bc, bc, Color.getHSBColor(0, 0, (float) heightFactor));
 
         return IrisColor.blend(rc, bc, bc, Color.getHSBColor(0, 0, (float) heightFactor));
     }

@@ -5,10 +5,14 @@ import art.arcane.volmlib.util.mantle.runtime.Mantle;
 import art.arcane.volmlib.util.math.Position2;
 import org.junit.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class IrisPregeneratorInitTest {
     @Test
@@ -31,6 +35,44 @@ public class IrisPregeneratorInitTest {
             assertEquals(1, method.initCalls.get());
             assertEquals(0, method.saveCalls.get());
         } finally {
+            IrisSettings.settings = previousSettings;
+        }
+    }
+
+    @Test
+    public void completionSummaryWaitsForAsyncCloseDrain() {
+        String output = runCompletionOnClose(false);
+
+        assertTrue(output.contains("Pregen finished: generated=9 total=9 failed=0"));
+    }
+
+    @Test
+    public void completionSummaryIncludesFailureDrainedOnClose() {
+        String output = runCompletionOnClose(true);
+
+        assertTrue(output.contains("Pregen finished: generated=8 total=9 failed=1"));
+    }
+
+    private String runCompletionOnClose(boolean failLast) {
+        IrisSettings previousSettings = IrisSettings.settings;
+        PrintStream previousOut = System.out;
+        IrisSettings.settings = new IrisSettings();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(output, true, StandardCharsets.UTF_8));
+        CompletionOnCloseMethod method = new CompletionOnCloseMethod(failLast);
+        PregenTask task = PregenTask.builder()
+                .center(new Position2(0, 0))
+                .radiusX(1)
+                .radiusZ(1)
+                .build();
+        try {
+            IrisPregenerator pregenerator = new IrisPregenerator(task, method, new NoOpPregenListener());
+
+            pregenerator.start();
+
+            return output.toString(StandardCharsets.UTF_8);
+        } finally {
+            System.setOut(previousOut);
             IrisSettings.settings = previousSettings;
         }
     }
@@ -69,6 +111,60 @@ public class IrisPregeneratorInitTest {
 
         @Override
         public void generateChunk(int x, int z, PregenListener listener) {
+        }
+
+        @Override
+        public Mantle getMantle() {
+            return null;
+        }
+    }
+
+    private static final class CompletionOnCloseMethod implements PregeneratorMethod {
+        private final boolean failLast;
+        private int pending;
+        private PregenListener listener;
+
+        private CompletionOnCloseMethod(boolean failLast) {
+            this.failLast = failLast;
+        }
+
+        @Override
+        public void init() {
+        }
+
+        @Override
+        public void close() {
+            for (int index = 0; index < pending; index++) {
+                if (failLast && index == pending - 1) {
+                    listener.onChunkFailed(0, 0);
+                } else {
+                    listener.onChunkGenerated(0, 0);
+                }
+            }
+        }
+
+        @Override
+        public void save() {
+        }
+
+        @Override
+        public boolean supportsRegions(int x, int z, PregenListener listener) {
+            return false;
+        }
+
+        @Override
+        public String getMethod(int x, int z) {
+            return "test";
+        }
+
+        @Override
+        public void generateRegion(int x, int z, PregenListener listener) {
+        }
+
+        @Override
+        public void generateChunk(int x, int z, PregenListener listener) {
+            pending++;
+            this.listener = listener;
         }
 
         @Override

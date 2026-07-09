@@ -204,27 +204,38 @@ public class IrisPregenerator {
         ticker.start();
         checkRegions();
         PrecisionStopwatch p = PrecisionStopwatch.start();
+        boolean completed = false;
         try {
             int[] regionBounds = task.regionBounds();
             generator.onRegionBounds(regionBounds[0], regionBounds[1], regionBounds[2], regionBounds[3]);
             task.iterateRegions((x, z) -> visitRegion(x, z, true));
             task.iterateRegions((x, z) -> visitRegion(x, z, false));
-            long failedCount = failed.get();
-            if (failedCount > 0) {
-                IrisLogging.warn("Pregen finished with " + Form.f(failedCount) + " failed chunk(s); failures are not cached, rerun to fill them");
-            }
-            IrisLogging.info("Pregen took " + Form.duration((long) p.getMilliseconds()));
+            completed = true;
         } catch (Throwable e) {
             IrisLogging.reportError(e);
             IrisLogging.error("Pregen aborted after " + Form.duration((long) p.getMilliseconds()) + " due to " + e.getClass().getSimpleName() + ": " + e.getMessage());
         } finally {
             shutdown();
         }
+        if (completed) {
+            logSuccessfulCompletion(p);
+        }
         if (benchmarking == null) {
             IrisLogging.info(C.IRIS + "Pregen stopped.");
         } else {
             benchmarking.finishedBenchmark(chunksPerSecondHistory);
         }
+    }
+
+    private void logSuccessfulCompletion(PrecisionStopwatch stopwatch) {
+        long failedCount = failed.get();
+        if (failedCount > 0) {
+            IrisLogging.warn("Pregen finished with " + Form.f(failedCount) + " failed chunk(s); failures are not cached, rerun to fill them");
+        }
+        IrisLogging.info("Pregen finished: generated=" + Form.f(generated.get())
+                + " total=" + Form.f(totalChunks.get())
+                + " failed=" + Form.f(failedCount)
+                + " duration=" + Form.duration((long) stopwatch.getMilliseconds()));
     }
 
     private void checkRegions() {

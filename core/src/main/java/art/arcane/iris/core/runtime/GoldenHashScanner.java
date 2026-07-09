@@ -53,7 +53,7 @@ public final class GoldenHashScanner {
                 GoldenHashEngine.Mode.AUTO,
                 resetMantle,
                 deep,
-                "null");
+                GoldenHashEngine.FALLBACK_BIOME_KEY);
         this.hashEngine = new GoldenHashEngine(engine, request, IrisPlatforms.get().dataFolder("golden"), this::snapshot, feedback(), progress());
     }
 

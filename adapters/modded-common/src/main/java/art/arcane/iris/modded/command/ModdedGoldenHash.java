@@ -74,7 +74,7 @@ public final class ModdedGoldenHash {
                 engineMode,
                 true,
                 false,
-                "minecraft:plains");
+                GoldenHashEngine.FALLBACK_BIOME_KEY);
         this.hashEngine = new GoldenHashEngine(engine, request, goldenDir, this::snapshot, feedback(), progress());
     }
 

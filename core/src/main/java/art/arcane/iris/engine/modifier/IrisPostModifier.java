@@ -30,8 +30,6 @@ import art.arcane.volmlib.util.math.RNG;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
 import art.arcane.iris.spi.PlatformBlockState;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 public class IrisPostModifier extends EngineAssignedModifier<PlatformBlockState> {
     private static final class States {
         private static final PlatformBlockState AIR = B.getState("AIR");
@@ -48,14 +46,12 @@ public class IrisPostModifier extends EngineAssignedModifier<PlatformBlockState>
     @Override
     public void onModify(int x, int z, Hunk<PlatformBlockState> output, boolean multicore, ChunkContext context) {
         PrecisionStopwatch p = PrecisionStopwatch.start();
-        AtomicInteger i = new AtomicInteger();
-        AtomicInteger j = new AtomicInteger();
         Hunk<PlatformBlockState> sync = output.synchronize();
-        for (i.set(0); i.get() < output.getWidth(); i.getAndIncrement()) {
-            for (j.set(0); j.get() < output.getDepth(); j.getAndIncrement()) {
-                int ii = i.get();
-                int jj = j.get();
-                post(ii, jj, sync, ii + x, jj + z, context);
+        int width = output.getWidth();
+        int depth = output.getDepth();
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < depth; j++) {
+                post(i, j, sync, i + x, j + z, context);
             }
         }
 

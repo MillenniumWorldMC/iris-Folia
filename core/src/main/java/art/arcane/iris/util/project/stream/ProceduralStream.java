@@ -142,6 +142,10 @@ public interface ProceduralStream<T> extends ProceduralLayer, Interpolated<T> {
         return new ContextInjectingStream<>(this, contextAccessor);
     }
 
+    default ProceduralStream<T> contextInjecting(Engine engine, Function3<ChunkContext, Integer, Integer, T> contextAccessor) {
+        return new ContextInjectingStream<>(this, engine, contextAccessor);
+    }
+
     default ProceduralStream<T> add(ProceduralStream<Double> a) {
         return add2D((x, z) -> a.get(x, z));
     }

@@ -62,6 +62,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
@@ -368,8 +369,8 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
                 for (int blockY = y; blockY < sectionEnd; blockY++) {
                     int bufferY = blockY - dimMinY;
                     int localY = blockY & 15;
-                    for (int x = 0; x < 16; x++) {
-                        for (int z = 0; z < 16; z++) {
+                    for (int z = 0; z < 16; z++) {
+                        for (int x = 0; x < 16; x++) {
                             if (blocks.isAir(x, bufferY, z)) {
                                 continue;
                             }
@@ -445,7 +446,7 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
     @Override
     public int getSeaLevel() {
         Engine current = engineOrNull();
-        return current == null ? 63 : current.getDimension().getFluidHeight();
+        return current == null ? 63 : current.getMinHeight() + current.getDimension().getFluidHeight();
     }
 
     @Override
@@ -471,25 +472,18 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
         Engine current = engineOrNull();
         BlockState airState = Blocks.AIR.defaultBlockState();
         if (current == null) {
-            for (int i = 0; i < states.length; i++) {
-                states[i] = airState;
-            }
+            Arrays.fill(states, airState);
             return new NoiseColumn(minY, states);
         }
         int surface = current.getMinHeight() + current.getHeight(x, z, true);
-        int fluid = current.getDimension().getFluidHeight();
+        int fluid = current.getMinHeight() + current.getDimension().getFluidHeight();
         BlockState stone = Blocks.STONE.defaultBlockState();
         BlockState water = Blocks.WATER.defaultBlockState();
-        for (int i = 0; i < states.length; i++) {
-            int y = minY + i;
-            if (y <= surface) {
-                states[i] = stone;
-            } else if (y <= fluid) {
-                states[i] = water;
-            } else {
-                states[i] = airState;
-            }
-        }
+        int solidEnd = Math.max(0, Math.min(states.length, surface - minY + 1));
+        int fluidEnd = Math.max(solidEnd, Math.max(0, Math.min(states.length, fluid - minY + 1)));
+        Arrays.fill(states, 0, solidEnd, stone);
+        Arrays.fill(states, solidEnd, fluidEnd, water);
+        Arrays.fill(states, fluidEnd, states.length, airState);
         return new NoiseColumn(minY, states);
     }
 

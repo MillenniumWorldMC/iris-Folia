@@ -53,7 +53,7 @@ public class MatterObjectResourceLoader extends ResourceLoader<IrisMatterObject>
     protected IrisMatterObject loadFile(File j, String name) {
         try {
             PrecisionStopwatch p = PrecisionStopwatch.start();
-            IrisMatterObject t = IrisMatterObject.from(j);
+            IrisMatterObject t = IrisMatterObject.from(j, manager);
             t.setLoadKey(name);
             t.setLoader(manager);
             t.setLoadFile(j);

@@ -20,6 +20,7 @@ package art.arcane.iris.engine;
 
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.core.IrisSettings;
+import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.tools.WorldMaintenance;
 import art.arcane.iris.engine.EnginePanic;
 import art.arcane.iris.core.nms.container.Pair;
@@ -34,6 +35,7 @@ import art.arcane.iris.engine.mantle.components.MantleObjectComponent;
 import art.arcane.iris.engine.mantle.components.IrisStructureComponent;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.PlatformBlockState;
+import art.arcane.iris.util.project.matter.IrisMatterContext;
 import art.arcane.iris.util.project.matter.IrisMatterSupport;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
@@ -182,7 +184,7 @@ public class IrisEngineMantle implements EngineMantle {
         IrisMatterSupport.ensureRegistered();
         File dataFolder = new File(engine.getWorld().worldFolder(), "mantle");
         int worldHeight = engine.getTarget().getHeight();
-        MantleDataAdapter<Matter> adapter = createRuntimeDataAdapter();
+        MantleDataAdapter<Matter> adapter = createRuntimeDataAdapter(engine.getData());
         MantleHooks hooks = createRuntimeHooks();
         art.arcane.volmlib.util.mantle.Mantle.RegionIO<TectonicPlate<Matter>> regionIO =
                 createRegionIO(dataFolder, worldHeight, adapter, hooks);
@@ -198,15 +200,15 @@ public class IrisEngineMantle implements EngineMantle {
         );
     }
 
-    public static MantleDataAdapter<Matter> createRuntimeDataAdapter() {
-        return createDataAdapter();
+    public static MantleDataAdapter<Matter> createRuntimeDataAdapter(IrisData data) {
+        return createDataAdapter(data);
     }
 
     public static MantleHooks createRuntimeHooks() {
         return createHooks();
     }
 
-    private static MantleDataAdapter<Matter> createDataAdapter() {
+    private static MantleDataAdapter<Matter> createDataAdapter(IrisData data) {
         return new MantleDataAdapter<>() {
             @Override
             public Matter createSection() {
@@ -215,7 +217,9 @@ public class IrisEngineMantle implements EngineMantle {
 
             @Override
             public Matter readSection(art.arcane.volmlib.util.io.CountingDataInputStream din) throws IOException {
-                return Matter.readDin(din);
+                try (IrisMatterContext.Scope scope = IrisMatterContext.open(data)) {
+                    return Matter.readDin(din);
+                }
             }
 
             @Override

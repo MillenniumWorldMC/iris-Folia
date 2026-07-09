@@ -264,6 +264,10 @@ public class IrisToolbelt {
         PregenPerformanceProfile.apply(engine);
     }
 
+    public static boolean supportsStrictSerialPregeneration() {
+        return PaperLib.isPaper();
+    }
+
     /**
      * Start a pregenerator task. If the supplied generator is headless, headless mode is used,
      * otherwise Hybrid mode is used.
@@ -273,8 +277,16 @@ public class IrisToolbelt {
      * @return the pregenerator job (already started)
      */
     public static PregeneratorJob pregenerate(PregenTask task, PlatformChunkGenerator gen) {
-        return pregenerate(task, new HybridPregenMethod(gen.getEngine().getWorld().realWorld(),
-                IrisSettings.getThreadCount(IrisSettings.get().getConcurrency().getParallelism())), gen.getEngine());
+        World world = gen.getEngine().getWorld().realWorld();
+        int threads = IrisSettings.getThreadCount(IrisSettings.get().getConcurrency().getParallelism());
+        PregeneratorMethod method = new HybridPregenMethod(world, threads);
+        return pregenerate(task, method, gen.getEngine());
+    }
+
+    public static PregeneratorJob pregenerateSerial(PregenTask task, PlatformChunkGenerator gen) {
+        World world = gen.getEngine().getWorld().realWorld();
+        PregeneratorMethod method = HybridPregenMethod.strictSerial(world);
+        return pregenerate(task, method, gen.getEngine());
     }
 
     /**
@@ -290,7 +302,18 @@ public class IrisToolbelt {
             return pregenerate(task, access(world));
         }
 
-        return pregenerate(task, new HybridPregenMethod(world, IrisSettings.getThreadCount(IrisSettings.get().getConcurrency().getParallelism())), null);
+        int threads = IrisSettings.getThreadCount(IrisSettings.get().getConcurrency().getParallelism());
+        PregeneratorMethod method = new HybridPregenMethod(world, threads);
+        return pregenerate(task, method, null);
+    }
+
+    public static PregeneratorJob pregenerateSerial(PregenTask task, World world) {
+        if (isIrisWorld(world)) {
+            return pregenerateSerial(task, access(world));
+        }
+
+        PregeneratorMethod method = HybridPregenMethod.strictSerial(world);
+        return pregenerate(task, method, null);
     }
 
     /**

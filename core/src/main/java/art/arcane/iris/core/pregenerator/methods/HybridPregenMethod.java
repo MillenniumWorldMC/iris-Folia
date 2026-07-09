@@ -28,8 +28,16 @@ public class HybridPregenMethod implements PregeneratorMethod {
     private final World world;
 
     public HybridPregenMethod(World world, int threads) {
+        this(world, new AsyncOrMedievalPregenMethod(world, threads));
+    }
+
+    private HybridPregenMethod(World world, PregeneratorMethod inWorld) {
         this.world = world;
-        inWorld = new AsyncOrMedievalPregenMethod(world, threads);
+        this.inWorld = inWorld;
+    }
+
+    public static HybridPregenMethod strictSerial(World world) {
+        return new HybridPregenMethod(world, AsyncOrMedievalPregenMethod.strictSerial(world));
     }
 
     @Override

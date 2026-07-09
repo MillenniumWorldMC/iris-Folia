@@ -77,6 +77,9 @@ public final class ModdedProtocolHandler {
         transport = serverTransport;
         protocolServer = protocol;
         IrisServices.register(IrisProtocolServer.class, protocol);
+        if (server.getPlayerList() == null) {
+            return;
+        }
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             sessionRegistry.register(new IrisSession(player.getUUID().toString(), serverTransport));
         }

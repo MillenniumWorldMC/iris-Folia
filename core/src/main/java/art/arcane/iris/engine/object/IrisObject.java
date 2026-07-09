@@ -29,7 +29,6 @@ import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
-import art.arcane.iris.util.project.context.IrisContext;
 import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.common.data.VectorMap;
 import art.arcane.volmlib.util.format.Form;
@@ -676,7 +675,7 @@ public class IrisObject extends IrisRegistrant {
     }
 
     public int place(int x, int yv, int z, IObjectPlacer oplacer, IrisObjectPlacement config, RNG rng, BiConsumer<BlockPosition, PlatformBlockState> listener, CarveResult c, IrisData rdata) {
-        IObjectPlacer placer = (config.getHeightmap() != null) ? new HeightmapObjectPlacer(oplacer.getEngine() == null ? IrisContext.get().getEngine() : oplacer.getEngine(), rng, x, yv, z, config, oplacer) : oplacer;
+        IObjectPlacer placer = config.getHeightmap() != null ? new HeightmapObjectPlacer(rng, x, yv, z, config, oplacer) : oplacer;
 
         if (rdata != null) {
             // Slope condition

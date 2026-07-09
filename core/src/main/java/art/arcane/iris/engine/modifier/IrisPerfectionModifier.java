@@ -33,7 +33,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class IrisPerfectionModifier extends EngineAssignedModifier<PlatformBlockState> {
     private static final class States {
@@ -88,17 +87,14 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<PlatformBlock
             hideOres(output, multicore);
         }
         AtomicBoolean changed = new AtomicBoolean(true);
-        int passes = 0;
-        AtomicInteger changes = new AtomicInteger();
-        List<Integer> surfaces = new ArrayList<>();
-        List<Integer> ceilings = new ArrayList<>();
         BurstExecutor burst = burst().burst(multicore);
         while (changed.get()) {
-            passes++;
             changed.set(false);
             for (int i = 0; i < 16; i++) {
                 int finalI = i;
                 burst.queue(() -> {
+                    List<Integer> surfaces = new ArrayList<>();
+                    List<Integer> ceilings = new ArrayList<>();
                     for (int j = 0; j < 16; j++) {
                         surfaces.clear();
                         ceilings.clear();
@@ -148,11 +144,9 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<PlatformBlock
 
                                 if (remove) {
                                     changed.set(true);
-                                    changes.getAndIncrement();
                                     output.set(finalI, k, j, States.AIR);
 
                                     if (remove2) {
-                                        changes.getAndIncrement();
                                         output.set(finalI, k - 1, j, States.AIR);
                                     }
                                 }
@@ -161,6 +155,7 @@ public class IrisPerfectionModifier extends EngineAssignedModifier<PlatformBlock
                     }
                 });
             }
+            burst.complete();
         }
 
         getEngine().getMetrics().getPerfection().put(p.getMilliseconds());

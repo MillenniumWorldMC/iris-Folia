@@ -35,4 +35,11 @@ public class AsyncPregenMethodConcurrencyCapTest {
         assertEquals(32, AsyncPregenMethod.resolveFoliaConcurrencyWorkerThreads(4, 16, 32));
         assertEquals(16, AsyncPregenMethod.resolveFoliaConcurrencyWorkerThreads(-1, 16, 12));
     }
+
+    @Test
+    public void strictSerialOverridesRecommendedConcurrencyCap() {
+        assertEquals(1, AsyncPregenMethod.selectConcurrencyCap(128, true));
+        assertEquals(128, AsyncPregenMethod.selectConcurrencyCap(128, false));
+        assertEquals(1, AsyncPregenMethod.selectConcurrencyCap(0, false));
+    }
 }

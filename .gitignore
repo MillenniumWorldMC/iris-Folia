@@ -24,3 +24,5 @@ adapters/*/run/
 .codegraph/
 
 plans/
+
+docs/

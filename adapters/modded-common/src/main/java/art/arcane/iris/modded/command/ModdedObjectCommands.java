@@ -386,7 +386,7 @@ public final class ModdedObjectCommands {
 
         IrisObjectPlacement placement = new IrisObjectPlacement();
         placement.setRotation(IrisObjectRotation.of(0, rotation, 0));
-        ModdedObjectPlacer placer = new ModdedObjectPlacer(level);
+        ModdedObjectPlacer placer = new ModdedObjectPlacer(level, engine);
         try {
             object.place(target.getX(), target.getY() + object.getCenter().getY(), target.getZ(), placer, placement, new RNG(), null);
         } catch (Throwable e) {

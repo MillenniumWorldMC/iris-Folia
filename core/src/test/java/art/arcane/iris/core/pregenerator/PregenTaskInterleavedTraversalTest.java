@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class PregenTaskInterleavedTraversalTest {
     @Test
@@ -36,6 +37,35 @@ public class PregenTaskInterleavedTraversalTest {
         assertEquals(baseline.size(), firstInterleaved.size());
         assertEquals(firstInterleaved, secondInterleaved);
         assertEquals(asSet(baseline), asSet(firstInterleaved));
+    }
+
+    @Test
+    public void blockRadius352CoversExactly2025Chunks() {
+        PregenTask task = PregenTask.builder()
+                .center(new Position2(0, 0))
+                .radiusX(352)
+                .radiusZ(352)
+                .build();
+        KList<Long> chunks = new KList<>();
+
+        task.iterateAllChunks((x, z) -> chunks.add(asKey(x, z)));
+
+        assertEquals(2025, chunks.size());
+        assertEquals(2025, asSet(chunks).size());
+    }
+
+    @Test
+    public void nonpositiveRadiusIsRejected() {
+        assertThrows(IllegalArgumentException.class, () -> PregenTask.builder()
+                .center(new Position2(0, 0))
+                .radiusX(0)
+                .radiusZ(352)
+                .build());
+        assertThrows(IllegalArgumentException.class, () -> PregenTask.builder()
+                .center(new Position2(0, 0))
+                .radiusX(352)
+                .radiusZ(-1)
+                .build());
     }
 
     private Set<Long> asSet(KList<Long> values) {

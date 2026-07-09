@@ -10,14 +10,13 @@ application {
 }
 
 String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')
-    .orElse('com.github.VolmitSoftware:VolmLib:master-SNAPSHOT')
+    .orElse('com.github.VolmitSoftware:VolmLib:cdf7e8bb880199734dacd386a6616bda799fcde1')
     .get()
 
 dependencies {
     implementation(project(':core'))
     compileOnly(libs.spigot)
     compileOnly(volmLibCoordinate) {
-        changing = true
         transitive = false
     }
     runtimeOnly(libs.paralithic)

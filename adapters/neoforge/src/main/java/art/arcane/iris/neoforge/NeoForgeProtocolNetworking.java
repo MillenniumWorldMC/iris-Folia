@@ -55,14 +55,14 @@ public final class NeoForgeProtocolNetworking {
     private static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar("1").optional();
         if (FMLEnvironment.getDist() == Dist.CLIENT) {
-            IrisNeoForgeClient.registerClientbound(registrar);
+            IrisNeoForgeClient.registerBidirectional(registrar);
         } else {
-            registrar.playToClient(ModdedIrisPayload.TYPE, ModdedIrisPayload.STREAM_CODEC);
+            registrar.playBidirectional(ModdedIrisPayload.TYPE, ModdedIrisPayload.STREAM_CODEC,
+                    NeoForgeProtocolNetworking::onInbound);
         }
-        registrar.playToServer(ModdedIrisPayload.TYPE, ModdedIrisPayload.STREAM_CODEC, NeoForgeProtocolNetworking::onInbound);
     }
 
-    private static void onInbound(ModdedIrisPayload payload, IPayloadContext context) {
+    static void onInbound(ModdedIrisPayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player) {
             ModdedProtocolHandler.onInbound(player, payload.data());
         }

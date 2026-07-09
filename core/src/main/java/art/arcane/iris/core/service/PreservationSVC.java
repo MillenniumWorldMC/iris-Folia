@@ -22,7 +22,6 @@ import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.framework.MeteredCache;
 import art.arcane.iris.engine.framework.PreservationRegistry;
-import art.arcane.iris.util.project.context.IrisContext;
 import art.arcane.volmlib.util.data.KCache;
 import art.arcane.volmlib.util.format.Form;
 import art.arcane.iris.util.common.plugin.IrisService;
@@ -52,7 +51,7 @@ public class PreservationSVC implements IrisService, PreservationRegistry {
     }
 
     public void printCaches() {
-        var c = getCaches();
+        List<MeteredCache> c = getCaches();
         long s = 0;
         long m = 0;
         double p = 0;
@@ -68,7 +67,6 @@ public class PreservationSVC implements IrisService, PreservationRegistry {
     }
 
     public void dereference() {
-        IrisContext.dereference();
         IrisData.dereference();
         threads.removeIf((i) -> !i.isAlive());
         services.removeIf(ExecutorService::isShutdown);
@@ -122,7 +120,7 @@ public class PreservationSVC implements IrisService, PreservationRegistry {
 
     public void updateCaches() {
         caches.removeIf(ref -> {
-            var c = ref.get();
+            MeteredCache c = ref.get();
             return c == null || c.isClosed();
         });
     }

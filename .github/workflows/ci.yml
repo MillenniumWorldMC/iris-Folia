@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Verify (core:check + spi:build)
+    name: Verify (core, plugin, spi, probes)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -25,8 +25,8 @@ jobs:
           java-version: '25'
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-      - name: Run core checks and build spi
-        run: ./gradlew :core:check :spi:build :probe:deserializationProbe --console=plain --stacktrace
+      - name: Run verification gates
+        run: ./gradlew :core:check :adapters:bukkit:plugin:test :spi:build :probe:deserializationProbe -PuseLocalVolmLib=false --console=plain --stacktrace
 
   build-artifacts:
     name: Build ${{ matrix.platform }}
@@ -55,7 +55,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
       - name: Build ${{ matrix.platform }} artifact
-        run: ./gradlew ${{ matrix.task }} --console=plain --stacktrace
+        run: ./gradlew ${{ matrix.task }} -PuseLocalVolmLib=false --console=plain --stacktrace
       - name: Upload ${{ matrix.platform }} jar
         uses: actions/upload-artifact@v4
         with:
@@ -67,7 +67,7 @@ jobs:
   release-bundle:
     name: Release bundle (buildAll)
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: verify
+    needs: [verify, build-artifacts]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -80,7 +80,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
       - name: Build all platforms
-        run: ./gradlew buildAll --console=plain --stacktrace
+        run: ./gradlew buildAll --no-parallel -PuseLocalVolmLib=false --console=plain --stacktrace
       - name: Upload release bundle
         uses: actions/upload-artifact@v4
         with:

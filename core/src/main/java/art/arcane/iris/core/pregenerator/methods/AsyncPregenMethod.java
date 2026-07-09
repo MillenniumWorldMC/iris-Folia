@@ -103,6 +103,10 @@ public class AsyncPregenMethod implements PregeneratorMethod {
     private final PregenMantleBackpressure backpressure;
 
     public AsyncPregenMethod(World world, int unusedThreads) {
+        this(world, false);
+    }
+
+    private AsyncPregenMethod(World world, boolean strictSerial) {
         if (!PaperLib.isPaper()) {
             throw new UnsupportedOperationException("Cannot use PaperAsync on non paper!");
         }
@@ -138,7 +142,7 @@ public class AsyncPregenMethod implements PregeneratorMethod {
         int configuredThreads = foliaRuntime
                 ? computeFoliaRecommendedCap(workerThreadsForCap)
                 : computePaperLikeRecommendedCap(workerThreadsForCap);
-        this.threads = Math.max(1, configuredThreads);
+        this.threads = selectConcurrencyCap(configuredThreads, strictSerial);
         this.workerPoolThreads = detectedWorkerPoolThreads;
         this.runtimeCpuThreads = detectedCpuThreads;
         this.effectiveWorkerThreads = workerThreadsForCap;
@@ -166,6 +170,10 @@ public class AsyncPregenMethod implements PregeneratorMethod {
                 pregen.getMantleBackpressureTimeoutMs(),
                 this::lowerAdaptiveInFlightLimit,
                 this::metricsSnapshot);
+    }
+
+    public static AsyncPregenMethod strictSerial(World world) {
+        return new AsyncPregenMethod(world, true);
     }
 
     private IrisPaperLikeBackendMode resolvePaperLikeBackendMode(IrisSettings.IrisSettingsPregen pregen) {
@@ -538,6 +546,10 @@ public class AsyncPregenMethod implements PregeneratorMethod {
         }
 
         return recommendedCap;
+    }
+
+    static int selectConcurrencyCap(int recommendedCap, boolean strictSerial) {
+        return strictSerial ? 1 : Math.max(1, recommendedCap);
     }
 
     static int resolvePaperLikeConcurrencyWorkerThreads(int detectedWorkerPoolThreads, int detectedCpuThreads, int configuredWorldGenThreads) {

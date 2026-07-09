@@ -35,6 +35,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,14 +46,16 @@ final class ModdedObjectPlacer implements IObjectPlacer {
     private static final Logger LOGGER = LoggerFactory.getLogger("Iris");
 
     private final ServerLevel level;
+    private final Engine engine;
     private final Map<BlockPos, BlockState> undo = new HashMap<>();
     private int writes = 0;
     private int nonAirWrites = 0;
     private int skippedTiles = 0;
     private int restoredTiles = 0;
 
-    ModdedObjectPlacer(ServerLevel level) {
+    ModdedObjectPlacer(ServerLevel level, @Nullable Engine engine) {
         this.level = level;
+        this.engine = engine;
     }
 
     Map<BlockPos, BlockState> undoSnapshot() {
@@ -183,6 +186,6 @@ final class ModdedObjectPlacer implements IObjectPlacer {
 
     @Override
     public Engine getEngine() {
-        return null;
+        return engine;
     }
 }

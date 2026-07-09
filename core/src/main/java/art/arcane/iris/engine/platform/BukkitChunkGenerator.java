@@ -381,12 +381,20 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
 
     public void withExclusiveControl(Runnable r) {
         J.a(() -> {
+            boolean acquired = false;
             try {
                 loadLock.acquire(LOAD_LOCKS);
+                acquired = true;
                 r.run();
-                loadLock.release(LOAD_LOCKS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                IrisLogging.reportError(e);
             } catch (Throwable e) {
                 IrisLogging.reportError(e);
+            } finally {
+                if (acquired) {
+                    loadLock.release(LOAD_LOCKS);
+                }
             }
         });
     }
@@ -394,14 +402,21 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
     public CompletableFuture<Void> withExclusiveControlFuture(Runnable r) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         J.a(() -> {
+            boolean acquired = false;
             try {
                 loadLock.acquire(LOAD_LOCKS);
+                acquired = true;
                 r.run();
                 future.complete(null);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                future.completeExceptionally(e);
             } catch (Throwable e) {
                 future.completeExceptionally(e);
             } finally {
-                loadLock.release(LOAD_LOCKS);
+                if (acquired) {
+                    loadLock.release(LOAD_LOCKS);
+                }
             }
         });
         return future;

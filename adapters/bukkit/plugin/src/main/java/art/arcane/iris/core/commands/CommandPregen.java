@@ -42,21 +42,36 @@ public class CommandPregen implements DirectorExecutor {
             @Param(aliases = "middle", description = "The center location of the pregen. Use \"me\" for your current location", defaultValue = "0,0")
             Vector center,
             @Param(description = "Open the Iris pregen gui", defaultValue = "true")
-            boolean gui
+            boolean gui,
+            @Param(name = "serial", description = "Generate only one chunk at a time", defaultValue = "false")
+            boolean serial
             ) {
+        if (radius <= 0) {
+            sender().sendMessage(C.RED + "Pregen radius must be greater than zero blocks.");
+            return;
+        }
+        if (serial && !IrisToolbelt.supportsStrictSerialPregeneration()) {
+            sender().sendMessage(C.RED + "Strict serial pregeneration requires Paper or a Paper-compatible server.");
+            return;
+        }
+
         try {
             if (sender().isPlayer() && access() == null) {
                 sender().sendMessage(C.RED + "The engine access for this world is null!");
                 sender().sendMessage(C.RED + "Please make sure the world is loaded & the engine is initialized. Generate a new chunk, for example.");
             }
-            radius = Math.max(radius, 1024);
-            IrisToolbelt.pregenerate(PregenTask
+            PregenTask task = PregenTask
                     .builder()
                     .center(new Position2(center.getBlockX(), center.getBlockZ()))
                     .gui(gui)
                     .radiusX(radius)
                     .radiusZ(radius)
-                    .build(), world);
+                    .build();
+            if (serial) {
+                IrisToolbelt.pregenerateSerial(task, world);
+            } else {
+                IrisToolbelt.pregenerate(task, world);
+            }
             String msg = C.GREEN + "Pregen started in " + C.GOLD + world.getName() + C.GREEN + " of " + C.GOLD + (radius * 2) + C.GREEN + " by " + C.GOLD + (radius * 2) + C.GREEN + " blocks from " + C.GOLD + center.getX() + "," + center.getZ();
             sender().sendMessage(msg);
             Iris.info(msg);

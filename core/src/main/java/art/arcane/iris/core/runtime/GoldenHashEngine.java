@@ -46,6 +46,8 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class GoldenHashEngine {
+    public static final String FALLBACK_BIOME_KEY = "minecraft:plains";
+
     public enum Mode {
         AUTO,
         CAPTURE,

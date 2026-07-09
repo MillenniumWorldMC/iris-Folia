@@ -52,8 +52,10 @@ String fabricLoaderVersion = providers.gradleProperty('fabricLoaderVersion').get
 String forgeVersion = providers.gradleProperty('forgeVersion').getOrElse('26.2-65.0.0')
 String neoForgeVersion = providers.gradleProperty('neoForgeVersion').getOrElse('26.2.0.6-beta')
 String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')
-    .orElse('com.github.VolmitSoftware:VolmLib:master-SNAPSHOT')
+    .orElse('com.github.VolmitSoftware:VolmLib:cdf7e8bb880199734dacd386a6616bda799fcde1')
     .get()
+String useLocalVolmLib = providers.gradleProperty('useLocalVolmLib').getOrElse('true')
+String localVolmLibDirectory = providers.gradleProperty('localVolmLibDirectory').getOrNull()
 Closure<String> loaderDisplayVersion = { String loaderVersion ->
     String coordinatePrefix = "${minecraftVersion}-"
     if (loaderVersion.startsWith(coordinatePrefix)) {
@@ -118,7 +120,6 @@ nmsBindings.each { key, value ->
         dependencies {
             compileOnly(project(':core'))
             compileOnly(volmLibCoordinate) {
-                changing = true
                 transitive = false
             }
             compileOnly(rootProject.libs.annotations)
@@ -172,14 +173,20 @@ tasks.register('fabricJar', Exec) {
     group = 'iris'
     workingDir = layout.projectDirectory.dir('adapters/fabric').asFile
     String wrapperScript = System.getProperty('os.name').toLowerCase().contains('windows') ? 'gradlew.bat' : 'gradlew'
-    commandLine(
+    List<String> command = [
         layout.projectDirectory.file(wrapperScript).asFile.absolutePath,
         'shadowJar',
         '--console=plain',
         "-PirisVersion=${project.version}",
         "-PminecraftVersion=${minecraftVersion}",
-        "-PfabricLoaderVersion=${fabricLoaderVersion}"
-    )
+        "-PfabricLoaderVersion=${fabricLoaderVersion}",
+        "-PuseLocalVolmLib=${useLocalVolmLib}",
+        "-PvolmLibCoordinate=${volmLibCoordinate}"
+    ]
+    if (localVolmLibDirectory != null && !localVolmLibDirectory.isBlank()) {
+        command.add("-PlocalVolmLibDirectory=${localVolmLibDirectory}")
+    }
+    commandLine(command)
 }
 
 tasks.register('buildFabric', Copy) {
@@ -196,14 +203,20 @@ tasks.register('forgeJar', Exec) {
     group = 'iris'
     workingDir = layout.projectDirectory.dir('adapters/forge').asFile
     String wrapperScript = System.getProperty('os.name').toLowerCase().contains('windows') ? 'gradlew.bat' : 'gradlew'
-    commandLine(
+    List<String> command = [
         layout.projectDirectory.file(wrapperScript).asFile.absolutePath,
         'shadowJar',
         '--console=plain',
         "-PirisVersion=${project.version}",
         "-PminecraftVersion=${minecraftVersion}",
-        "-PforgeVersion=${forgeVersion}"
-    )
+        "-PforgeVersion=${forgeVersion}",
+        "-PuseLocalVolmLib=${useLocalVolmLib}",
+        "-PvolmLibCoordinate=${volmLibCoordinate}"
+    ]
+    if (localVolmLibDirectory != null && !localVolmLibDirectory.isBlank()) {
+        command.add("-PlocalVolmLibDirectory=${localVolmLibDirectory}")
+    }
+    commandLine(command)
 }
 
 tasks.register('buildForge', Copy) {
@@ -220,14 +233,20 @@ tasks.register('neoforgeJar', Exec) {
     group = 'iris'
     workingDir = layout.projectDirectory.dir('adapters/neoforge').asFile
     String wrapperScript = System.getProperty('os.name').toLowerCase().contains('windows') ? 'gradlew.bat' : 'gradlew'
-    commandLine(
+    List<String> command = [
         layout.projectDirectory.file(wrapperScript).asFile.absolutePath,
         'shadowJar',
         '--console=plain',
         "-PirisVersion=${project.version}",
         "-PminecraftVersion=${minecraftVersion}",
-        "-PneoForgeVersion=${neoForgeVersion}"
-    )
+        "-PneoForgeVersion=${neoForgeVersion}",
+        "-PuseLocalVolmLib=${useLocalVolmLib}",
+        "-PvolmLibCoordinate=${volmLibCoordinate}"
+    ]
+    if (localVolmLibDirectory != null && !localVolmLibDirectory.isBlank()) {
+        command.add("-PlocalVolmLibDirectory=${localVolmLibDirectory}")
+    }
+    commandLine(command)
 }
 
 tasks.register('buildNeoforge', Copy) {
@@ -242,6 +261,11 @@ tasks.register('buildNeoforge', Copy) {
 
 tasks.named('forgeJar').configure {
     mustRunAfter(tasks.named('fabricJar'))
+}
+
+tasks.named('fabricJar').configure {
+    mustRunAfter(tasks.named('buildBukkit'))
+    mustRunAfter(project(':spi').tasks.named('jar'))
 }
 
 tasks.named('neoforgeJar').configure {

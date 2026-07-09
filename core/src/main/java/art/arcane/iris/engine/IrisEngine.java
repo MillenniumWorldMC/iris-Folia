@@ -81,8 +81,6 @@ import art.arcane.volmlib.util.scheduling.ChronoLatch;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.ToString;
 
 import java.io.File;
 import java.io.IOException;
@@ -94,8 +92,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Data
-@EqualsAndHashCode(exclude = "context")
-@ToString(exclude = "context")
 public class IrisEngine implements Engine {
     private final AtomicInteger bud;
     private final AtomicInteger buds;
@@ -104,7 +100,6 @@ public class IrisEngine implements Engine {
     private final AtomicDouble perSecond;
     private final AtomicLong lastGPS;
     private final EngineTarget target;
-    private final IrisContext context;
     private final EngineMantle mantle;
     private final ChronoLatch perSecondLatch;
     private final ChronoLatch perSecondBudLatch;
@@ -156,7 +151,6 @@ public class IrisEngine implements Engine {
         long _t0 = M.ms();
         mantle = new IrisEngineMantle(this);
         IrisLogging.debug("[IrisEngine timing] new IrisEngineMantle=" + (M.ms() - _t0) + "ms");
-        context = new IrisContext(this);
         cleaning = new AtomicBoolean(false);
         modeFallbackLogged = new AtomicBoolean(false);
         prefetchSaveStarted = new AtomicBoolean(false);
@@ -167,7 +161,6 @@ public class IrisEngine implements Engine {
             getTarget().setDimension(getData().getDimensionLoader().load(getDimension().getLoadKey()));
             IrisLogging.debug("[IrisEngine timing] dump+clearLists+reload=" + (M.ms() - _t0) + "ms");
         }
-        context.touch();
         getData().setEngine(this);
         _t0 = M.ms();
         getData().loadPrefetch(this);
@@ -717,9 +710,8 @@ public class IrisEngine implements Engine {
             throw new GenerationSessionException("Generation session is closed for world \"" + getWorld().name() + "\".", true);
         }
 
-        try (GenerationSessionLease lease = acquireGenerationLease("chunk_generate")) {
-            context.touch();
-            context.setGenerationSessionId(lease.sessionId());
+        try (GenerationSessionLease lease = acquireGenerationLease("chunk_generate");
+             IrisContext.Scope generationScope = IrisContext.open(this, lease.sessionId(), null)) {
             getEngineData().getStatistics().generatedChunk();
             PrecisionStopwatch p = PrecisionStopwatch.start();
             Hunk<PlatformBlockState> blocks = vblocks.listen((xx, y, zz, t) -> catchBlockUpdates(x + xx, y, z + zz, t));
@@ -733,7 +725,7 @@ public class IrisEngine implements Engine {
                 }
             } else {
                 EngineMode activeMode = ensureMode();
-                activeMode.generate(x, z, blocks, vbiomes, multicore);
+                activeMode.generate(x, z, blocks, vbiomes, multicore, lease.sessionId());
             }
 
             boolean skipRealFlag = J.isFolia() && getWorld().hasRealWorld() && IrisToolbelt.isWorldMaintenanceBypassingMantleStages(getWorld().realWorld());

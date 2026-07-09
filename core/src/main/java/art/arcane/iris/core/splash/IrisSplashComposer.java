@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class IrisSplashComposer {
-    public static final String RELEASE_TAG = "RC.1.1.6";
     private static final String SPLASH_PADDING = " ".repeat(4);
 
     private IrisSplashComposer() {
@@ -20,7 +19,7 @@ public final class IrisSplashComposer {
         String prefix = style.linePrefix();
         return new String[]{
                 "",
-                prefix + style.title(" Iris, ") + style.subtitle("Dimension Engine ") + style.tag("[" + releaseTrain + " " + RELEASE_TAG + "]"),
+                prefix + style.title(" Iris, ") + style.subtitle("Dimension Engine ") + style.tag("[" + releaseTrain + "]"),
                 prefix + style.label(" Version: ") + style.value(version),
                 prefix + style.label(" By: ") + style.value("Volmit Software (Arcane Arts)"),
                 prefix + style.label(" Server: ") + style.value(serverLine),

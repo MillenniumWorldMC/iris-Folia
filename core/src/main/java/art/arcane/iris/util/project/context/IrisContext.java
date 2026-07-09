@@ -20,70 +20,55 @@ package art.arcane.iris.util.project.context;
 
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.IrisComplex;
+import art.arcane.iris.engine.mantle.EngineMantle;
 import art.arcane.iris.engine.framework.Engine;
-import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.engine.object.IrisDimension;
 import art.arcane.volmlib.util.collection.KMap;
-import art.arcane.volmlib.util.scheduling.ChronoLatch;
-import lombok.Data;
 
-@Data
-public class IrisContext {
-    private static final KMap<Thread, IrisContext> context = new KMap<>();
-    private static final ChronoLatch cl = new ChronoLatch(60000);
+import java.util.Objects;
+
+public final class IrisContext {
+    private static final ThreadLocal<IrisContext> CONTEXT = new ThreadLocal<>();
     private final Engine engine;
-    private ChunkContext chunkContext;
-    private long generationSessionId;
+    private final ChunkContext chunkContext;
+    private final long generationSessionId;
 
-    public IrisContext(Engine engine) {
-        this.engine = engine;
-    }
-
-    public static IrisContext getOr(Engine engine) {
-        IrisContext c = get();
-
-        if (c == null) {
-            c = new IrisContext(engine);
-            touch(c);
-        }
-
-        return c;
+    private IrisContext(Engine engine, long generationSessionId, ChunkContext chunkContext) {
+        this.engine = Objects.requireNonNull(engine);
+        this.generationSessionId = generationSessionId;
+        this.chunkContext = chunkContext;
     }
 
     public static IrisContext get() {
-        return context.get(Thread.currentThread());
+        return CONTEXT.get();
     }
 
-    public static void touch(IrisContext c) {
-        context.put(Thread.currentThread(), c);
-
-        if (!cl.couldFlip()) return;
-        synchronized (cl) {
-            if (cl.flip()) {
-                dereference();
-            }
+    public static IrisContext require() {
+        IrisContext current = get();
+        if (current == null) {
+            throw new IllegalStateException("No Iris execution context is bound to thread " + Thread.currentThread().getName() + ".");
         }
+        return current;
     }
 
-    public static synchronized void dereference() {
-        var it = context.entrySet().iterator();
-        while (it.hasNext()) {
-            var entry = it.next();
-            var thread = entry.getKey();
-            var context = entry.getValue();
-            if (thread == null || context == null) {
-                it.remove();
-                continue;
-            }
-
-            if (!thread.isAlive() || context.engine.isClosed()) {
-                IrisLogging.debug("Dereferenced Context<Engine> " + thread.getName() + " " + thread.threadId());
-                it.remove();
-            }
-        }
+    public static Scope open(Engine engine, long generationSessionId, ChunkContext chunkContext) {
+        Thread thread = Thread.currentThread();
+        IrisContext previous = CONTEXT.get();
+        IrisContext installed = new IrisContext(engine, generationSessionId, chunkContext);
+        CONTEXT.set(installed);
+        return new Scope(thread, previous, installed);
     }
 
-    public void touch() {
-        IrisContext.touch(this);
+    public Engine getEngine() {
+        return engine;
+    }
+
+    public ChunkContext getChunkContext() {
+        return chunkContext;
+    }
+
+    public long getGenerationSessionId() {
+        return generationSessionId;
     }
 
     public IrisData getData() {
@@ -95,9 +80,9 @@ public class IrisContext {
     }
 
     public KMap<String, Object> asContext() {
-        var hash32 = engine.getHash32().getNow(null);
-        var dimension = engine.getDimension();
-        var mantle = engine.getMantle();
+        Long hash32 = engine.getHash32().getNow(null);
+        IrisDimension dimension = engine.getDimension();
+        EngineMantle mantle = engine.getMantle();
         return new KMap<String, Object>()
                 .qput("studio", engine.isStudio())
                 .qput("closed", engine.isClosed())
@@ -110,5 +95,38 @@ public class IrisContext {
                         .qput("idle", mantle.getAdjustedIdleDuration())
                         .qput("loaded", mantle.getLoadedRegionCount())
                         .qput("queued", mantle.getUnloadRegionCount()));
+    }
+
+    public static final class Scope implements AutoCloseable {
+        private final Thread owner;
+        private final IrisContext previous;
+        private final IrisContext installed;
+        private boolean closed;
+
+        private Scope(Thread owner, IrisContext previous, IrisContext installed) {
+            this.owner = owner;
+            this.previous = previous;
+            this.installed = installed;
+        }
+
+        @Override
+        public void close() {
+            if (closed) {
+                return;
+            }
+            if (Thread.currentThread() != owner) {
+                throw new IllegalStateException("Iris execution context scope closed from a different thread.");
+            }
+            IrisContext current = CONTEXT.get();
+            if (current != installed) {
+                throw new IllegalStateException("Iris execution context scopes must close in LIFO order.");
+            }
+            if (previous == null) {
+                CONTEXT.remove();
+            } else {
+                CONTEXT.set(previous);
+            }
+            closed = true;
+        }
     }
 }

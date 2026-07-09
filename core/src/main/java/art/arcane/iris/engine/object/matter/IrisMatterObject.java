@@ -1,7 +1,9 @@
 package art.arcane.iris.engine.object.matter;
 
+import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.loader.IrisRegistrant;
 import art.arcane.iris.engine.object.IrisObject;
+import art.arcane.iris.util.project.matter.IrisMatterContext;
 import art.arcane.iris.util.project.matter.IrisMatterSupport;
 import art.arcane.volmlib.util.json.JSONObject;
 import art.arcane.volmlib.util.matter.IrisMatter;
@@ -35,9 +37,11 @@ public class IrisMatterObject extends IrisRegistrant {
         return new IrisMatterObject(IrisMatterSupport.from(object));
     }
 
-    public static IrisMatterObject from(File j) throws IOException, ClassNotFoundException {
+    public static IrisMatterObject from(File j, IrisData data) throws IOException {
         IrisMatterSupport.ensureRegistered();
-        return new IrisMatterObject(Matter.read(j));
+        try (IrisMatterContext.Scope scope = IrisMatterContext.open(data)) {
+            return new IrisMatterObject(Matter.read(j));
+        }
     }
 
     private static Matter createMatter(int w, int h, int d) {

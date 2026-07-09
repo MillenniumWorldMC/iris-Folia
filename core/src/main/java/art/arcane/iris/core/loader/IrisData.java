@@ -95,7 +95,6 @@ public class IrisData implements ExclusionStrategy, TypeAdapterFactory {
     private ResourceLoader<IrisObject> objectLoader;
     private ResourceLoader<IrisMatterObject> matterLoader;
     private ResourceLoader<IrisImage> imageLoader;
-    private ResourceLoader<IrisMatterObject> matterObjectLoader;
     private ResourceLoader<IrisStructure> structureLoader;
     private ResourceLoader<IrisJigsawPool> jigsawPoolLoader;
     private ResourceLoader<IrisJigsawPiece> jigsawPieceLoader;
@@ -337,7 +336,7 @@ public class IrisData implements ExclusionStrategy, TypeAdapterFactory {
         this.expressionLoader = registerLoader(IrisExpression.class);
         this.objectLoader = registerLoader(IrisObject.class);
         this.imageLoader = registerLoader(IrisImage.class);
-        this.matterObjectLoader = registerLoader(IrisMatterObject.class);
+        this.matterLoader = registerLoader(IrisMatterObject.class);
         this.structureLoader = registerLoader(IrisStructure.class);
         this.jigsawPoolLoader = registerLoader(IrisJigsawPool.class);
         this.jigsawPieceLoader = registerLoader(IrisJigsawPiece.class);

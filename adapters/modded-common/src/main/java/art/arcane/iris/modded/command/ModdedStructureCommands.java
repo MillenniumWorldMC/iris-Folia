@@ -161,6 +161,7 @@ public final class ModdedStructureCommands {
             return 0;
         }
         ServerLevel level = source.getLevel();
+        Engine engine = IrisModdedCommands.engineFor(level);
         IrisData data = dataFor(source);
         if (data == null) {
             return 0;
@@ -181,7 +182,7 @@ public final class ModdedStructureCommands {
             IrisModdedCommands.fail(source, "Structure '" + key + "' assembled 0 pieces");
             return 0;
         }
-        ModdedObjectPlacer placer = new ModdedObjectPlacer(level);
+        ModdedObjectPlacer placer = new ModdedObjectPlacer(level, engine);
         UUID owner = player.getUUID();
         try {
             for (PlacedStructurePiece piece : pieces) {

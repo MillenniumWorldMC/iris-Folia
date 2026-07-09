@@ -2,14 +2,21 @@ package art.arcane.iris.util.project.stream.utility;
 
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.iris.util.project.context.IrisContext;
+import art.arcane.iris.engine.framework.Engine;
 import art.arcane.volmlib.util.function.Function3;
 import art.arcane.iris.util.project.stream.BasicStream;
 import art.arcane.iris.util.project.stream.ProceduralStream;
 public class ContextInjectingStream<T> extends BasicStream<T> {
+    private final Engine engine;
     private final Function3<ChunkContext, Integer, Integer, T> contextAccessor;
 
     public ContextInjectingStream(ProceduralStream<T> stream, Function3<ChunkContext, Integer, Integer, T> contextAccessor) {
+        this(stream, null, contextAccessor);
+    }
+
+    public ContextInjectingStream(ProceduralStream<T> stream, Engine engine, Function3<ChunkContext, Integer, Integer, T> contextAccessor) {
         super(stream);
+        this.engine = engine;
         this.contextAccessor = contextAccessor;
     }
 
@@ -19,9 +26,16 @@ public class ContextInjectingStream<T> extends BasicStream<T> {
 
         if (context != null) {
             ChunkContext chunkContext = context.getChunkContext();
+            int blockX = (int) x;
+            int blockZ = (int) z;
 
-            if (chunkContext != null && (int) x >> 4 == chunkContext.getX() >> 4 && (int) z >> 4 == chunkContext.getZ() >> 4) {
-                T t = contextAccessor.apply(chunkContext, (int) x & 15, (int) z & 15);
+            if (chunkContext != null
+                    && (engine == null || context.getEngine() == engine)
+                    && context.getGenerationSessionId() == chunkContext.getGenerationSessionId()
+                    && (engine == null || context.getGenerationSessionId() == engine.getGenerationSessionId())
+                    && blockX >> 4 == chunkContext.getX() >> 4
+                    && blockZ >> 4 == chunkContext.getZ() >> 4) {
+                T t = contextAccessor.apply(chunkContext, blockX & 15, blockZ & 15);
 
                 if (t != null) {
                     return t;

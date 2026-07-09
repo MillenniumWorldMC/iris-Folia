@@ -34,6 +34,7 @@ import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.IrisDimension;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
 import art.arcane.iris.util.project.context.IrisContext;
+import art.arcane.iris.util.project.matter.IrisMatterContext;
 import art.arcane.iris.util.common.director.DirectorExecutor;
 import art.arcane.volmlib.util.director.DirectorOrigin;
 import art.arcane.volmlib.util.director.annotations.Director;
@@ -74,8 +75,14 @@ public class CommandDeveloper implements DirectorExecutor {
     @Director(description = "Send a test exception to sentry")
     public void Sentry() {
         Engine engine = engine();
-        if (engine != null) IrisContext.getOr(engine);
-        Iris.reportError(new Exception("This is a test"));
+        Exception testException = new Exception("This is a test");
+        if (engine == null) {
+            Iris.reportError(testException);
+            return;
+        }
+        try (IrisContext.Scope scope = IrisContext.open(engine, engine.getGenerationSessionId(), null)) {
+            Iris.reportError(testException);
+        }
     }
 
     @Director(description = "Hash generated block output of a fixed area for determinism/identity testing", origin = DirectorOrigin.BOTH)
@@ -221,18 +228,28 @@ public class CommandDeveloper implements DirectorExecutor {
             @Param(name = "name", description = "The dump file id under plugins/Iris/dump (pv.<id>.*)", defaultValue = "21474836474")
             String name
     ) throws Throwable {
-        var base = Iris.instance.getDataFile("dump", "pv." + name + ".ttp.lz4b.bin");
-        var section = Iris.instance.getDataFile("dump", "pv." + name + ".section.bin");
+        Engine activeEngine = engine();
+        if (activeEngine == null) {
+            sender().sendMessage(C.RED + "Target an Iris world before reading a mantle dump.");
+            return;
+        }
+        File base = Iris.instance.getDataFile("dump", "pv." + name + ".ttp.lz4b.bin");
+        File section = Iris.instance.getDataFile("dump", "pv." + name + ".section.bin");
 
-        if (plate) {
-            try (var in = CountingDataInputStream.wrap(new BufferedInputStream(new FileInputStream(base)))) {
-                TectonicPlate.read(1088, in, true, IrisEngineMantle.createRuntimeDataAdapter(), IrisEngineMantle.createRuntimeHooks());
-            } catch (Throwable e) {
-                e.printStackTrace();
+        try (IrisMatterContext.Scope scope = IrisMatterContext.open(activeEngine.getData())) {
+            if (plate) {
+                try (CountingDataInputStream in = CountingDataInputStream.wrap(new BufferedInputStream(new FileInputStream(base)))) {
+                    TectonicPlate.read(1088, in, true, IrisEngineMantle.createRuntimeDataAdapter(activeEngine.getData()), IrisEngineMantle.createRuntimeHooks());
+                } catch (Throwable e) {
+                    e.printStackTrace();
+                }
+            } else {
+                Matter.read(section);
             }
-        } else Matter.read(section);
-        if (!TectonicPlate.hasError())
+        }
+        if (!TectonicPlate.hasError()) {
             Iris.info("Read " + (plate ? base : section).length() + " bytes from " + (plate ? base : section).getAbsolutePath());
+        }
     }
 
     @Director(description = "Test")

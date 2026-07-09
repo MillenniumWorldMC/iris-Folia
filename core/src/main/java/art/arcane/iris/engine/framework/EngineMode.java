@@ -51,7 +51,11 @@ public interface EngineMode extends Staged {
             e.setMulticore(multicore);
 
             for (EngineStage i : stages) {
-                e.queue(() -> i.generate(x, z, blocks, biomes, multicore, ctx));
+                e.queue(() -> {
+                    try (IrisContext.Scope stageScope = IrisContext.open(getEngine(), ctx.getGenerationSessionId(), ctx)) {
+                        i.generate(x, z, blocks, biomes, multicore, ctx);
+                    }
+                });
             }
 
             e.complete();
@@ -71,19 +75,19 @@ public interface EngineMode extends Staged {
     }
 
     @BlockCoordinates
-    default void generate(int x, int z, Hunk<PlatformBlockState> blocks, Hunk<PlatformBiome> biomes, boolean multicore) {
-        IrisContext context = IrisContext.getOr(getEngine());
+    default void generate(int x, int z, Hunk<PlatformBlockState> blocks, Hunk<PlatformBiome> biomes, boolean multicore, long generationSessionId) {
         boolean cacheContext = true;
         if (J.isFolia() && getEngine().getWorld().hasRealWorld() && shouldDisableContextCacheForMaintenance()) {
             cacheContext = false;
         }
         ChunkContext.PrefillPlan prefillPlan = cacheContext ? ChunkContext.PrefillPlan.NO_CAVE : ChunkContext.PrefillPlan.NONE;
-        ChunkContext ctx = new ChunkContext(x, z, getComplex(), context.getGenerationSessionId(), cacheContext, prefillPlan, getEngine().getMetrics());
-        context.setChunkContext(ctx);
+        ChunkContext ctx = new ChunkContext(x, z, getComplex(), generationSessionId, cacheContext, prefillPlan, getEngine().getMetrics());
 
         EngineStage[] stages = getStages().toArray(new EngineStage[0]);
-        for (EngineStage i : stages) {
-            i.generate(x, z, blocks, biomes, multicore, ctx);
+        try (IrisContext.Scope chunkScope = IrisContext.open(getEngine(), generationSessionId, ctx)) {
+            for (EngineStage i : stages) {
+                i.generate(x, z, blocks, biomes, multicore, ctx);
+            }
         }
     }
 

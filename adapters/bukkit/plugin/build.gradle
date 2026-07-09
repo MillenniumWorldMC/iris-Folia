@@ -2,13 +2,12 @@ String apiVersion = providers.gradleProperty('minecraftVersion').get()
 def mainClass = 'art.arcane.iris.Iris'
 
 String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')
-    .orElse('com.github.VolmitSoftware:VolmLib:master-SNAPSHOT')
+    .orElse('com.github.VolmitSoftware:VolmLib:cdf7e8bb880199734dacd386a6616bda799fcde1')
     .get()
 
 dependencies {
     compileOnly(project(':core'))
     compileOnly(volmLibCoordinate) {
-        changing = true
         transitive = false
     }
     compileOnly(libs.spigot)
@@ -18,7 +17,6 @@ dependencies {
     testImplementation(libs.sentry)
     testImplementation(project(':core'))
     testImplementation(volmLibCoordinate) {
-        changing = true
         transitive = false
     }
     compileOnly(libs.placeholderApi)

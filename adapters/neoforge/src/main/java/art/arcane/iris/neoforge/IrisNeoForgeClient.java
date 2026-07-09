@@ -35,8 +35,9 @@ public final class IrisNeoForgeClient {
     private IrisNeoForgeClient() {
     }
 
-    public static void registerClientbound(PayloadRegistrar registrar) {
-        registrar.playToClient(ModdedIrisPayload.TYPE, ModdedIrisPayload.STREAM_CODEC,
+    public static void registerBidirectional(PayloadRegistrar registrar) {
+        registrar.playBidirectional(ModdedIrisPayload.TYPE, ModdedIrisPayload.STREAM_CODEC,
+                NeoForgeProtocolNetworking::onInbound,
                 (payload, context) -> context.enqueueWork(() -> IrisClient.onInbound(payload.data())));
     }
 

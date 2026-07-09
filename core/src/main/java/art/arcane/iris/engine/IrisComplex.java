@@ -35,7 +35,6 @@ import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.volmlib.util.collection.KList;
-import art.arcane.iris.util.project.context.IrisContext;
 import art.arcane.iris.util.common.data.DataProvider;
 import art.arcane.volmlib.util.math.M;
 import art.arcane.volmlib.util.math.RNG;
@@ -164,7 +163,7 @@ public class IrisComplex implements DataProvider {
                 .cache2D("regionStream", engine, cacheSize).waste("Region Stream");
         regionIDStream = regionIdentityStream.convertCached((i) -> new UUID(Double.doubleToLongBits(i),
                 String.valueOf(i * 38445).hashCode() * 3245556666L)).waste("Region ID Stream");
-        caveBiomeStream = regionStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getRegion().get(x, z))
+        caveBiomeStream = regionStream.contextInjecting(engine, (c, x, z) -> c.getRegion().get(x, z))
                 .convert((r)
                         -> engine.getDimension().getCaveBiomeStyle().create(rng.nextParallelRNG(InferredType.CAVE.ordinal()), getData()).stream()
                         .zoom(engine.getDimension().getBiomeZoom())
@@ -173,7 +172,7 @@ public class IrisComplex implements DataProvider {
                         .onNull(emptyBiome)
                 ).convertAware2D(ProceduralStream::get).cache2D("caveBiomeStream", engine, cacheSize).waste("Cave Biome Stream");
         inferredStreams.put(InferredType.CAVE, caveBiomeStream);
-        landBiomeStream = regionStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getRegion().get(x, z))
+        landBiomeStream = regionStream.contextInjecting(engine, (c, x, z) -> c.getRegion().get(x, z))
                 .convert((r)
                         -> engine.getDimension().getLandBiomeStyle().create(rng.nextParallelRNG(InferredType.LAND.ordinal()), getData()).stream()
                         .zoom(engine.getDimension().getBiomeZoom())
@@ -183,7 +182,7 @@ public class IrisComplex implements DataProvider {
                 ).convertAware2D(ProceduralStream::get)
                 .cache2D("landBiomeStream", engine, cacheSize).waste("Land Biome Stream");
         inferredStreams.put(InferredType.LAND, landBiomeStream);
-        seaBiomeStream = regionStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getRegion().get(x, z))
+        seaBiomeStream = regionStream.contextInjecting(engine, (c, x, z) -> c.getRegion().get(x, z))
                 .convert((r)
                         -> engine.getDimension().getSeaBiomeStyle().create(rng.nextParallelRNG(InferredType.SEA.ordinal()), getData()).stream()
                         .zoom(engine.getDimension().getBiomeZoom())
@@ -193,7 +192,7 @@ public class IrisComplex implements DataProvider {
                 ).convertAware2D(ProceduralStream::get)
                 .cache2D("seaBiomeStream", engine, cacheSize).waste("Sea Biome Stream");
         inferredStreams.put(InferredType.SEA, seaBiomeStream);
-        shoreBiomeStream = regionStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getRegion().get(x, z))
+        shoreBiomeStream = regionStream.contextInjecting(engine, (c, x, z) -> c.getRegion().get(x, z))
                 .convert((r)
                         -> engine.getDimension().getShoreBiomeStyle().create(rng.nextParallelRNG(InferredType.SHORE.ordinal()), getData()).stream()
                         .zoom(engine.getDimension().getBiomeZoom())
@@ -216,37 +215,37 @@ public class IrisComplex implements DataProvider {
             IrisBiome b = focusBiome != null ? focusBiome : baseBiomeStream.get(x, z);
             return getHeight(engine, b, x, z, engine.getSeedManager().getHeight());
         }, Interpolated.DOUBLE).cache2DDouble("heightStream", engine, cacheSize).waste("Height Stream");
-        roundedHeighteightStream = heightStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getHeight().getDouble(x, z))
+        roundedHeighteightStream = heightStream.contextInjecting(engine, (c, x, z) -> c.getHeight().getDouble(x, z))
                 .round().waste("Rounded Height Stream");
-        slopeStream = heightStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getHeight().getDouble(x, z))
+        slopeStream = heightStream.contextInjecting(engine, (c, x, z) -> c.getHeight().getDouble(x, z))
                 .slope(3).cache2DDouble("slopeStream", engine, cacheSize).waste("Slope Stream");
         trueBiomeStream = focusBiome != null ? ProceduralStream.of((x, y) -> focusBiome, Interpolated.of(a -> 0D,
                         b -> focusBiome))
                 .cache2D("trueBiomeStream-focus", engine, cacheSize) : heightStream
                 .convertAware2D((h, x, z) ->
                         fixBiomeType(h, baseBiomeStream.get(x, z),
-                                regionStream.contextInjecting((c, xx, zz) -> IrisContext.getOr(engine).getChunkContext().getRegion().get(xx, zz)).get(x, z), x, z, fluidHeight))
+                                regionStream.contextInjecting(engine, (c, xx, zz) -> c.getRegion().get(xx, zz)).get(x, z), x, z, fluidHeight))
                 .cache2D("trueBiomeStream", engine, cacheSize).waste("True Biome Stream");
-        trueBiomeDerivativeStream = trueBiomeStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getBiome().get(x, z))
+        trueBiomeDerivativeStream = trueBiomeStream.contextInjecting(engine, (c, x, z) -> c.getBiome().get(x, z))
                 .convert((b) -> IrisPlatforms.get().registries().biome(b.getDerivativeKey())).cache2D("trueBiomeDerivativeStream", engine, cacheSize).waste("True Biome Derivative Stream");
-        heightFluidStream = heightStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getHeight().getDouble(x, z))
+        heightFluidStream = heightStream.contextInjecting(engine, (c, x, z) -> c.getHeight().getDouble(x, z))
                 .max(fluidHeight).cache2DDouble("heightFluidStream", engine, cacheSize).waste("Height Fluid Stream");
         maxHeightStream = ProceduralStream.ofDouble((x, z) -> height).waste("Max Height Stream");
-        terrainSurfaceDecoration = trueBiomeStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getBiome().get(x, z))
+        terrainSurfaceDecoration = trueBiomeStream.contextInjecting(engine, (c, x, z) -> c.getBiome().get(x, z))
                 .convertAware2D((b, xx, zz) -> decorateFor(b, xx, zz, IrisDecorationPart.NONE)).cache2D("terrainSurfaceDecoration", engine, cacheSize).waste("Surface Decoration Stream");
-        terrainCeilingDecoration = trueBiomeStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getBiome().get(x, z))
+        terrainCeilingDecoration = trueBiomeStream.contextInjecting(engine, (c, x, z) -> c.getBiome().get(x, z))
                 .convertAware2D((b, xx, zz) -> decorateFor(b, xx, zz, IrisDecorationPart.CEILING)).cache2D("terrainCeilingDecoration", engine, cacheSize).waste("Ceiling Decoration Stream");
-        terrainCaveSurfaceDecoration = caveBiomeStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getCave().get(x, z))
+        terrainCaveSurfaceDecoration = caveBiomeStream.contextInjecting(engine, (c, x, z) -> c.getCave().get(x, z))
                 .convertAware2D((b, xx, zz) -> decorateFor(b, xx, zz, IrisDecorationPart.NONE)).cache2D("terrainCaveSurfaceDecoration", engine, cacheSize).waste("Cave Surface Stream");
-        terrainCaveCeilingDecoration = caveBiomeStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getCave().get(x, z))
+        terrainCaveCeilingDecoration = caveBiomeStream.contextInjecting(engine, (c, x, z) -> c.getCave().get(x, z))
                 .convertAware2D((b, xx, zz) -> decorateFor(b, xx, zz, IrisDecorationPart.CEILING)).cache2D("terrainCaveCeilingDecoration", engine, cacheSize).waste("Cave Ceiling Stream");
-        shoreSurfaceDecoration = trueBiomeStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getBiome().get(x, z))
+        shoreSurfaceDecoration = trueBiomeStream.contextInjecting(engine, (c, x, z) -> c.getBiome().get(x, z))
                 .convertAware2D((b, xx, zz) -> decorateFor(b, xx, zz, IrisDecorationPart.SHORE_LINE)).cache2D("shoreSurfaceDecoration", engine, cacheSize).waste("Shore Surface Stream");
-        seaSurfaceDecoration = trueBiomeStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getBiome().get(x, z))
+        seaSurfaceDecoration = trueBiomeStream.contextInjecting(engine, (c, x, z) -> c.getBiome().get(x, z))
                 .convertAware2D((b, xx, zz) -> decorateFor(b, xx, zz, IrisDecorationPart.SEA_SURFACE)).cache2D("seaSurfaceDecoration", engine, cacheSize).waste("Sea Surface Stream");
-        seaFloorDecoration = trueBiomeStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getBiome().get(x, z))
+        seaFloorDecoration = trueBiomeStream.contextInjecting(engine, (c, x, z) -> c.getBiome().get(x, z))
                 .convertAware2D((b, xx, zz) -> decorateFor(b, xx, zz, IrisDecorationPart.SEA_FLOOR)).cache2D("seaFloorDecoration", engine, cacheSize).waste("Sea Floor Stream");
-        baseBiomeIDStream = trueBiomeStream.contextInjecting((c, x, z) -> IrisContext.getOr(engine).getChunkContext().getBiome().get(x, z))
+        baseBiomeIDStream = trueBiomeStream.contextInjecting(engine, (c, x, z) -> c.getBiome().get(x, z))
                 .convertAware2D((b, x, z) -> {
                     UUID d = regionIDStream.get(x, z);
                     return new UUID(b.getLoadKey().hashCode() * 818223L,

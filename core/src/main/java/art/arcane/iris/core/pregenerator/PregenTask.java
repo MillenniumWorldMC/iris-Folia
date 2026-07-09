@@ -55,6 +55,10 @@ public class PregenTask {
     private final Bounds bounds = new Bounds();
 
     protected PregenTask(boolean gui, Position2 center, int radiusX, int radiusZ) {
+        if (radiusX <= 0 || radiusZ <= 0) {
+            throw new IllegalArgumentException("Pregen radii must be greater than zero blocks.");
+        }
+
         this.gui = gui;
         this.center = new ProxiedPos(center);
         this.radiusX = radiusX;

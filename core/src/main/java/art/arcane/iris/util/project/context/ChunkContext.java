@@ -121,6 +121,10 @@ public class ChunkContext {
         return complex;
     }
 
+    public long getGenerationSessionId() {
+        return generationSessionId;
+    }
+
     public ChunkedDoubleDataCache getHeight() {
         return height;
     }

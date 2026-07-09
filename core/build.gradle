@@ -41,7 +41,7 @@ plugins {
 
 def lib = 'art.arcane.iris.util'
 String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')
-    .orElse('com.github.VolmitSoftware:VolmLib:master-SNAPSHOT')
+    .orElse('com.github.VolmitSoftware:VolmLib:cdf7e8bb880199734dacd386a6616bda799fcde1')
     .get()
 String sentryAuthToken = findProperty('sentry.auth.token') as String ?: System.getenv('SENTRY_AUTH_TOKEN')
 boolean hasSentryAuthToken = sentryAuthToken != null && !sentryAuthToken.isBlank()
@@ -85,7 +85,6 @@ dependencies {
     // Shaded
     implementation('de.crazydev22.slimjar.helper:spigot:2.1.9')
     implementation(volmLibCoordinate) {
-        changing = true
         transitive = false
     }
 

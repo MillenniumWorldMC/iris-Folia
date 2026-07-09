@@ -31,7 +31,7 @@ public class HeightmapObjectPlacer implements IObjectPlacer {
     private final IrisObjectPlacement config;
     private final IObjectPlacer oplacer;
 
-    public HeightmapObjectPlacer(Engine engine, RNG rng, int x, int yv, int z, IrisObjectPlacement config, IObjectPlacer oplacer) {
+    public HeightmapObjectPlacer(RNG rng, int x, int yv, int z, IrisObjectPlacement config, IObjectPlacer oplacer) {
         s = rng.nextLong() + yv + z - x;
         this.config = config;
         this.oplacer = oplacer;
@@ -94,6 +94,6 @@ public class HeightmapObjectPlacer implements IObjectPlacer {
 
     @Override
     public Engine getEngine() {
-        return null;
+        return oplacer.getEngine();
     }
 }

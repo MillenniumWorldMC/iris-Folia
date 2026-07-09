@@ -33,6 +33,7 @@ public class GoldenHashEngineTest {
     private PlatformBlockState stone;
     private PlatformBlockState dirt;
     private PlatformBiome plains;
+    private PlatformBiome forest;
 
     @Before
     public void setUp() throws Exception {
@@ -49,6 +50,8 @@ public class GoldenHashEngineTest {
         when(dirt.key()).thenReturn("minecraft:dirt");
         plains = mock(PlatformBiome.class);
         when(plains.key()).thenReturn("minecraft:plains");
+        forest = mock(PlatformBiome.class);
+        when(forest.key()).thenReturn("minecraft:forest");
     }
 
     @After
@@ -78,6 +81,26 @@ public class GoldenHashEngineTest {
         String expectedBody = referenceLine(0, 0, 3, 2, 1);
         assertEquals(expectedBody, lines.get(8));
         assertEquals("#combined=" + referenceCombined(expectedBody), lines.get(9));
+    }
+
+    @Test
+    public void nullBiomeUsesCanonicalPlainsFallback() throws Exception {
+        RecordingFeedback feedback = new RecordingFeedback();
+        GoldenHashEngine hashEngine = new GoldenHashEngine(engine, request(GoldenHashEngine.Mode.AUTO), goldenDir, source(dirt, 3, 2, 1, null), feedback, progress());
+
+        assertTrue(hashEngine.run());
+        List<String> lines = Files.readAllLines(hashEngine.getGoldenFile().toPath(), StandardCharsets.UTF_8);
+        assertEquals(referenceLine(0, 0, 3, 2, 1), lines.get(8));
+    }
+
+    @Test
+    public void nonNullBiomeKeyRemainsUnchanged() throws Exception {
+        RecordingFeedback feedback = new RecordingFeedback();
+        GoldenHashEngine hashEngine = new GoldenHashEngine(engine, request(GoldenHashEngine.Mode.AUTO), goldenDir, source(dirt, 3, 2, 1, forest), feedback, progress());
+
+        assertTrue(hashEngine.run());
+        List<String> lines = Files.readAllLines(hashEngine.getGoldenFile().toPath(), StandardCharsets.UTF_8);
+        assertEquals(referenceLine(0, 0, 3, 2, 1, "minecraft:forest"), lines.get(8));
     }
 
     @Test
@@ -130,7 +153,7 @@ public class GoldenHashEngineTest {
     }
 
     private GoldenHashEngine.Request request(GoldenHashEngine.Mode mode) {
-        return new GoldenHashEngine.Request("testworld", 1234L, "test-1.0", MIN_Y, MAX_Y, 0, 0, 0, 1, mode, false, false, "null");
+        return new GoldenHashEngine.Request("testworld", 1234L, "test-1.0", MIN_Y, MAX_Y, 0, 0, 0, 1, mode, false, false, GoldenHashEngine.FALLBACK_BIOME_KEY);
     }
 
     private GoldenHashEngine.Progress progress() {
@@ -139,6 +162,10 @@ public class GoldenHashEngineTest {
     }
 
     private GoldenHashEngine.ChunkSource source(PlatformBlockState special, int sx, int sy, int sz) {
+        return source(special, sx, sy, sz, plains);
+    }
+
+    private GoldenHashEngine.ChunkSource source(PlatformBlockState special, int sx, int sy, int sz, PlatformBiome biome) {
         return (int chunkX, int chunkZ) -> new GoldenHashEngine.ChunkSnapshot() {
             @Override
             public int minY() {
@@ -157,12 +184,16 @@ public class GoldenHashEngineTest {
 
             @Override
             public PlatformBiome biome(int x, int y, int z) {
-                return plains;
+                return biome;
             }
         };
     }
 
     private String referenceLine(int chunkX, int chunkZ, int sx, int sy, int sz) throws Exception {
+        return referenceLine(chunkX, chunkZ, sx, sy, sz, "minecraft:plains");
+    }
+
+    private String referenceLine(int chunkX, int chunkZ, int sx, int sy, int sz, String biomeKey) throws Exception {
         MessageDigest blockDigest = MessageDigest.getInstance("SHA-256");
         MessageDigest biomeDigest = MessageDigest.getInstance("SHA-256");
         for (int x = 0; x < 16; x++) {
@@ -176,7 +207,7 @@ public class GoldenHashEngineTest {
         for (int x = 0; x < 16; x += 4) {
             for (int z = 0; z < 16; z += 4) {
                 for (int y = MIN_Y; y < MAX_Y; y += 4) {
-                    biomeDigest.update("minecraft:plains\n".getBytes(StandardCharsets.UTF_8));
+                    biomeDigest.update((biomeKey + "\n").getBytes(StandardCharsets.UTF_8));
                 }
             }
         }
