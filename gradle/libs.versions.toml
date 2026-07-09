@@ -56,6 +56,17 @@ kgenerators = "7.3" # https://repo.codemc.io/repository/maven-public/me/kryniowe
 multiverseCore = "5.1.0"
 craftengine = "0.0.67" # https://github.com/Xiao-MoMi/craft-engine/releases
 
+# Fabric API (net.fabricmc.fabric-api) - each module is independently versioned
+fabricApi-base = "2.0.4+ece063239e"
+fabricApi-registrySync = "7.1.0+c7bd5b8e9e"
+fabricApi-resourceLoader = "2.0.13+9edec1269e"
+fabricApi-lifecycleEvents = "4.1.3+4575b05f9e"
+fabricApi-commandApi = "3.1.0+00cb03469e"
+fabricApi-eventsInteraction = "5.2.6+8f57f7ee9e"
+fabricApi-networking = "6.3.3+72073ef09e"
+fabricApi-rendering = "25.3.1+6988455e9e"
+fabricApi-keyMapping = "2.0.5+e2bdee789e"
+
 [libraries]
 # Core Libraries
 lombok = { module = "org.projectlombok:lombok", version.ref ="lombok" }
@@ -107,6 +118,17 @@ kgenerators = { module = "me.kryniowesegryderiusz:kgenerators-core", version.ref
 multiverseCore = { module = "org.mvplugins.multiverse.core:multiverse-core", version.ref = "multiverseCore" }
 craftengine-core = { module = "net.momirealms:craft-engine-core", version.ref = "craftengine" }
 craftengine-bukkit = { module = "net.momirealms:craft-engine-bukkit", version.ref = "craftengine" }
+
+# Fabric API
+fabricApi-base = { module = "net.fabricmc.fabric-api:fabric-api-base", version.ref = "fabricApi-base" }
+fabricApi-registrySync = { module = "net.fabricmc.fabric-api:fabric-registry-sync-v0", version.ref = "fabricApi-registrySync" }
+fabricApi-resourceLoader = { module = "net.fabricmc.fabric-api:fabric-resource-loader-v1", version.ref = "fabricApi-resourceLoader" }
+fabricApi-lifecycleEvents = { module = "net.fabricmc.fabric-api:fabric-lifecycle-events-v1", version.ref = "fabricApi-lifecycleEvents" }
+fabricApi-commandApi = { module = "net.fabricmc.fabric-api:fabric-command-api-v2", version.ref = "fabricApi-commandApi" }
+fabricApi-eventsInteraction = { module = "net.fabricmc.fabric-api:fabric-events-interaction-v0", version.ref = "fabricApi-eventsInteraction" }
+fabricApi-networking = { module = "net.fabricmc.fabric-api:fabric-networking-api-v1", version.ref = "fabricApi-networking" }
+fabricApi-rendering = { module = "net.fabricmc.fabric-api:fabric-rendering-v1", version.ref = "fabricApi-rendering" }
+fabricApi-keyMapping = { module = "net.fabricmc.fabric-api:fabric-key-mapping-api-v1", version.ref = "fabricApi-keyMapping" }
 
 [plugins]
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }

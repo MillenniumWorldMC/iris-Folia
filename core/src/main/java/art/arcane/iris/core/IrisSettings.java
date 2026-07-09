@@ -73,6 +73,7 @@ public class IrisSettings {
             try {
                 String ss = IO.readAll(s);
                 settings = new Gson().fromJson(ss, IrisSettings.class);
+                migrateLegacyKeys(ss);
                 try {
                     IO.writeAll(s, new JSONObject(new Gson().toJson(settings)).toString(4));
                 } catch (IOException e) {
@@ -85,6 +86,17 @@ public class IrisSettings {
         }
 
         return settings;
+    }
+
+    private static void migrateLegacyKeys(String rawJson) {
+        JSONObject root = new JSONObject(rawJson);
+        JSONObject worldObject = root.optJSONObject("world");
+        if (worldObject == null || !worldObject.has("anbientEntitySpawningSystem")) {
+            return;
+        }
+
+        settings.getWorld().setAmbientEntitySpawningSystem(worldObject.optBoolean("anbientEntitySpawningSystem", settings.getWorld().isAmbientEntitySpawningSystem()));
+        IrisLogging.info("Migrated legacy settings key world.anbientEntitySpawningSystem -> world.ambientEntitySpawningSystem");
     }
 
     public static void invalidate() {
@@ -115,7 +127,7 @@ public class IrisSettings {
     public static class IrisSettingsWorld {
         public boolean postLoadBlockUpdates = true;
         public boolean forcePersistEntities = true;
-        public boolean anbientEntitySpawningSystem = true;
+        public boolean ambientEntitySpawningSystem = true;
         public long asyncTickIntervalMS = 700;
         public double targetSpawnEntitiesPerChunk = 0.95;
         public boolean markerEntitySpawningSystem = true;

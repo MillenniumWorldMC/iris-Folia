@@ -2,7 +2,11 @@ package art.arcane.iris.engine.object;
 
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.util.common.math.IrisBlockVector;
-import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.engine.object.annotations.Desc;
+import art.arcane.iris.engine.object.annotations.MaxNumber;
+import art.arcane.iris.engine.object.annotations.MinNumber;
+import art.arcane.iris.engine.object.annotations.RegistryListResource;
+import art.arcane.iris.engine.object.annotations.Snippet;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.collection.KSet;
 import art.arcane.volmlib.util.math.M;

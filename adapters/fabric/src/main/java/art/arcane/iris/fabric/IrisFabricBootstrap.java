@@ -49,6 +49,7 @@ public final class IrisFabricBootstrap implements ModInitializer {
     public void onInitialize() {
         ModdedEngineBootstrap.bootCommon(new FabricModdedLoader(), "Fabric",
             () -> Registry.register(BuiltInRegistries.CHUNK_GENERATOR, Identifier.fromNamespaceAndPath("irisworldgen", "iris"), IrisModdedChunkGenerator.CODEC));
+        FabricProtocolNetworking.install();
         ServerLifecycleEvents.SERVER_STARTING.register((MinecraftServer server) -> ModdedEngineBootstrap.start(server));
         ServerLifecycleEvents.SERVER_STOPPING.register((MinecraftServer server) -> ModdedEngineBootstrap.stop());
         CommandRegistrationCallback.EVENT.register((CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext buildContext, Commands.CommandSelection selection) -> IrisModdedCommands.register(dispatcher));

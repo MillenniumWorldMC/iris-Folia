@@ -23,7 +23,7 @@ import art.arcane.iris.core.events.IrisEngineHotloadEvent;
 import art.arcane.iris.util.common.format.C;
 import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
-import org.bukkit.*;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -59,32 +59,6 @@ public abstract class EngineAssignedWorldManager extends EngineAssignedComponent
             s.sendTitle(C.IRIS + "Engine " + C.AQUA + "<font:minecraft:uniform>Hotloaded", 70, 60, 410);
         }
     }
-
-//    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-//    public void on(PlayerTeleportEvent e) {
-//        if(ignoreTP.get()) {
-//            System.out.println("IgTP1");
-//            return;
-//        }
-//
-//        if(!PaperLib.isPaper() || e.getTo() == null) {
-//            System.out.println("IgTP2");
-//
-////            return;
-//        }
-//
-////        try {
-////            System.out.println("IgTP3");
-////
-////            if(e.getTo().getWorld().equals(getTarget().getWorld().realWorld())) {
-////                System.out.println("IgTP4");
-////
-////                getEngine().getWorldManager().teleportAsync(e);
-////            }
-////        } catch(Throwable ex) {
-////
-////        }
-//    }
 
     @EventHandler
     public void on(WorldSaveEvent e) {

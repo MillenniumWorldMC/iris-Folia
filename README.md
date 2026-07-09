@@ -1,75 +1,129 @@
 # Iris
 
-The master branch is for the latest version of minecraft.
+Iris is a world generation engine for Minecraft servers and mod loaders. It generates terrain,
+biomes, caves, structures, objects, and entities from editable JSON packs, with a full in-game
+studio authoring workflow. The same engine runs as a Bukkit-family plugin and as a Fabric, Forge,
+or NeoForge server mod, and produces bit-identical terrain on every platform for the same pack and
+seed. The master branch targets the current Minecraft version (26.2).
 
 # [Support](https://discord.gg/3xxPTpT) **|** [Documentation](https://docs.volmit.com/iris/) **|** [Git](https://github.com/IrisDimensions)
 
-# Building
+Consider supporting development by buying Iris on Spigot.
 
-Building Iris is fairly simple, though you will need to setup a few things if your system has never been used for java
-development.[README.md](README.md)
+## Platforms
 
-Consider supporting our development by buying Iris on spigot! We work hard to make Iris the best it can be for everyone.
+| Platform | Artifact | Minecraft | Notes |
+|---|---|---|---|
+| Paper / Purpur / Leaf / Canvas | plugin jar | 26.2 | Full feature set |
+| Folia | plugin jar | 26.2 | Region-safe scheduling throughout |
+| Spigot / CraftBukkit | plugin jar | 26.2 | Full feature set |
+| Fabric | mod jar | 26.2 | Server worldgen + client HUD; requires Fabric Loader 0.19.3+ |
+| Forge | mod jar | 26.2 | Server worldgen + client HUD; requires Forge 65.0.0+ |
+| NeoForge | mod jar | 26.2 | Server worldgen + client HUD; requires NeoForge 26.2+ |
 
-## Preface: if you need help compiling and you are a developer / intend to help out in the community or with development we would love to help you regardless in the discord! however do not come to the discord asking for free copies, or a tutorial on how to compile.
+Java 25 is required on every platform.
 
-### Command Line Builds
+The modded feature set matches the plugin wherever the operation is not Bukkit-bound: worldgen
+from Iris packs, authoring with mod blocks/items/entities (with validation suggestions), studio
+workspaces with schema autocomplete over the server's live registries, entity spawning parity
+including death loot, pregeneration with a boss bar or client HUD, the `/iris` command tree, and
+the goldenhash determinism gate, which is interchangeable across all four platforms.
 
-1. Install [Java JDK 25](https://adoptium.net/temurin/releases/?version=25)
-2. Set the JDK installation path to `JAVA_HOME` as an environment variable.
-    * Windows
-        1. Start > Type `env` and press Enter
-        2. Advanced > Environment Variables
-        3. Under System Variables, click `New...`
-        4. Variable Name: `JAVA_HOME`
-        5. Variable Value: `C:\Program Files\Java\jdk-25` (verify this exists after installing java don't just copy
-           the example text)
-    * MacOS
-        1. Run `/usr/libexec/java_home -V` and look for Java 25
-        2. Run `sudo nano ~/.zshenv`
-        3. Add `export JAVA_HOME=$(/usr/libexec/java_home)` as a new line
-        4. Use `CTRL + X`, then Press `Y`, Then `ENTER`
-        5. Quit & Reopen Terminal and verify with `echo $JAVA_HOME`. It should print a directory
-3. Once the project has setup, run `gradlew iris`
-4. The Iris jar will be placed in `Iris/build/Iris-XXX-XXX.jar` Enjoy! Consider supporting us by buying it on spigot!
+## Install
 
-### IDE Builds (for development)
+**Plugin (Paper/Purpur/Leaf/Canvas/Folia/Spigot):** drop the plugin jar into `plugins/` and start
+the server. On first boot Iris downloads the default `overworld` pack automatically.
 
-* Configure ITJ Gradle to use JDK 21 (in settings, search for gradle)
-* Add a build line in the build.gradle for your own build task to directly compile Iris into your plugins folder if you
-  prefer.
-* Resync the project & run your newly created task (under the development folder in gradle tasks!)
+**Mod (Fabric/Forge/NeoForge):** drop the mod jar into `mods/` and start the server. The jar is
+self-contained (core, SPI, and required Fabric API modules are bundled). On first boot Iris
+downloads the default `overworld` pack before the worldgen datapack is written, so the default
+pack is fully active immediately. Packs installed later register their custom dimension types
+(height ranges) and custom biomes through the forced datapack at server start — restart once after
+adding a pack so worlds get its full heights and biomes; worlds created before that restart run
+with fallback heights.
 
-# Iris Toolbelt
+**Singleplayer (modded clients):** installed Iris packs appear as selectable World Types on the
+Create New World screen; the integrated server runs the same engine.
 
-Everyone needs a tool-belt.
+## The client mod
 
-```java
-package art.arcane.iris.core.tools;
+Installing the mod jar on a client adds a native pregeneration HUD: a top-left panel with a
+progress bar, chunks done/total, percent, chunks per second, and ETA, turning yellow while the
+pregen is paused. The `H` key (rebindable, under the "Iris" controls category) toggles it.
 
-// Get IrisDataManager from a world
-IrisToolbelt.access(anyWorld).getCompound().getData();
+The HUD works against modded Iris servers and against Bukkit/Paper Iris servers, both over the
+`irisworldgen:main` channel (custom payloads on modded, plugin messaging on Bukkit). Vanilla
+clients are unaffected and get the server-side boss bar instead; on non-Iris servers the client
+mod is inert.
 
-// Get Default Engine from world
-IrisToolbelt.access(anyWorld).getCompound().getDefaultEngine();
+## Quickstart
 
-// Get the engine at the given height
-IrisToolbelt.access(anyWorld).getCompound().getEngineForHeight(68);
+Create and enter an Iris world.
 
-// IS THIS THING ON?
-boolean yes=IrisToolbelt.isIrisWorld(world);
+Plugin (optional arguments are keyed):
 
-// GTFO for worlds (moves players to any other world, just not this one)
-IrisToolbelt.evacuate(world);
-
-IrisAccess access=IrisToolbelt.createWorld() // If you like builders...
-  .name("myWorld") // The world name
-  .dimension("terrifyinghands")
-  .seed(69133742) // The world seed
-  .pregen(PregenTask // Define a pregen job to run
-  .builder()
-    .center(new Position2(0,0)) // REGION coords (1 region = 32x32 chunks)
-    .radius(4)  // Radius in REGIONS. Rad of 4 means a 9x9 Region map.
-    .build())
-  .create();
 ```
+/iris create myworld type=overworld seed=1337
+/iris load myworld
+```
+
+Mod (positional arguments):
+
+```
+/iris create myworld overworld 1337
+```
+
+`/iris pregen start` pregenerates around spawn; players with the client mod see the native HUD,
+everyone else gets a boss bar (modded) or console/status output. `/iris pregen status` reports
+progress on the plugin.
+
+## Studio and VSCode workspace
+
+The studio is the pack authoring environment, available on all platforms. Studio worlds are
+transient — they are deleted on close and purged at startup.
+
+```
+/iris studio create <name> [template]   scaffold a new pack (default template: example)
+/iris studio open <pack> [seed]         open a temporary studio world for live editing
+/iris studio vscode [pack]              write a .code-workspace with JSON schemas
+/iris studio update [pack]              regenerate the workspace schemas
+/iris studio close                      close and discard the studio world
+```
+
+As in the quickstart, optional arguments are keyed on the plugin (`seed=1234`) and positional on
+the mod.
+
+The generated VSCode workspace wires per-type JSON schemas (dimensions, biomes, regions, objects,
+loot, entities, snippets) for full autocomplete. Schemas are generated from the server's live
+registries, so on modded servers block, item, entity, enchantment, and potion-effect completion
+includes installed mod content (for example `create:brass_ingot`). Editing an open studio's pack
+files hotloads the changes and regenerates the schemas.
+
+## Building from source
+
+Requirements: JDK 25 (set `JAVA_HOME` to it). The Gradle wrapper handles everything else.
+
+```
+./gradlew buildAll
+```
+
+builds every platform artifact into `dist/`:
+
+```
+Iris v<version> [CraftBukkit] <mc>.jar
+Iris v<version> [Fabric] <mc>+<loader>.jar
+Iris v<version> [Forge] <mc>+<loader>.jar
+Iris v<version> [NeoForge] <mc>+<loader>.jar
+```
+
+Per-platform tasks: `./gradlew buildBukkit`, `buildFabric`, `buildForge`, `buildNeoforge`. The
+developer SPI jar (the pure-JVM platform API contract) is built to `spi/build/libs/` by
+`./gradlew :spi:jar`.
+
+If you need help compiling as a developer or contributor, ask in the Discord. Do not come to the
+Discord asking for free copies or a compile tutorial.
+
+## Maintainer docs
+
+- [Minecraft version bump checklist](docs/mc-version-bump.md)
+- [Release checklist](docs/release-checklist.md)

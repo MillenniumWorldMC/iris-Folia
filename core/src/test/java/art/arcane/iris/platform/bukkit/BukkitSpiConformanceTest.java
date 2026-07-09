@@ -20,16 +20,23 @@ package art.arcane.iris.platform.bukkit;
 
 import art.arcane.iris.spi.IrisPlatform;
 import art.arcane.iris.spi.IrisPlatforms;
+import art.arcane.iris.spi.PlatformBlockProperty;
 import art.arcane.iris.spi.PlatformBlockState;
+import art.arcane.iris.spi.PlatformRegistries;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Server;
 import org.bukkit.block.data.BlockData;
+import org.junit.Assume;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.mockito.invocation.InvocationOnMock;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 
 import static org.junit.Assert.assertEquals;
@@ -38,6 +45,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -62,7 +70,26 @@ public class BukkitSpiConformanceTest {
     private static BlockData blockData(String asString) {
         BlockData data = mock(BlockData.class);
         doReturn(asString).when(data).getAsString();
+        doReturn(asString).when(data).getAsString(anyBoolean());
         return data;
+    }
+
+    private static PlatformRegistries registries() {
+        return new BukkitRegistries();
+    }
+
+    private static void assertNamespacedRegistryList(Supplier<List<String>> supplier) {
+        List<String> keys;
+        try {
+            keys = supplier.get();
+        } catch (Throwable unavailable) {
+            Assume.assumeNoException("live Bukkit registry unavailable in this environment", unavailable);
+            return;
+        }
+        assertFalse(keys.isEmpty());
+        for (String key : keys) {
+            assertTrue("expected namespaced key but was '" + key + "'", key.contains(":"));
+        }
     }
 
     @Test
@@ -128,5 +155,63 @@ public class BukkitSpiConformanceTest {
         } catch (IllegalStateException expected) {
         }
         assertSame(first, IrisPlatforms.get());
+    }
+
+    @Test
+    public void itemKeysAreNamespacedAndNonEmpty() {
+        assertNamespacedRegistryList(() -> registries().itemKeys());
+    }
+
+    @Test
+    public void entityKeysAreNamespacedAndNonEmpty() {
+        assertNamespacedRegistryList(() -> registries().entityKeys());
+    }
+
+    @Test
+    public void enchantmentKeysAreNamespacedAndNonEmpty() {
+        assertNamespacedRegistryList(() -> registries().enchantmentKeys());
+    }
+
+    @Test
+    public void potionEffectKeysAreNamespacedAndNonEmpty() {
+        assertNamespacedRegistryList(() -> registries().potionEffectKeys());
+    }
+
+    @Test
+    public void blockTypeKeysAreNamespacedAndNonEmpty() {
+        assertNamespacedRegistryList(() -> registries().blockTypeKeys());
+    }
+
+    @Test
+    public void blockTypeKeysMatchAuthorableBlockTypeSource() {
+        List<String> keys;
+        List<String> legacy;
+        try {
+            keys = registries().blockTypeKeys();
+            legacy = Arrays.asList(BukkitBlockResolution.getBlockTypes());
+        } catch (Throwable unavailable) {
+            Assume.assumeNoException("live Bukkit registry unavailable in this environment", unavailable);
+            return;
+        }
+        assertEquals(legacy, keys);
+    }
+
+    @Test
+    public void blockStatePropertiesAreKeyedByNamespacedBlock() {
+        Map<String, List<PlatformBlockProperty>> states;
+        try {
+            states = registries().blockStateProperties();
+        } catch (Throwable unavailable) {
+            Assume.assumeNoException("live Bukkit registry unavailable in this environment", unavailable);
+            return;
+        }
+        assertFalse(states.isEmpty());
+        for (Map.Entry<String, List<PlatformBlockProperty>> entry : states.entrySet()) {
+            assertTrue("expected namespaced block key but was '" + entry.getKey() + "'", entry.getKey().contains(":"));
+            for (PlatformBlockProperty property : entry.getValue()) {
+                assertFalse(property.name().isEmpty());
+                assertFalse(property.jsonType().isEmpty());
+            }
+        }
     }
 }

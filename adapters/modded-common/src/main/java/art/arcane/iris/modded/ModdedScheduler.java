@@ -43,13 +43,17 @@ public final class ModdedScheduler implements PlatformScheduler {
 
     private static volatile Thread mainThread;
 
-    private final ThreadPoolExecutor asyncExecutor;
+    private volatile ThreadPoolExecutor asyncExecutor;
     private final ConcurrentLinkedQueue<Runnable> mainQueue = new ConcurrentLinkedQueue<>();
     private final ConcurrentLinkedQueue<DelayedTask> delayedQueue = new ConcurrentLinkedQueue<>();
 
     public ModdedScheduler() {
+        this.asyncExecutor = createAsyncExecutor();
+    }
+
+    private static ThreadPoolExecutor createAsyncExecutor() {
         BlockingQueue<Runnable> workQueue = new ArrayBlockingQueue<>(ASYNC_QUEUE_CAPACITY);
-        this.asyncExecutor = new ThreadPoolExecutor(
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(
             ASYNC_CORE_THREADS,
             ASYNC_MAX_THREADS,
             ASYNC_KEEP_ALIVE_SECONDS,
@@ -57,7 +61,8 @@ public final class ModdedScheduler implements PlatformScheduler {
             workQueue,
             new AsyncThreadFactory(),
             new ThreadPoolExecutor.CallerRunsPolicy());
-        this.asyncExecutor.allowCoreThreadTimeOut(true);
+        executor.allowCoreThreadTimeOut(true);
+        return executor;
     }
 
     public static void tick(MinecraftServer server) {
@@ -115,7 +120,18 @@ public final class ModdedScheduler implements PlatformScheduler {
     }
 
     public void reset() {
-        asyncExecutor.getQueue().clear();
+        if (asyncExecutor.isShutdown()) {
+            asyncExecutor = createAsyncExecutor();
+        } else {
+            asyncExecutor.getQueue().clear();
+        }
+        mainQueue.clear();
+        delayedQueue.clear();
+        mainThread = null;
+    }
+
+    public void shutdown() {
+        asyncExecutor.shutdownNow();
         mainQueue.clear();
         delayedQueue.clear();
         mainThread = null;

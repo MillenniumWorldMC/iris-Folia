@@ -24,7 +24,7 @@ import art.arcane.volmlib.util.json.JSONObject;
 import art.arcane.iris.util.common.plugin.VolmitSender;
 
 import javax.imageio.ImageIO;
-import java.awt.*;
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;

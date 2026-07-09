@@ -48,6 +48,7 @@ sourceSets {
     main {
         java {
             srcDir '../modded-common/src/main/java'
+            srcDir '../client-common/src/main/java'
         }
         resources {
             srcDir '../modded-common/src/main/resources'

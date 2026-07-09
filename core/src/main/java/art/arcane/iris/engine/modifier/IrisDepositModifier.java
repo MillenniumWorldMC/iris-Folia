@@ -20,7 +20,13 @@ package art.arcane.iris.engine.modifier;
 
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineAssignedModifier;
-import art.arcane.iris.engine.object.*;
+import art.arcane.iris.engine.object.IrisBiome;
+import art.arcane.iris.engine.object.IrisDepositGenerator;
+import art.arcane.iris.engine.object.IrisDepositVariant;
+import art.arcane.iris.engine.object.IrisDimension;
+import art.arcane.iris.engine.object.IrisObject;
+import art.arcane.iris.engine.object.IrisProceduralBlocks;
+import art.arcane.iris.engine.object.IrisRegion;
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.volmlib.util.data.HeightMap;
 import art.arcane.iris.util.project.hunk.Hunk;

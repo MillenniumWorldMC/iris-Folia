@@ -18,8 +18,12 @@
 
 package art.arcane.iris.engine.framework;
 
+import java.util.concurrent.ExecutorService;
+
 public interface PreservationRegistry {
     void register(Thread thread);
+
+    void register(ExecutorService service);
 
     void registerCache(MeteredCache cache);
 

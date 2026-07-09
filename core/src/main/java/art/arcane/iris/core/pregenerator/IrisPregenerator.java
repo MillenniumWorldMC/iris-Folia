@@ -19,6 +19,9 @@
 package art.arcane.iris.core.pregenerator;
 
 import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.protocol.IrisMessage;
+import art.arcane.iris.core.protocol.IrisProtocolServer;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.tools.IrisPackBenchmarking;
 import art.arcane.volmlib.util.collection.KList;
@@ -41,6 +44,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class IrisPregenerator {
     private static final double INVALID = 9223372036854775807d;
+    private static final AtomicLong JOB_SEQUENCE = new AtomicLong(0L);
+    private final long jobId;
     private final PregenTask task;
     private final PregeneratorMethod generator;
     private final PregenListener listener;
@@ -72,6 +77,7 @@ public class IrisPregenerator {
     private final IrisPackBenchmarking benchmarking;
 
     public IrisPregenerator(PregenTask task, PregeneratorMethod generator, PregenListener listener) {
+        this.jobId = JOB_SEQUENCE.incrementAndGet();
         benchmarking = IrisPackBenchmarking.getInstance();
         this.listener = listenify(listener);
         cl = new ChronoLatch(10000);
@@ -138,6 +144,17 @@ public class IrisPregenerator {
                         totalChunks.get() - generated.get(), eta, M.ms() - startTime.get(), currentGeneratorMethod.get(),
                         cached);
 
+                IrisProtocolServer protocolServer = IrisServices.getOrNull(IrisProtocolServer.class);
+                if (protocolServer != null) {
+                    protocolServer.broadcastPregenProgress(
+                            jobId,
+                            generated.get(),
+                            totalChunks.get(),
+                            cached ? cachedPerSecond.getAverage() : chunksPerSecond.getAverage(),
+                            eta,
+                            paused.get() ? IrisMessage.PregenProgress.STATE_PAUSED : IrisMessage.PregenProgress.STATE_RUNNING);
+                }
+
                 if (cl.flip()) {
                     double percentage = ((double) generated.get() / (double) totalChunks.get()) * 100;
 
@@ -171,6 +188,10 @@ public class IrisPregenerator {
         return Double.isFinite(d) && d != INVALID ? (long) d : 0;
     }
 
+
+    public long getJobId() {
+        return jobId;
+    }
 
     public void close() {
         shutdown.set(true);
@@ -219,6 +240,11 @@ public class IrisPregenerator {
         generator.close();
         ticker.interrupt();
         listener.onClose();
+        IrisProtocolServer protocolServer = IrisServices.getOrNull(IrisProtocolServer.class);
+        if (protocolServer != null) {
+            long total = totalChunks.get();
+            protocolServer.pregenEnd(jobId, total > 0 && generated.get() >= total);
+        }
         Mantle mantle = getMantle();
         if (mantle != null) {
             reclaimTectonicPlates(mantle);

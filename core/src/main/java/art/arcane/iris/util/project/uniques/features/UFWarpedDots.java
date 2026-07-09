@@ -5,7 +5,7 @@ import art.arcane.iris.util.project.noise.CNG;
 import art.arcane.iris.util.project.uniques.UFeature;
 import art.arcane.iris.util.project.uniques.UFeatureMeta;
 import art.arcane.iris.util.project.uniques.UImage;
-import java.awt.*;
+import java.awt.Color;
 import java.util.function.Consumer;
 
 public class UFWarpedDots implements UFeature {

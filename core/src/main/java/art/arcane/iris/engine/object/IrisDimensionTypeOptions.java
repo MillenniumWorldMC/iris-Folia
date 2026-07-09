@@ -1,11 +1,16 @@
 package art.arcane.iris.engine.object;
 
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.NonNull;
+import static art.arcane.iris.engine.object.IrisDimensionTypeOptions.TriState.DEFAULT;
+import static art.arcane.iris.engine.object.IrisDimensionTypeOptions.TriState.FALSE;
+import static art.arcane.iris.engine.object.IrisDimensionTypeOptions.TriState.TRUE;
 import art.arcane.iris.engine.object.annotations.Desc;
 import art.arcane.iris.engine.object.annotations.MaxNumber;
 import art.arcane.iris.engine.object.annotations.MinNumber;
 import art.arcane.volmlib.util.data.Varint;
 import art.arcane.volmlib.util.json.JSONObject;
-import lombok.*;
 import lombok.experimental.Accessors;
 import org.jetbrains.annotations.Nullable;
 
@@ -14,7 +19,6 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Arrays;
 
-import static art.arcane.iris.engine.object.IrisDimensionTypeOptions.TriState.*;
 
 @Data
 @NoArgsConstructor

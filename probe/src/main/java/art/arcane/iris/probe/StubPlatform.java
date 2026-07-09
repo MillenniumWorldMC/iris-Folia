@@ -22,6 +22,7 @@ import art.arcane.iris.spi.IrisPlatform;
 import art.arcane.iris.spi.LogLevel;
 import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.iris.spi.PlatformBiomeWriter;
+import art.arcane.iris.spi.PlatformBlockProperty;
 import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.spi.PlatformEntityType;
 import art.arcane.iris.spi.PlatformItem;
@@ -32,6 +33,7 @@ import art.arcane.iris.spi.PlatformWorld;
 
 import java.io.File;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
@@ -353,6 +355,36 @@ public final class StubPlatform implements IrisPlatform {
         @Override
         public List<String> structureKeys() {
             return List.of();
+        }
+
+        @Override
+        public List<String> itemKeys() {
+            return List.of();
+        }
+
+        @Override
+        public List<String> entityKeys() {
+            return List.of();
+        }
+
+        @Override
+        public List<String> blockTypeKeys() {
+            return List.of();
+        }
+
+        @Override
+        public List<String> enchantmentKeys() {
+            return List.of();
+        }
+
+        @Override
+        public List<String> potionEffectKeys() {
+            return List.of();
+        }
+
+        @Override
+        public Map<String, List<PlatformBlockProperty>> blockStateProperties() {
+            return Map.of();
         }
     }
 

@@ -19,6 +19,7 @@
 package art.arcane.iris.neoforge;
 
 import art.arcane.iris.modded.IrisModdedChunkGenerator;
+import art.arcane.iris.modded.ModdedDeathLoot;
 import art.arcane.iris.modded.ModdedEngineBootstrap;
 import art.arcane.iris.modded.ModdedForcedDatapack;
 import art.arcane.iris.modded.command.IrisModdedCommands;
@@ -28,12 +29,15 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLLoader;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.AddPackFindersEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
@@ -55,9 +59,16 @@ public final class IrisNeoForgeBootstrap {
             }
         });
 
+        NeoForgeProtocolNetworking.register(modBus);
+
+        if (FMLEnvironment.getDist() == Dist.CLIENT) {
+            IrisNeoForgeClient.init(modBus);
+        }
+
         NeoForge.EVENT_BUS.addListener((ServerStartingEvent event) -> ModdedEngineBootstrap.start(event.getServer()));
         NeoForge.EVENT_BUS.addListener((ServerStoppingEvent event) -> ModdedEngineBootstrap.stop());
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event) -> IrisModdedCommands.register(event.getDispatcher()));
+        NeoForge.EVENT_BUS.addListener((LivingDropsEvent event) -> ModdedDeathLoot.handle(event.getEntity()));
         NeoForge.EVENT_BUS.addListener((PlayerInteractEvent.LeftClickBlock event) -> {
             if (ModdedWandService.attackBlock(event.getEntity(), event.getLevel(), event.getHand(), event.getPos())) {
                 event.setCanceled(true);

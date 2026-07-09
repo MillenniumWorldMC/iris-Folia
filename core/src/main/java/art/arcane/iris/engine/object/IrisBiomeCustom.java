@@ -19,7 +19,13 @@
 package art.arcane.iris.engine.object;
 
 import art.arcane.iris.core.nms.datapack.IDataFixer;
-import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.engine.object.annotations.ArrayType;
+import art.arcane.iris.engine.object.annotations.DependsOn;
+import art.arcane.iris.engine.object.annotations.Desc;
+import art.arcane.iris.engine.object.annotations.MaxNumber;
+import art.arcane.iris.engine.object.annotations.MinNumber;
+import art.arcane.iris.engine.object.annotations.Required;
+import art.arcane.iris.engine.object.annotations.Snippet;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
@@ -30,7 +36,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
-import java.awt.*;
+import java.awt.Color;
 import java.util.Locale;
 
 @Snippet("custom-biome")

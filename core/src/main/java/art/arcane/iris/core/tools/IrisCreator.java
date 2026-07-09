@@ -44,7 +44,9 @@ import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.scheduling.FoliaScheduler;
 import lombok.Data;
 import lombok.experimental.Accessors;
-import org.bukkit.*;
+import org.bukkit.Bukkit;
+import org.bukkit.World;
+import org.bukkit.WorldCreator;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -241,6 +243,7 @@ public class IrisCreator {
             } catch (Throwable e) {
                 dx.set(true);
                 cancelRepeatingTask(pregenProgressTask);
+                IrisLogging.reportError(e);
                 e.printStackTrace();
             }
         }
@@ -401,6 +404,7 @@ public class IrisCreator {
                 IrisLogging.info("Registered \"" + name + "\" in bukkit.yml");
             } catch (IOException e) {
                 IrisLogging.error("Failed to update bukkit.yml!");
+                IrisLogging.reportError(e);
                 e.printStackTrace();
             }
         }

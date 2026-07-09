@@ -26,7 +26,14 @@ import art.arcane.iris.engine.data.cache.Cache;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineAssignedWorldManager;
 import art.arcane.iris.engine.platform.EngineBukkitOps;
-import art.arcane.iris.engine.object.*;
+import art.arcane.iris.engine.object.IRare;
+import art.arcane.iris.engine.object.IrisBiome;
+import art.arcane.iris.engine.object.IrisBlockDrops;
+import art.arcane.iris.engine.object.IrisEntitySpawn;
+import art.arcane.iris.engine.object.IrisMarker;
+import art.arcane.iris.engine.object.IrisPosition;
+import art.arcane.iris.engine.object.IrisRegion;
+import art.arcane.iris.engine.object.IrisSpawner;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
@@ -63,7 +70,14 @@ import org.bukkit.inventory.ItemStack;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -145,7 +159,7 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
                         engine.getEngineData().cleanup(getEngine());
                     }
 
-                    if (!IrisSettings.get().getWorld().isMarkerEntitySpawningSystem() && !IrisSettings.get().getWorld().isAnbientEntitySpawningSystem()) {
+                    if (!IrisSettings.get().getWorld().isMarkerEntitySpawningSystem() && !IrisSettings.get().getWorld().isAmbientEntitySpawningSystem()) {
                         return 3000;
                     }
 
@@ -576,7 +590,7 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
             });
         }
 
-        if (!IrisSettings.get().getWorld().isAnbientEntitySpawningSystem()) {
+        if (!IrisSettings.get().getWorld().isAmbientEntitySpawningSystem()) {
             return;
         }
 
@@ -1018,6 +1032,9 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
     public void close() {
         super.close();
         looper.interrupt();
+        if (cleanupService != null) {
+            cleanupService.shutdownNow();
+        }
     }
 
     @Override

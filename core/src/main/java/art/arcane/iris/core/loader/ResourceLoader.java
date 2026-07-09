@@ -46,13 +46,19 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
-import java.io.*;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -74,6 +80,7 @@ public class ResourceLoader<T extends IrisRegistrant> implements MeteredCache {
         return thread;
     });
     private static final Set<String> schemaBuildQueue = ConcurrentHashMap.newKeySet();
+    private static final AtomicBoolean schemaBuildExecutorRegistered = new AtomicBoolean();
     protected final AtomicCache<KList<File>> folderCache;
     protected KSet<String> firstAccess;
     protected File root;
@@ -101,6 +108,10 @@ public class ResourceLoader<T extends IrisRegistrant> implements MeteredCache {
         loadCache = new KCache<>(this::loadRaw, IrisSettings.get().getPerformance().getResourceLoaderCacheSize());
         IrisLogging.debug("Loader<" + C.GREEN + resourceTypeName + C.LIGHT_PURPLE + "> created in " + C.RED + "IDM/" + manager.getId() + C.LIGHT_PURPLE + " on " + C.GRAY + manager.getDataFolder().getPath());
         IrisServices.get(PreservationRegistry.class).registerCache(this);
+        PreservationRegistry preservation = IrisServices.getOrNull(PreservationRegistry.class);
+        if (preservation != null && schemaBuildExecutorRegistered.compareAndSet(false, true)) {
+            preservation.register(schemaBuildExecutor);
+        }
     }
 
     public JSONObject buildSchema() {

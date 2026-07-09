@@ -1,0 +1,153 @@
+package art.arcane.iris.client;
+
+import art.arcane.iris.spi.protocol.IrisMessage;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+
+public final class IrisPregenHud {
+    private static final int PANEL_COLOR = 0xC0101010;
+    private static final int TITLE_COLOR = 0xFF66BB6A;
+    private static final int TEXT_COLOR = 0xFFFFFFFF;
+    private static final int MUTED_COLOR = 0xFFD7D7D7;
+    private static final int BAR_BACK_COLOR = 0xFF2B2B2B;
+    private static final int BAR_RUNNING_COLOR = 0xFF66BB6A;
+    private static final int PAUSED_COLOR = 0xFFFFD54F;
+    private static final int GRID_BACK_COLOR = 0xFF161616;
+    private static final int CELL_PENDING_COLOR = 0xFF3A3A3A;
+    private static final int CELL_GENERATING_COLOR = 0xFFFFD54F;
+    private static final int CELL_DONE_COLOR = 0xFF66BB6A;
+    private static final int ORIGIN_X = 6;
+    private static final int ORIGIN_Y = 6;
+    private static final int PADDING = 4;
+    private static final int ROW_GAP = 2;
+    private static final int BAR_HEIGHT = 6;
+    private static final int MIN_WIDTH = 130;
+    private static final int MINIMAP_MAX_PX = 64;
+    private static final int MINIMAP_MAX_CELL = 6;
+    private static final int MINIMAP_GAP = 4;
+
+    private IrisPregenHud() {
+    }
+
+    public static void render(GuiGraphicsExtractor graphics) {
+        if (!IrisClient.hudVisible()) {
+            return;
+        }
+        IrisMessage.PregenProgress progress = IrisClient.pregen().active();
+        if (progress == null) {
+            return;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.player == null) {
+            return;
+        }
+        Font font = minecraft.font;
+        boolean paused = progress.state() == IrisMessage.PregenProgress.STATE_PAUSED;
+        double percent = progress.chunksTotal() > 0L
+                ? clampPercent((double) progress.chunksDone() / (double) progress.chunksTotal() * 100.0D)
+                : 0.0D;
+        String title = "Iris Pregen";
+        String stats = String.format("%,d / %,d  (%.1f%%)", progress.chunksDone(), progress.chunksTotal(), percent);
+        String tail = paused ? "PAUSED" : rateAndEta(progress);
+        int accent = paused ? PAUSED_COLOR : BAR_RUNNING_COLOR;
+
+        int lineHeight = font.lineHeight;
+        int contentWidth = Math.max(MIN_WIDTH, Math.max(font.width(title), Math.max(font.width(stats), font.width(tail))));
+        int contentHeight = lineHeight * 3 + ROW_GAP * 3 + BAR_HEIGHT;
+
+        IrisClientRegionMap regionMap = IrisClient.regions();
+        IrisClientRegionMap.Bounds bounds = regionMap.hasData() ? regionMap.bounds() : null;
+        boolean showMap = bounds != null;
+        int cellPx = 0;
+        int gridWidth = 0;
+        int gridHeight = 0;
+        if (showMap) {
+            int span = Math.max(bounds.regionsWide(), bounds.regionsTall());
+            cellPx = Math.max(1, Math.min(MINIMAP_MAX_CELL, MINIMAP_MAX_PX / span));
+            gridWidth = Math.min(MINIMAP_MAX_PX, bounds.regionsWide() * cellPx);
+            gridHeight = Math.min(MINIMAP_MAX_PX, bounds.regionsTall() * cellPx);
+        }
+
+        int panelWidth = showMap ? Math.max(contentWidth, gridWidth) : contentWidth;
+        int panelHeight = showMap ? contentHeight + MINIMAP_GAP + gridHeight : contentHeight;
+
+        graphics.fill(ORIGIN_X - PADDING, ORIGIN_Y - PADDING, ORIGIN_X + panelWidth + PADDING, ORIGIN_Y + panelHeight + PADDING, PANEL_COLOR);
+
+        int cursorY = ORIGIN_Y;
+        graphics.text(font, title, ORIGIN_X, cursorY, TITLE_COLOR);
+        cursorY += lineHeight + ROW_GAP;
+        graphics.text(font, stats, ORIGIN_X, cursorY, TEXT_COLOR);
+        cursorY += lineHeight + ROW_GAP;
+
+        int fillWidth = (int) Math.round(contentWidth * (percent / 100.0D));
+        graphics.fill(ORIGIN_X, cursorY, ORIGIN_X + contentWidth, cursorY + BAR_HEIGHT, BAR_BACK_COLOR);
+        if (fillWidth > 0) {
+            graphics.fill(ORIGIN_X, cursorY, ORIGIN_X + fillWidth, cursorY + BAR_HEIGHT, accent);
+        }
+        cursorY += BAR_HEIGHT + ROW_GAP;
+
+        graphics.text(font, tail, ORIGIN_X, cursorY, paused ? PAUSED_COLOR : MUTED_COLOR);
+
+        if (showMap) {
+            renderMinimap(graphics, regionMap, bounds, cellPx, gridWidth, gridHeight, ORIGIN_Y + contentHeight + MINIMAP_GAP);
+        }
+    }
+
+    private static void renderMinimap(GuiGraphicsExtractor graphics, IrisClientRegionMap regionMap, IrisClientRegionMap.Bounds bounds, int cellPx, int gridWidth, int gridHeight, int gridTop) {
+        int mapLeft = ORIGIN_X;
+        int mapRight = mapLeft + gridWidth;
+        int mapBottom = gridTop + gridHeight;
+        graphics.fill(mapLeft, gridTop, mapRight, mapBottom, GRID_BACK_COLOR);
+        int minRegionX = bounds.minRegionX();
+        int minRegionZ = bounds.minRegionZ();
+        regionMap.forEachCell((regionX, regionZ, state) -> {
+            int px = mapLeft + (regionX - minRegionX) * cellPx;
+            int py = gridTop + (regionZ - minRegionZ) * cellPx;
+            if (px + cellPx > mapRight || py + cellPx > mapBottom) {
+                return;
+            }
+            graphics.fill(px, py, px + cellPx, py + cellPx, cellColor(state));
+        });
+    }
+
+    private static int cellColor(int state) {
+        return switch (state) {
+            case IrisMessage.PregenRegionDelta.STATE_DONE -> CELL_DONE_COLOR;
+            case IrisMessage.PregenRegionDelta.STATE_GENERATING -> CELL_GENERATING_COLOR;
+            default -> CELL_PENDING_COLOR;
+        };
+    }
+
+    private static String rateAndEta(IrisMessage.PregenProgress progress) {
+        String rate = String.format("%,.0f/s", progress.chunksPerSecond());
+        if (progress.etaMillis() > 0L) {
+            return rate + "  ETA " + formatDuration(progress.etaMillis());
+        }
+        return rate;
+    }
+
+    private static String formatDuration(long etaMillis) {
+        long totalSeconds = etaMillis / 1000L;
+        long hours = totalSeconds / 3600L;
+        long minutes = (totalSeconds % 3600L) / 60L;
+        long seconds = totalSeconds % 60L;
+        if (hours > 0L) {
+            return hours + "h " + minutes + "m";
+        }
+        if (minutes > 0L) {
+            return minutes + "m " + seconds + "s";
+        }
+        return seconds + "s";
+    }
+
+    private static double clampPercent(double value) {
+        if (value < 0.0D) {
+            return 0.0D;
+        }
+        if (value > 100.0D) {
+            return 100.0D;
+        }
+        return value;
+    }
+}

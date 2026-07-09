@@ -19,6 +19,7 @@
 package art.arcane.iris.spi;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Resolves namespaced string keys against the platform's live registries into interned neutral handles.
@@ -45,4 +46,16 @@ public interface PlatformRegistries {
     List<String> biomeKeys();
 
     List<String> structureKeys();
+
+    List<String> itemKeys();
+
+    List<String> entityKeys();
+
+    List<String> blockTypeKeys();
+
+    List<String> enchantmentKeys();
+
+    List<String> potionEffectKeys();
+
+    Map<String, List<PlatformBlockProperty>> blockStateProperties();
 }

@@ -25,7 +25,7 @@ import org.bukkit.Particle;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
-import java.awt.*;
+import java.awt.Color;
 
 import static art.arcane.iris.util.common.data.registry.Particles.REDSTONE;
 

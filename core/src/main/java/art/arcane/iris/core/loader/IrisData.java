@@ -18,7 +18,13 @@
 
 package art.arcane.iris.core.loader;
 
-import com.google.gson.*;
+import com.google.gson.ExclusionStrategy;
+import com.google.gson.FieldAttributes;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.Strictness;
+import com.google.gson.TypeAdapter;
+import com.google.gson.TypeAdapterFactory;
 import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
@@ -27,7 +33,22 @@ import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.framework.Engine;
-import art.arcane.iris.engine.object.*;
+import art.arcane.iris.engine.object.IrisBiome;
+import art.arcane.iris.engine.object.IrisBlockData;
+import art.arcane.iris.engine.object.IrisDimension;
+import art.arcane.iris.engine.object.IrisEntity;
+import art.arcane.iris.engine.object.IrisExpression;
+import art.arcane.iris.engine.object.IrisGenerator;
+import art.arcane.iris.engine.object.IrisImage;
+import art.arcane.iris.engine.object.IrisJigsawPiece;
+import art.arcane.iris.engine.object.IrisJigsawPool;
+import art.arcane.iris.engine.object.IrisLootTable;
+import art.arcane.iris.engine.object.IrisMarker;
+import art.arcane.iris.engine.object.IrisMod;
+import art.arcane.iris.engine.object.IrisObject;
+import art.arcane.iris.engine.object.IrisRegion;
+import art.arcane.iris.engine.object.IrisSpawner;
+import art.arcane.iris.engine.object.IrisStructure;
 import art.arcane.iris.engine.object.annotations.Snippet;
 import art.arcane.iris.engine.object.matter.IrisMatterObject;
 import art.arcane.volmlib.util.collection.KList;
@@ -48,7 +69,11 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 
 @Data
 public class IrisData implements ExclusionStrategy, TypeAdapterFactory {

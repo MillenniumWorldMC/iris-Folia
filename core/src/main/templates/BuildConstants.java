@@ -4,4 +4,5 @@ package art.arcane.iris;
 public interface BuildConstants {
     String ENVIRONMENT = "${environment}";
     String COMMIT = "${commit}";
+    String MINECRAFT_VERSION = "${minecraftVersion}";
 }

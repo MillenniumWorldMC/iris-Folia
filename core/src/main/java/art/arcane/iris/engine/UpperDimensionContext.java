@@ -2,7 +2,13 @@ package art.arcane.iris.engine;
 
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.framework.Engine;
-import art.arcane.iris.engine.object.*;
+import art.arcane.iris.engine.object.InferredType;
+import art.arcane.iris.engine.object.IrisBiome;
+import art.arcane.iris.engine.object.IrisDimension;
+import art.arcane.iris.engine.object.IrisGenerator;
+import art.arcane.iris.engine.object.IrisInterpolator;
+import art.arcane.iris.engine.object.IrisRegion;
+import art.arcane.iris.engine.object.IrisShapedGeneratorStyle;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.iris.util.common.data.DataProvider;
@@ -13,7 +19,12 @@ import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.project.stream.ProceduralStream;
 import art.arcane.iris.util.project.stream.interpolation.Interpolated;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.Map;
+import java.util.Set;
 
 public class UpperDimensionContext implements DataProvider {
     private static final NoiseBounds ZERO_NOISE_BOUNDS = new NoiseBounds(0D, 0D);

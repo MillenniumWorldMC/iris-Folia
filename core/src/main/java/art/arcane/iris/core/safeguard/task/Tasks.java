@@ -1,5 +1,6 @@
 package art.arcane.iris.core.safeguard.task;
 
+import art.arcane.iris.BuildConstants;
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.core.IrisWorlds;
 import art.arcane.iris.core.nms.INMS;
@@ -94,7 +95,7 @@ public final class Tasks {
         } else if (parts.length >= 2) {
             supportedVersions = parts[1];
         } else {
-            supportedVersions = "26.2";
+            supportedVersions = BuildConstants.MINECRAFT_VERSION;
         }
 
         if (!(INMS.get() instanceof NMSBinding1X)) {

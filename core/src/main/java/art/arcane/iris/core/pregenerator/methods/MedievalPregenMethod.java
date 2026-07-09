@@ -23,7 +23,9 @@ import art.arcane.iris.core.pregenerator.PregenListener;
 import art.arcane.iris.core.pregenerator.PregeneratorMethod;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.framework.Engine;
+import art.arcane.iris.engine.framework.PreservationRegistry;
 import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisServices;
 import art.arcane.iris.util.project.context.ChunkContext;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.mantle.runtime.Mantle;
@@ -63,6 +65,10 @@ public class MedievalPregenMethod implements PregeneratorMethod {
         this.prefetchDisabled = new AtomicBoolean(J.isFolia());
         int prefetchThreads = J.isFolia() ? 0 : Math.max(2, Math.min(16, configuredThreads));
         this.prefetchPool = prefetchThreads > 0 ? newPrefetchPool(prefetchThreads) : null;
+        PreservationRegistry preservation = IrisServices.getOrNull(PreservationRegistry.class);
+        if (preservation != null && prefetchPool != null) {
+            preservation.register(prefetchPool);
+        }
     }
 
     private static ExecutorService newPrefetchPool(int threads) {

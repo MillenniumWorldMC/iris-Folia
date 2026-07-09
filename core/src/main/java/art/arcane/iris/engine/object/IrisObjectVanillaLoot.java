@@ -2,7 +2,11 @@ package art.arcane.iris.engine.object;
 
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.data.cache.AtomicCache;
-import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.engine.object.annotations.ArrayType;
+import art.arcane.iris.engine.object.annotations.Desc;
+import art.arcane.iris.engine.object.annotations.RegistryListFunction;
+import art.arcane.iris.engine.object.annotations.Required;
+import art.arcane.iris.engine.object.annotations.Snippet;
 import art.arcane.iris.engine.object.annotations.functions.LootTableKeyFunction;
 import art.arcane.volmlib.util.collection.KList;
 import lombok.AllArgsConstructor;

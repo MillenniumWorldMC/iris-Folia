@@ -20,7 +20,13 @@ package art.arcane.iris.engine.object;
 
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.framework.Engine;
-import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.engine.object.annotations.DependsOn;
+import art.arcane.iris.engine.object.annotations.Desc;
+import art.arcane.iris.engine.object.annotations.MaxNumber;
+import art.arcane.iris.engine.object.annotations.MinNumber;
+import art.arcane.iris.engine.object.annotations.RegistryListPotionEffect;
+import art.arcane.iris.engine.object.annotations.Required;
+import art.arcane.iris.engine.object.annotations.Snippet;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.volmlib.util.math.RNG;
 import art.arcane.volmlib.util.scheduling.ChronoLatch;

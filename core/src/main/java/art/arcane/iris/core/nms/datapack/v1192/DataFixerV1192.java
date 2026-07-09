@@ -1,5 +1,7 @@
 package art.arcane.iris.core.nms.datapack.v1192;
 
+import static art.arcane.iris.engine.object.IrisDimensionTypeOptions.TriState.FALSE;
+import static art.arcane.iris.engine.object.IrisDimensionTypeOptions.TriState.TRUE;
 import art.arcane.iris.core.nms.datapack.IDataFixer;
 import art.arcane.iris.engine.object.IrisDimensionTypeOptions;
 import art.arcane.volmlib.util.json.JSONObject;
@@ -7,7 +9,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 
-import static art.arcane.iris.engine.object.IrisDimensionTypeOptions.TriState.*;
 
 public class DataFixerV1192 implements IDataFixer {
     private static final Map<Dimension, IrisDimensionTypeOptions> OPTIONS = Map.of(

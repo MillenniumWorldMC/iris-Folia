@@ -18,7 +18,11 @@
 
 package art.arcane.iris.engine.object;
 
-import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.engine.object.annotations.Desc;
+import art.arcane.iris.engine.object.annotations.MaxNumber;
+import art.arcane.iris.engine.object.annotations.MinNumber;
+import art.arcane.iris.engine.object.annotations.Required;
+import art.arcane.iris.engine.object.annotations.Snippet;
 import art.arcane.volmlib.util.function.NoiseProvider3;
 import art.arcane.iris.util.project.interpolation.InterpolationMethod3D;
 import art.arcane.iris.util.project.interpolation.IrisInterpolation;

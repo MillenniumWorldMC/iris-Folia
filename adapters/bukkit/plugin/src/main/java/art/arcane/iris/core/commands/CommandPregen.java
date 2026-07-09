@@ -61,7 +61,7 @@ public class CommandPregen implements DirectorExecutor {
             sender().sendMessage(msg);
             Iris.info(msg);
         } catch (Throwable e) {
-            sender().sendMessage(C.RED + "Epic fail. See console.");
+            sender().sendMessage(C.RED + "Failed to start pregeneration. See console for details.");
             Iris.reportError(e);
             e.printStackTrace();
         }

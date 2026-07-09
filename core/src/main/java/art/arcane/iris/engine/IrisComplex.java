@@ -22,7 +22,14 @@ import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.data.cache.Cache;
 import art.arcane.iris.engine.framework.Engine;
-import art.arcane.iris.engine.object.*;
+import art.arcane.iris.engine.object.InferredType;
+import art.arcane.iris.engine.object.IrisBiome;
+import art.arcane.iris.engine.object.IrisDecorationPart;
+import art.arcane.iris.engine.object.IrisDecorator;
+import art.arcane.iris.engine.object.IrisGenerator;
+import art.arcane.iris.engine.object.IrisInterpolator;
+import art.arcane.iris.engine.object.IrisRegion;
+import art.arcane.iris.engine.object.IrisShapedGeneratorStyle;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.PlatformBiome;
@@ -41,7 +48,13 @@ import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
 import java.io.File;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 @Data
 @EqualsAndHashCode(exclude = "data")

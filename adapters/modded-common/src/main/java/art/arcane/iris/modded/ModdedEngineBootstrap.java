@@ -21,7 +21,6 @@ package art.arcane.iris.modded;
 import art.arcane.iris.core.gui.GuiHost;
 import art.arcane.iris.engine.decorator.DecoratorPlatformHooks;
 import art.arcane.iris.engine.framework.Engine;
-import art.arcane.iris.engine.framework.EngineWorldManager;
 import art.arcane.iris.engine.framework.EngineWorldManagerProvider;
 import art.arcane.iris.engine.framework.PreservationRegistry;
 import art.arcane.iris.engine.object.BlockDataMergeSupport;
@@ -36,6 +35,7 @@ import art.arcane.iris.modded.command.ModdedStudioCommands;
 import art.arcane.iris.modded.command.ModdedWandService;
 import art.arcane.iris.modded.service.ModdedChunkUpdateService;
 import art.arcane.iris.modded.service.ModdedEngineMaintenanceService;
+import art.arcane.iris.modded.service.ModdedEntitySpawnService;
 import art.arcane.iris.modded.service.ModdedLogFilterService;
 import art.arcane.iris.modded.service.ModdedPreservationService;
 import art.arcane.iris.modded.service.ModdedSettingsHotloadService;
@@ -43,10 +43,6 @@ import art.arcane.iris.modded.service.ModdedStudioHotloadService;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.IrisServices;
 import net.minecraft.server.MinecraftServer;
-import org.bukkit.Chunk;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
-import org.bukkit.event.player.PlayerTeleportEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,6 +77,7 @@ public final class ModdedEngineBootstrap {
         ModdedPrimaryWorldRouter.tick(server);
         SERVICE_MANAGER.tick(server);
         ModdedPregenBossBar.tick(server);
+        ModdedProtocolHandler.tickDimensionSync(server);
     }
 
     public static void start(MinecraftServer server) {
@@ -91,10 +88,14 @@ public final class ModdedEngineBootstrap {
         if (scheduler != null) {
             scheduler.reset();
         }
+        IrisModdedChunkGenerator.startGenPool();
         SERVICE_MANAGER.enableAll();
+        ModdedProtocolHandler.start(server);
+        ModdedSentry.start(loader());
     }
 
     public static void stop() {
+        ModdedProtocolHandler.stop();
         ModdedPregenJob.shutdown();
         ModdedObjectUndo.clearAll();
         ModdedWandService.clearAll();
@@ -105,8 +106,10 @@ public final class ModdedEngineBootstrap {
         ModdedDimensionManager.clear();
         ModdedScheduler scheduler = schedulerOrNull();
         if (scheduler != null) {
-            scheduler.reset();
+            scheduler.shutdown();
         }
+        IrisModdedChunkGenerator.shutdownGenPool();
+        ModdedSentry.flush();
         ModdedStartup.reset();
         currentServer = null;
     }
@@ -197,8 +200,9 @@ public final class ModdedEngineBootstrap {
             SERVICE_MANAGER.register(ModdedSettingsHotloadService.class, new ModdedSettingsHotloadService());
             SERVICE_MANAGER.register(ModdedStudioHotloadService.class, new ModdedStudioHotloadService());
             SERVICE_MANAGER.register(ModdedChunkUpdateService.class, new ModdedChunkUpdateService());
+            SERVICE_MANAGER.register(ModdedEntitySpawnService.class, new ModdedEntitySpawnService());
             IrisServices.register(PreservationRegistry.class, preservation);
-            IrisServices.register(EngineWorldManagerProvider.class, (EngineWorldManagerProvider) (Engine engine) -> new InertWorldManager());
+            IrisServices.register(EngineWorldManagerProvider.class, (EngineWorldManagerProvider) (Engine engine) -> new ModdedWorldManager(engine));
             ModdedCustomContentRegistry.discover();
             platform = created;
             SERVICE_MANAGER.enableAll();
@@ -207,55 +211,6 @@ public final class ModdedEngineBootstrap {
             }
             ModdedIrisSplash.print(boundLoader);
             return created;
-        }
-    }
-
-    private static final class InertWorldManager implements EngineWorldManager {
-        @Override
-        public void close() {
-        }
-
-        @Override
-        public int getEntityCount() {
-            return 0;
-        }
-
-        @Override
-        public int getChunkCount() {
-            return 0;
-        }
-
-        @Override
-        public double getEntitySaturation() {
-            return 0;
-        }
-
-        @Override
-        public void onTick() {
-        }
-
-        @Override
-        public void onSave() {
-        }
-
-        @Override
-        public void onBlockBreak(BlockBreakEvent e) {
-        }
-
-        @Override
-        public void onBlockPlace(BlockPlaceEvent e) {
-        }
-
-        @Override
-        public void onChunkLoad(Chunk e, boolean generated) {
-        }
-
-        @Override
-        public void onChunkUnload(Chunk e) {
-        }
-
-        @Override
-        public void teleportAsync(PlayerTeleportEvent e) {
         }
     }
 }

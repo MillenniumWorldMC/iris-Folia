@@ -34,6 +34,10 @@ public final class IrisPlatforms {
         platform = p;
     }
 
+    public static synchronized void unbind() {
+        platform = null;
+    }
+
     public static IrisPlatform get() {
         IrisPlatform bound = platform;
         if (bound == null) {

@@ -18,6 +18,14 @@
 
 package art.arcane.iris.engine.platform;
 
+import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
+import org.bukkit.HeightMap;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.World;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Semaphore;
 import art.arcane.iris.spi.IrisServices;
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.core.IrisSettings;
@@ -54,7 +62,6 @@ import io.papermc.lib.PaperLib;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.Setter;
-import org.bukkit.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -71,7 +78,6 @@ import java.io.PrintWriter;
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;

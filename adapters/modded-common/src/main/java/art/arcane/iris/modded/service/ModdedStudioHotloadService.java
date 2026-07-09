@@ -19,9 +19,11 @@
 package art.arcane.iris.modded.service;
 
 import art.arcane.iris.core.gui.PregeneratorJob;
+import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.modded.IrisModdedChunkGenerator;
 import art.arcane.iris.modded.ModdedDimensionManager;
+import art.arcane.iris.modded.ModdedWorkspaceGenerator;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.io.ReactiveFolder;
 import art.arcane.volmlib.util.scheduling.ChronoLatch;
@@ -169,9 +171,19 @@ public final class ModdedStudioHotloadService implements ModdedTickableService {
         try {
             engine.hotloadSilently();
             generator.onHotload();
+            regenerateSchemas(dimensionId, engine);
             LOGGER.info("Iris studio hotload {} pack={} {}ms", dimensionId, engine.getDimension().getLoadKey(), System.currentTimeMillis() - start);
         } catch (Throwable e) {
             LOGGER.error("Iris studio hotload failed for {}", dimensionId, e);
+        }
+    }
+
+    private void regenerateSchemas(String dimensionId, Engine engine) {
+        try {
+            IrisData data = engine.getData();
+            ModdedWorkspaceGenerator.writeWorkspace(data, data.getDataFolder());
+        } catch (Throwable e) {
+            LOGGER.error("Iris studio schema regeneration failed for {}", dimensionId, e);
         }
     }
 

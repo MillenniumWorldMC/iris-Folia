@@ -84,7 +84,21 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
 
     private static final AtomicInteger GEN_THREAD_SEQ = new AtomicInteger();
     private static final boolean PARALLEL_CHUNK_SYSTEM = detectParallelChunkSystem();
-    private static final ExecutorService GEN_POOL = createGenPool();
+    private static volatile ExecutorService genPool = createGenPool();
+
+    public static void startGenPool() {
+        ExecutorService pool = genPool;
+        if (pool == null || pool.isShutdown()) {
+            genPool = createGenPool();
+        }
+    }
+
+    public static void shutdownGenPool() {
+        ExecutorService pool = genPool;
+        if (pool != null) {
+            pool.shutdownNow();
+        }
+    }
 
     private static boolean detectParallelChunkSystem() {
         String[] markers = {
@@ -269,7 +283,7 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
         }
         return CompletableFuture.supplyAsync(
                 () -> generateTerrain(chunk, generationEngine, pos, dimMinY, height, air, biomeRegistry, randomState),
-                GEN_POOL);
+                genPool);
     }
 
     private ChunkAccess generateTerrain(ChunkAccess chunk, Engine generationEngine, ChunkPos pos,
@@ -294,6 +308,7 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
         writeBlocks(chunk, blocks, dimMinY, height);
         Heightmap.primeHeightmaps(chunk, EnumSet.of(Heightmap.Types.WORLD_SURFACE_WG, Heightmap.Types.OCEAN_FLOOR_WG));
         chunk.fillBiomesFromNoise(new HunkBiomeResolver(this, biomes, biomeRegistry, pos, dimMinY, height), randomState.sampler());
+        ModdedWorldManager.enqueueGenerated(generationEngine, pos.x(), pos.z());
         return chunk;
     }
 

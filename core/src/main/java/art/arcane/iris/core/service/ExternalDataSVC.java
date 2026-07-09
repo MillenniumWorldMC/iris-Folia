@@ -21,7 +21,8 @@ package art.arcane.iris.core.service;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
-import art.arcane.iris.core.link.*;
+import art.arcane.iris.core.link.ExternalDataProvider;
+import art.arcane.iris.core.link.Identifier;
 import art.arcane.iris.core.link.data.DataType;
 import art.arcane.iris.core.nms.container.BlockProperty;
 import art.arcane.iris.core.nms.container.Pair;
@@ -42,7 +43,11 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.server.PluginEnableEvent;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.MissingResourceException;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Data

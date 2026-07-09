@@ -24,7 +24,13 @@ import art.arcane.iris.spi.IrisServices;
 import art.arcane.iris.core.link.Identifier;
 import art.arcane.iris.core.service.ExternalDataSVC;
 import art.arcane.iris.engine.data.cache.AtomicCache;
-import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.engine.object.annotations.ArrayType;
+import art.arcane.iris.engine.object.annotations.Desc;
+import art.arcane.iris.engine.object.annotations.MaxNumber;
+import art.arcane.iris.engine.object.annotations.MinNumber;
+import art.arcane.iris.engine.object.annotations.RegistryListItemType;
+import art.arcane.iris.engine.object.annotations.Required;
+import art.arcane.iris.engine.object.annotations.Snippet;
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.volmlib.util.collection.KList;
@@ -49,7 +55,7 @@ import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.inventory.meta.components.CustomModelDataComponent;
 import org.bukkit.material.Colorable;
 
-import java.awt.*;
+import java.awt.Color;
 import java.util.List;
 import java.util.Optional;
 

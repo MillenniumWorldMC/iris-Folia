@@ -19,7 +19,8 @@
 package art.arcane.iris.core.tools;
 
 import art.arcane.iris.core.loader.IrisData;
-import art.arcane.iris.engine.object.*;
+import art.arcane.iris.engine.object.IrisDimension;
+import art.arcane.iris.engine.object.IrisWorld;
 import art.arcane.iris.engine.platform.BukkitChunkGenerator;
 import org.bukkit.Bukkit;
 import org.bukkit.World;

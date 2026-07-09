@@ -194,6 +194,8 @@ public final class IrisModdedCommands {
         root.then(ModdedStructureCommands.tree("structure"));
         root.then(ModdedStructureCommands.tree("struct"));
         root.then(ModdedStructureCommands.tree("str"));
+        root.then(ModdedDeveloperCommands.tree("developer"));
+        root.then(ModdedDeveloperCommands.tree("dev"));
 
         return root;
     }

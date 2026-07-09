@@ -201,6 +201,7 @@ def generateTemplates = tasks.register('generateTemplates', Copy) {
             logger.error('Git commit hash not found', failure)
             return 'unknown'
         },
+        minecraftVersion: providers.gradleProperty('minecraftVersion'),
     ])
 
     from(templateSource)

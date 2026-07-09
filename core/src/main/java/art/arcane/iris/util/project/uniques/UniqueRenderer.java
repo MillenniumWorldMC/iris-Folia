@@ -1,6 +1,9 @@
 package art.arcane.iris.util.project.uniques;
 
+import art.arcane.iris.engine.framework.PreservationRegistry;
 import art.arcane.iris.engine.object.NoiseStyle;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.IrisLogging;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.format.Form;
@@ -14,7 +17,13 @@ import art.arcane.volmlib.util.scheduling.ChronoLatch;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
 import art.arcane.iris.util.project.stream.ProceduralStream;
-import art.arcane.iris.util.project.uniques.features.*;
+import art.arcane.iris.util.project.uniques.features.UFInterpolator;
+import art.arcane.iris.util.project.uniques.features.UFNOOP;
+import art.arcane.iris.util.project.uniques.features.UFWarpedBackground;
+import art.arcane.iris.util.project.uniques.features.UFWarpedCircle;
+import art.arcane.iris.util.project.uniques.features.UFWarpedDisc;
+import art.arcane.iris.util.project.uniques.features.UFWarpedDots;
+import art.arcane.iris.util.project.uniques.features.UFWarpedLines;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -41,6 +50,10 @@ public class UniqueRenderer {
 
     public UniqueRenderer(String seed, int width, int height) {
         renderer = this;
+        PreservationRegistry preservation = IrisServices.getOrNull(PreservationRegistry.class);
+        if (preservation != null) {
+            preservation.register(executor);
+        }
         computeNoiseStyles(3000, 2);
         computeInterpolationMethods(3000, 2);
         this.seed = seed;
@@ -52,8 +65,8 @@ public class UniqueRenderer {
                 J.sleep(5000);
 
                 if (!writing.isEmpty()) {
-                    System.out.println(Form.repeat("\n", 60));
-                    System.out.println(Form.memSize(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(), 2) + " of " + Form.memSize(Runtime.getRuntime().totalMemory(), 2));
+                    IrisLogging.info("%s", Form.repeat("\n", 60));
+                    IrisLogging.info("%s", Form.memSize(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory(), 2) + " of " + Form.memSize(Runtime.getRuntime().totalMemory(), 2));
                     KMap<String, String> c = writing.copy();
 
                     for (String i : writing.k().sort()) {
@@ -77,7 +90,7 @@ public class UniqueRenderer {
                             }
                         }
 
-                        System.out.println(prog + " " + i + " => " + f);
+                        IrisLogging.info("%s", prog + " " + i + " => " + f);
                     }
                 }
             }
@@ -162,9 +175,9 @@ public class UniqueRenderer {
         KMap<NoiseStyle, Integer> speeds = new KMap<>();
         double allocateMS = time;
         double maxTestDuration = allocateMS / allowedStyles.size();
-        System.out.println("Running Noise Style Benchmark for " + Form.duration(allocateMS, 0) + ".");
-        System.out.println("Benchmarking " + allowedStyles.size() + " + Noise Styles for " + Form.duration(maxTestDuration, 1) + " each.");
-        System.out.println();
+        IrisLogging.info("%s", "Running Noise Style Benchmark for " + Form.duration(allocateMS, 0) + ".");
+        IrisLogging.info("%s", "Benchmarking " + allowedStyles.size() + " + Noise Styles for " + Form.duration(maxTestDuration, 1) + " each.");
+        IrisLogging.info("");
 
         for (NoiseStyle i : allowedStyles) {
             int score = 0;
@@ -182,11 +195,11 @@ public class UniqueRenderer {
         }
 
         for (NoiseStyle i : speeds.sortKNumber()) {
-            System.out.println(Form.capitalizeWords(i.name().toLowerCase(Locale.ROOT).replaceAll("\\Q_\\E", " ")) + " => " + Form.f(speeds.get(i)));
+            IrisLogging.info("%s", Form.capitalizeWords(i.name().toLowerCase(Locale.ROOT).replaceAll("\\Q_\\E", " ")) + " => " + Form.f(speeds.get(i)));
         }
-        System.out.println();
+        IrisLogging.info("");
         int takeUpTo = (int) Math.max(1, scope * speeds.size());
-        System.out.println("Choosing the fastest " + Form.pc(scope) + " styles (" + takeUpTo + ")");
+        IrisLogging.info("%s", "Choosing the fastest " + Form.pc(scope) + " styles (" + takeUpTo + ")");
 
         for (NoiseStyle i : speeds.sortKNumber().reverse()) {
             if (takeUpTo-- <= 0) {
@@ -194,7 +207,7 @@ public class UniqueRenderer {
             }
 
             sortedStyles.add(i);
-            System.out.println("- " + Form.capitalizeWords(i.name().toLowerCase(Locale.ROOT).replaceAll("\\Q_\\E", " ")));
+            IrisLogging.info("%s", "- " + Form.capitalizeWords(i.name().toLowerCase(Locale.ROOT).replaceAll("\\Q_\\E", " ")));
         }
     }
 
@@ -204,9 +217,9 @@ public class UniqueRenderer {
         KMap<InterpolationMethod, Integer> speeds = new KMap<>();
         double allocateMS = time;
         double maxTestDuration = allocateMS / allowedStyles.size();
-        System.out.println("Running Interpolation Method Benchmark for " + Form.duration(allocateMS, 0) + ".");
-        System.out.println("Benchmarking " + allowedStyles.size() + " + Interpolation Methods for " + Form.duration(maxTestDuration, 1) + " each.");
-        System.out.println();
+        IrisLogging.info("%s", "Running Interpolation Method Benchmark for " + Form.duration(allocateMS, 0) + ".");
+        IrisLogging.info("%s", "Benchmarking " + allowedStyles.size() + " + Interpolation Methods for " + Form.duration(maxTestDuration, 1) + " each.");
+        IrisLogging.info("");
 
         RNG r = new RNG("renderspeedtestinterpolation");
         CNG cng = NoiseStyle.SIMPLEX.create(r);
@@ -229,11 +242,11 @@ public class UniqueRenderer {
         }
 
         for (InterpolationMethod i : speeds.sortKNumber()) {
-            System.out.println(Form.capitalizeWords(i.name().toLowerCase(Locale.ROOT).replaceAll("\\Q_\\E", " ")) + " => " + Form.f(speeds.get(i)));
+            IrisLogging.info("%s", Form.capitalizeWords(i.name().toLowerCase(Locale.ROOT).replaceAll("\\Q_\\E", " ")) + " => " + Form.f(speeds.get(i)));
         }
-        System.out.println();
+        IrisLogging.info("");
         int takeUpTo = (int) Math.max(1, scope * speeds.size());
-        System.out.println("Choosing the fastest " + Form.pc(scope) + " interpolators (" + takeUpTo + ")");
+        IrisLogging.info("%s", "Choosing the fastest " + Form.pc(scope) + " interpolators (" + takeUpTo + ")");
 
         for (InterpolationMethod i : speeds.sortKNumber().reverse()) {
             if (takeUpTo-- <= 0) {
@@ -241,7 +254,7 @@ public class UniqueRenderer {
             }
 
             sortedInterpolators.add(i);
-            System.out.println("- " + Form.capitalizeWords(i.name().toLowerCase(Locale.ROOT).replaceAll("\\Q_\\E", " ")));
+            IrisLogging.info("%s", "- " + Form.capitalizeWords(i.name().toLowerCase(Locale.ROOT).replaceAll("\\Q_\\E", " ")));
         }
     }
 
@@ -276,7 +289,7 @@ public class UniqueRenderer {
     }
 
     public void report(String s) {
-        System.out.println(s);
+        IrisLogging.info("%s", s);
     }
 
     public KList<NoiseStyle> getStyles() {

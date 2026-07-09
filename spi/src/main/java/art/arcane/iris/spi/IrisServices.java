@@ -38,6 +38,15 @@ public final class IrisServices {
         return type.cast(implementation);
     }
 
+    public static <T> T getOrNull(Class<T> type) {
+        Object implementation = SERVICES.get(type);
+        return implementation == null ? null : type.cast(implementation);
+    }
+
+    public static void remove(Class<?> type) {
+        SERVICES.remove(type);
+    }
+
     public static void clear() {
         SERVICES.clear();
     }

@@ -15,7 +15,9 @@ import org.jetbrains.annotations.Nullable;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static art.arcane.iris.util.common.data.registry.KeyedRegistry.wrapped;

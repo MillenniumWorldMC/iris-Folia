@@ -21,6 +21,8 @@ package art.arcane.iris.core.gui;
 import art.arcane.iris.engine.framework.render.IrisRenderer;
 import art.arcane.iris.engine.framework.render.RenderType;
 import art.arcane.iris.engine.framework.Engine;
+import art.arcane.iris.engine.framework.PreservationRegistry;
+import art.arcane.iris.spi.IrisServices;
 import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisRegion;
 import art.arcane.volmlib.util.collection.KList;
@@ -154,6 +156,11 @@ public class VisionGUI extends JPanel implements MouseWheelListener, KeyListener
     });
 
     public VisionGUI(JFrame frame) {
+        PreservationRegistry preservation = IrisServices.getOrNull(PreservationRegistry.class);
+        if (preservation != null) {
+            preservation.register(e);
+            preservation.register(eh);
+        }
         m.set(8);
         rs.put(1);
         setBackground(BG);

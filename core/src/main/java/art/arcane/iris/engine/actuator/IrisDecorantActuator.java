@@ -18,7 +18,11 @@
 
 package art.arcane.iris.engine.actuator;
 
-import art.arcane.iris.engine.decorator.*;
+import art.arcane.iris.engine.decorator.IrisCeilingDecorator;
+import art.arcane.iris.engine.decorator.IrisSeaFloorDecorator;
+import art.arcane.iris.engine.decorator.IrisSeaSurfaceDecorator;
+import art.arcane.iris.engine.decorator.IrisShoreLineDecorator;
+import art.arcane.iris.engine.decorator.IrisSurfaceDecorator;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineAssignedActuator;
 import art.arcane.iris.engine.framework.EngineDecorator;

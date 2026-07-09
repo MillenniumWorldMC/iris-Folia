@@ -18,7 +18,7 @@
 
 package art.arcane.iris.engine.framework.render;
 
-import java.awt.*;
+import java.awt.Color;
 
 @FunctionalInterface
 public interface Renderer {

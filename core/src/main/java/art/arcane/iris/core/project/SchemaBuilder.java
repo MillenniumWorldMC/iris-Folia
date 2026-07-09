@@ -18,10 +18,11 @@
 
 package art.arcane.iris.core.project;
 
-import art.arcane.iris.platform.bukkit.BukkitBlockResolution;
-
 import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.PlatformBlockProperty;
+import art.arcane.iris.spi.PlatformNumericRange;
 import art.arcane.iris.core.link.Identifier;
 import art.arcane.iris.core.link.data.DataType;
 import art.arcane.iris.core.loader.IrisData;
@@ -29,23 +30,37 @@ import art.arcane.iris.core.loader.IrisRegistrant;
 import art.arcane.iris.core.loader.ResourceLoader;
 import art.arcane.iris.core.service.ExternalDataSVC;
 import art.arcane.iris.core.structure.StructureSchemaKeys;
-import art.arcane.iris.engine.object.annotations.*;
-import art.arcane.iris.core.nms.INMS;
+import art.arcane.iris.engine.framework.ListFunction;
+import art.arcane.iris.engine.object.annotations.ArrayType;
+import art.arcane.iris.engine.object.annotations.Desc;
+import art.arcane.iris.engine.object.annotations.MaxNumber;
+import art.arcane.iris.engine.object.annotations.MinNumber;
+import art.arcane.iris.engine.object.annotations.RegistryListBlockType;
+import art.arcane.iris.engine.object.annotations.RegistryListEnchantment;
+import art.arcane.iris.engine.object.annotations.RegistryListEntityType;
+import art.arcane.iris.engine.object.annotations.RegistryListFont;
+import art.arcane.iris.engine.object.annotations.RegistryListFunction;
+import art.arcane.iris.engine.object.annotations.RegistryListItemType;
+import art.arcane.iris.engine.object.annotations.RegistryListPotionEffect;
+import art.arcane.iris.engine.object.annotations.RegistryListResource;
+import art.arcane.iris.engine.object.annotations.RegistryListSpecialEntity;
+import art.arcane.iris.engine.object.annotations.RegistryListStructure;
+import art.arcane.iris.engine.object.annotations.RegistryListVanillaStructure;
+import art.arcane.iris.engine.object.annotations.RegistryListVanillaStructureSet;
+import art.arcane.iris.engine.object.annotations.RegistryMapBlockState;
+import art.arcane.iris.engine.object.annotations.Required;
+import art.arcane.iris.engine.object.annotations.Snippet;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.json.JSONArray;
 import art.arcane.volmlib.util.json.JSONObject;
-import art.arcane.iris.util.common.reflect.KeyedType;
-import org.bukkit.NamespacedKey;
-import org.bukkit.Registry;
-import org.bukkit.enchantments.Enchantment;
-import org.bukkit.potion.PotionEffectType;
 import org.jetbrains.annotations.NotNull;
 
-import java.awt.*;
+import java.awt.GraphicsEnvironment;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -55,43 +70,20 @@ import java.util.function.Function;
 public class SchemaBuilder {
     private static final String SYMBOL_LIMIT__N = "*";
     private static final String SYMBOL_TYPE__N = "";
-    private static final JSONArray POTION_TYPES = getPotionTypes();
-    private static final JSONArray ENCHANT_TYPES = getEnchantTypes();
+    private static final String MINECRAFT_NAMESPACE = "minecraft:";
     private static final JSONArray FONT_TYPES = new JSONArray(GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames());
     private final KMap<String, JSONObject> definitions;
     private final Class<?> root;
     private final KList<String> warnings;
     private final IrisData data;
+    private JSONArray potionTypes;
+    private JSONArray enchantTypes;
 
     public SchemaBuilder(Class<?> root, IrisData data) {
         this.data = data;
         warnings = new KList<>();
         this.definitions = new KMap<>();
         this.root = root;
-    }
-
-    private static JSONArray getPotionTypes() {
-        JSONArray a = new JSONArray();
-
-        for (PotionEffectType gg : Registry.EFFECT) {
-            NamespacedKey key = KeyedType.getKey(gg);
-            if (key != null) {
-                a.put(key.getKey().toUpperCase(Locale.ROOT).replaceAll("\\Q \\E", "_"));
-            }
-        }
-
-        return a;
-    }
-
-    private static JSONArray getEnchantTypes() {
-        JSONArray array = new JSONArray();
-        for (Enchantment e : Registry.ENCHANTMENT) {
-            NamespacedKey key = KeyedType.getKey(e);
-            if (key != null) {
-                array.put(key.getKey());
-            }
-        }
-        return array;
     }
 
     public JSONObject construct() {
@@ -122,6 +114,52 @@ public class SchemaBuilder {
         return schema;
     }
 
+    private JSONArray potionTypes() {
+        if (potionTypes == null) {
+            JSONArray a = new JSONArray();
+            for (String key : IrisPlatforms.get().registries().potionEffectKeys()) {
+                a.put(stripNamespace(key).toUpperCase(Locale.ROOT).replace(" ", "_"));
+            }
+            potionTypes = a;
+        }
+        return potionTypes;
+    }
+
+    private JSONArray enchantTypes() {
+        if (enchantTypes == null) {
+            JSONArray a = new JSONArray();
+            for (String key : IrisPlatforms.get().registries().enchantmentKeys()) {
+                a.put(stripNamespace(key));
+            }
+            enchantTypes = a;
+        }
+        return enchantTypes;
+    }
+
+    private JSONArray itemTypes() {
+        JSONArray a = new JSONArray();
+        for (String key : IrisPlatforms.get().registries().itemKeys()) {
+            a.put(key.startsWith(MINECRAFT_NAMESPACE) ? key.substring(MINECRAFT_NAMESPACE.length()) : key);
+        }
+        return a;
+    }
+
+    private JSONArray blockTypes() {
+        JSONArray a = new JSONArray();
+        for (String i : data.getBlockLoader().getPossibleKeys()) {
+            a.put(i);
+        }
+        for (String i : IrisPlatforms.get().registries().blockTypeKeys()) {
+            a.put(i);
+        }
+        return a;
+    }
+
+    private static String stripNamespace(String key) {
+        int idx = key.indexOf(':');
+        return idx < 0 ? key : key.substring(idx + 1);
+    }
+
     private JSONObject buildProperties(Class<?> c) {
         JSONObject o = new JSONObject();
         JSONObject properties = new JSONObject();
@@ -132,7 +170,7 @@ public class SchemaBuilder {
         JSONArray required = new JSONArray();
         JSONArray extended = new JSONArray();
 
-        var parent = c.getSuperclass();
+        Class<?> parent = c.getSuperclass();
         while (parent != null && IrisRegistrant.class.isAssignableFrom(parent)) {
             buildProperties(properties, required, extended, parent);
             parent = parent.getSuperclass();
@@ -255,7 +293,7 @@ public class SchemaBuilder {
                     if (!definitions.containsKey(key)) {
                         JSONObject j = new JSONObject();
                         j.put("enum", new JSONArray(StructureSchemaKeys.collect(
-                                INMS.get().getStructureKeys(),
+                                IrisPlatforms.get().registries().structureKeys(),
                                 Arrays.asList(data.getStructureLoader().getPossibleKeys()),
                                 Arrays.asList(data.getJigsawPieceLoader().getPossibleKeys())).toArray(new String[0])));
                         definitions.put(key, j);
@@ -270,17 +308,7 @@ public class SchemaBuilder {
 
                     if (!definitions.containsKey(key)) {
                         JSONObject j = new JSONObject();
-                        JSONArray ja = new JSONArray();
-
-                        for (String i : data.getBlockLoader().getPossibleKeys()) {
-                            ja.put(i);
-                        }
-
-                        for (String i : BukkitBlockResolution.getBlockTypes()) {
-                            ja.put(i);
-                        }
-
-                        j.put("enum", ja);
+                        j.put("enum", blockTypes());
                         definitions.put(key, j);
                     }
 
@@ -295,7 +323,7 @@ public class SchemaBuilder {
                         JSONObject j = new JSONObject();
                         JSONArray ja = new JSONArray();
 
-                        for (String i : INMS.get().getStructureKeys()) {
+                        for (String i : IrisPlatforms.get().registries().structureKeys()) {
                             ja.put(i);
                         }
 
@@ -314,7 +342,7 @@ public class SchemaBuilder {
                         JSONObject j = new JSONObject();
                         JSONArray ja = new JSONArray();
 
-                        for (String i : INMS.get().getStructureSetKeys()) {
+                        for (String i : IrisPlatforms.get().structureHooks().structureSetKeys()) {
                             ja.put(i);
                         }
 
@@ -331,13 +359,32 @@ public class SchemaBuilder {
 
                     if (!definitions.containsKey(key)) {
                         JSONObject j = new JSONObject();
-                        j.put("enum", BukkitBlockResolution.getItemTypes());
+                        j.put("enum", itemTypes());
                         definitions.put(key, j);
                     }
 
                     fancyType = "Item Type";
                     prop.put("$ref", "#/definitions/" + key);
                     description.add(SYMBOL_TYPE__N + "  Must be a valid Item Type (use ctrl+space for auto complete!)");
+
+                } else if (k.isAnnotationPresent(RegistryListEntityType.class)) {
+                    String key = "enum-entity-type";
+
+                    if (!definitions.containsKey(key)) {
+                        JSONObject j = new JSONObject();
+                        JSONArray ja = new JSONArray();
+
+                        for (String i : IrisPlatforms.get().registries().entityKeys()) {
+                            ja.put(i);
+                        }
+
+                        j.put("enum", ja);
+                        definitions.put(key, j);
+                    }
+
+                    fancyType = "Entity Type";
+                    prop.put("$ref", "#/definitions/" + key);
+                    description.add(SYMBOL_TYPE__N + "  Must be a valid Entity Type (use ctrl+space for auto complete!)");
 
                 } else if (k.isAnnotationPresent(RegistryListSpecialEntity.class)) {
                     String key = "enum-reg-specialentity";
@@ -374,7 +421,7 @@ public class SchemaBuilder {
 
                     if (!definitions.containsKey(key)) {
                         JSONObject j = new JSONObject();
-                        j.put("enum", ENCHANT_TYPES);
+                        j.put("enum", enchantTypes());
                         definitions.put(key, j);
                     }
 
@@ -386,7 +433,7 @@ public class SchemaBuilder {
 
                     if (!definitions.containsKey(key)) {
                         JSONObject j = new JSONObject();
-                        j.put("enum", POTION_TYPES);
+                        j.put("enum", potionTypes());
                         definitions.put(key, j);
                     }
 
@@ -394,9 +441,9 @@ public class SchemaBuilder {
                     prop.put("$ref", "#/definitions/" + key);
                     description.add(SYMBOL_TYPE__N + "  Must be a valid Potion Effect Type (use ctrl+space for auto complete!)");
                 } else if (k.isAnnotationPresent(RegistryListFunction.class)) {
-                    var functionClass = k.getDeclaredAnnotation(RegistryListFunction.class).value();
+                    Class<? extends ListFunction<KList<String>>> functionClass = k.getDeclaredAnnotation(RegistryListFunction.class).value();
                     try {
-                        var instance = functionClass.getDeclaredConstructor().newInstance();
+                        ListFunction<KList<String>> instance = functionClass.getDeclaredConstructor().newInstance();
                         String key = instance.key();
                         fancyType = instance.fancyName();
 
@@ -411,27 +458,13 @@ public class SchemaBuilder {
                     } catch (Throwable e) {
                         IrisLogging.error("Could not execute apply method in " + functionClass.getName());
                     }
-                } else if (k.getType().equals(PotionEffectType.class)) {
-                    String key = "enum-potion-effect-type";
-
-                    if (!definitions.containsKey(key)) {
-                        JSONObject j = new JSONObject();
-                        j.put("enum", POTION_TYPES);
-                        definitions.put(key, j);
-                    }
-
-                    fancyType = "Potion Effect Type";
-                    prop.put("$ref", "#/definitions/" + key);
-                    description.add(SYMBOL_TYPE__N + "  Must be a valid Potion Effect Type (use ctrl+space for auto complete!)");
-
-                } else if (KeyedType.isKeyed(k.getType())) {
-                    fancyType = addEnum(k.getType(), prop, description, KeyedType.values(k.getType()), Function.identity());
+                } else if (SchemaKeyedTypes.isKeyed(k.getType())) {
+                    fancyType = addEnum(k.getType(), prop, description, SchemaKeyedTypes.values(k.getType()), Function.identity());
                 } else if (k.getType().isEnum()) {
                     fancyType = addEnum(k.getType(), prop, description, k.getType().getEnumConstants(), o -> ((Enum<?>) o).name());
                 }
             }
             case "object" -> {
-                //TODO add back descriptions
                 if (k.isAnnotationPresent(RegistryMapBlockState.class)) {
                     String blockType = k.getDeclaredAnnotation(RegistryMapBlockState.class).value();
                     fancyType = "Block State";
@@ -439,10 +472,13 @@ public class SchemaBuilder {
                     JSONArray any = new JSONArray();
                     prop.put("anyOf", any);
 
-                    BukkitBlockResolution.getBlockStates().forEach((blocks, properties) -> {
-                        if (blocks.isEmpty()) return;
+                    for (BlockStateGroup group : reconstructBlockStateGroups()) {
+                        List<String> blocks = group.blocks();
+                        if (blocks.isEmpty()) {
+                            continue;
+                        }
 
-                        String raw = blocks.getFirst().replace(':', '_');
+                        String raw = blocks.get(0).replace(':', '_');
                         String enumKey = "enum-block-state-" + raw;
                         String propertiesKey = "obj-block-state-" + raw;
 
@@ -470,15 +506,15 @@ public class SchemaBuilder {
 
                         if (!definitions.containsKey(propertiesKey)) {
                             JSONObject props = new JSONObject();
-                            properties.forEach(property -> {
-                                props.put(property.name(), property.buildJson());
-                            });
+                            for (PlatformBlockProperty property : group.properties()) {
+                                props.put(property.name(), buildBlockPropertyJson(property));
+                            }
 
                             definitions.put(propertiesKey, new JSONObject()
                                     .put("type", "object")
                                     .put("properties", props));
                         }
-                    });
+                    }
                 } else {
                     fancyType = k.getType().getSimpleName().replaceAll("\\QIris\\E", "") + " (Object)";
                     String key = "obj-" + k.getType().getCanonicalName().replaceAll("\\Q.\\E", "-").toLowerCase();
@@ -549,7 +585,7 @@ public class SchemaBuilder {
                                 if (!definitions.containsKey(key)) {
                                     JSONObject j = new JSONObject();
                                     j.put("enum", new JSONArray(StructureSchemaKeys.collect(
-                                            INMS.get().getStructureKeys(),
+                                            IrisPlatforms.get().registries().structureKeys(),
                                             Arrays.asList(data.getStructureLoader().getPossibleKeys()),
                                             Arrays.asList(data.getJigsawPieceLoader().getPossibleKeys())).toArray(new String[0])));
                                     definitions.put(key, j);
@@ -565,17 +601,7 @@ public class SchemaBuilder {
 
                                 if (!definitions.containsKey(key)) {
                                     JSONObject j = new JSONObject();
-                                    JSONArray ja = new JSONArray();
-
-                                    for (String i : data.getBlockLoader().getPossibleKeys()) {
-                                        ja.put(i);
-                                    }
-
-                                    for (String i : BukkitBlockResolution.getBlockTypes()) {
-                                        ja.put(i);
-                                    }
-
-                                    j.put("enum", ja);
+                                    j.put("enum", blockTypes());
                                     definitions.put(key, j);
                                 }
 
@@ -589,7 +615,7 @@ public class SchemaBuilder {
 
                                 if (!definitions.containsKey(key)) {
                                     JSONObject j = new JSONObject();
-                                    j.put("enum", BukkitBlockResolution.getItemTypes());
+                                    j.put("enum", itemTypes());
                                     definitions.put(key, j);
                                 }
 
@@ -597,6 +623,26 @@ public class SchemaBuilder {
                                 items.put("$ref", "#/definitions/" + key);
                                 prop.put("items", items);
                                 description.add(SYMBOL_TYPE__N + "  Must be a valid Item Type (use ctrl+space for auto complete!)");
+                            } else if (k.isAnnotationPresent(RegistryListEntityType.class)) {
+                                fancyType = "List of Entity Types";
+                                String key = "enum-entity-type";
+
+                                if (!definitions.containsKey(key)) {
+                                    JSONObject j = new JSONObject();
+                                    JSONArray ja = new JSONArray();
+
+                                    for (String i : IrisPlatforms.get().registries().entityKeys()) {
+                                        ja.put(i);
+                                    }
+
+                                    j.put("enum", ja);
+                                    definitions.put(key, j);
+                                }
+
+                                JSONObject items = new JSONObject();
+                                items.put("$ref", "#/definitions/" + key);
+                                prop.put("items", items);
+                                description.add(SYMBOL_TYPE__N + "  Must be a valid Entity Type (use ctrl+space for auto complete!)");
                             } else if (k.isAnnotationPresent(RegistryListFont.class)) {
                                 String key = "enum-font";
                                 fancyType = "List of Font Families";
@@ -617,7 +663,7 @@ public class SchemaBuilder {
 
                                 if (!definitions.containsKey(key)) {
                                     JSONObject j = new JSONObject();
-                                    j.put("enum", ENCHANT_TYPES);
+                                    j.put("enum", enchantTypes());
                                     definitions.put(key, j);
                                 }
 
@@ -631,7 +677,7 @@ public class SchemaBuilder {
 
                                 if (!definitions.containsKey(key)) {
                                     JSONObject j = new JSONObject();
-                                    j.put("enum", POTION_TYPES);
+                                    j.put("enum", potionTypes());
                                     definitions.put(key, j);
                                 }
 
@@ -640,9 +686,9 @@ public class SchemaBuilder {
                                 prop.put("items", items);
                                 description.add(SYMBOL_TYPE__N + "  Must be a valid Potion Effect Type (use ctrl+space for auto complete!)");
                             } else if (k.isAnnotationPresent(RegistryListFunction.class)) {
-                                var functionClass = k.getDeclaredAnnotation(RegistryListFunction.class).value();
+                                Class<? extends ListFunction<KList<String>>> functionClass = k.getDeclaredAnnotation(RegistryListFunction.class).value();
                                 try {
-                                    var instance = functionClass.getDeclaredConstructor().newInstance();
+                                    ListFunction<KList<String>> instance = functionClass.getDeclaredConstructor().newInstance();
                                     String key = instance.key();
                                     fancyType = instance.fancyName();
 
@@ -659,22 +705,8 @@ public class SchemaBuilder {
                                 } catch (Throwable e) {
                                     IrisLogging.error("Could not execute apply method in " + functionClass.getName());
                                 }
-                            } else if (t.type().equals(PotionEffectType.class)) {
-                                fancyType = "List of Potion Effect Types";
-                                String key = "enum-potion-effect-type";
-
-                                if (!definitions.containsKey(key)) {
-                                    JSONObject j = new JSONObject();
-                                    j.put("enum", POTION_TYPES);
-                                    definitions.put(key, j);
-                                }
-
-                                JSONObject items = new JSONObject();
-                                items.put("$ref", "#/definitions/" + key);
-                                prop.put("items", items);
-                                description.add(SYMBOL_TYPE__N + "  Must be a valid Potion Effect Type (use ctrl+space for auto complete!)");
-                            } else if (KeyedType.isKeyed(t.type())) {
-                                fancyType = addEnumList(prop, description, t, KeyedType.values(t.type()), Function.identity());
+                            } else if (SchemaKeyedTypes.isKeyed(t.type())) {
+                                fancyType = addEnumList(prop, description, t, SchemaKeyedTypes.values(t.type()), Function.identity());
                             } else if (t.type().isEnum()) {
                                 fancyType = addEnumList(prop, description, t, t.type().getEnumConstants(), o -> ((Enum<?>) o).name());
                             }
@@ -719,7 +751,7 @@ public class SchemaBuilder {
                 if (present) d.add("    ");
                 if (value instanceof List) {
                     d.add(SYMBOL_LIMIT__N + " Default Value is an empty list");
-                } else if (!k.getType().isPrimitive() && !(value instanceof Number) && !(value instanceof String) && !(value instanceof Enum<?>) && !KeyedType.isKeyed(k.getType())) {
+                } else if (!k.getType().isPrimitive() && !(value instanceof Number) && !(value instanceof String) && !(value instanceof Enum<?>) && !SchemaKeyedTypes.isKeyed(k.getType())) {
                     d.add(SYMBOL_LIMIT__N + " Default Value is a default object (create this object to see default properties)");
                 } else {
                     d.add(SYMBOL_LIMIT__N + " Default Value is " + value);
@@ -783,7 +815,7 @@ public class SchemaBuilder {
     @NotNull
     private <T> String addEnumList(JSONObject prop, KList<String> description, ArrayType t, T[] values, Function<T, String> function) {
         JSONObject items = new JSONObject();
-        var s = addEnum(t.type(), items, description, values, function);
+        String s = addEnum(t.type(), items, description, values, function);
         prop.put("items", items);
 
         return "List of " + s + "s";
@@ -826,6 +858,47 @@ public class SchemaBuilder {
         return type.getSimpleName().replaceAll("\\QIris\\E", "");
     }
 
+    private JSONObject buildBlockPropertyJson(PlatformBlockProperty property) {
+        JSONObject json = new JSONObject();
+        json.put("type", property.jsonType());
+        json.put("default", property.defaultValue());
+        List<Object> allowed = property.allowedValues();
+        if (!allowed.isEmpty()) {
+            json.put("enum", new JSONArray(allowed));
+        }
+        if (property.hasNumericRange()) {
+            PlatformNumericRange range = property.numericRange();
+            if ("integer".equals(property.jsonType())) {
+                json.put("minimum", (long) range.minimum());
+                json.put("maximum", (long) range.maximum());
+            } else {
+                json.put("minimum", range.minimum());
+                json.put("maximum", range.maximum());
+            }
+            json.put("exclusiveMinimum", range.exclusiveMinimum());
+            json.put("exclusiveMaximum", range.exclusiveMaximum());
+        }
+        return json;
+    }
+
+    private List<BlockStateGroup> reconstructBlockStateGroups() {
+        List<BlockStateGroup> groups = new ArrayList<>();
+        List<PlatformBlockProperty> currentProperties = null;
+        List<String> currentBlocks = null;
+        for (Map.Entry<String, List<PlatformBlockProperty>> entry : IrisPlatforms.get().registries().blockStateProperties().entrySet()) {
+            List<PlatformBlockProperty> value = entry.getValue();
+            if (currentProperties != null && value == currentProperties) {
+                currentBlocks.add(entry.getKey());
+            } else {
+                currentBlocks = new ArrayList<>();
+                currentBlocks.add(entry.getKey());
+                currentProperties = value;
+                groups.add(new BlockStateGroup(currentBlocks, value));
+            }
+        }
+        return groups;
+    }
+
     private String getType(Class<?> c) {
         if (c.equals(int.class) || c.equals(Integer.class) || c.equals(long.class) || c.equals(Long.class)) {
             return "integer";
@@ -839,7 +912,7 @@ public class SchemaBuilder {
             return "boolean";
         }
 
-        if (c.equals(String.class) || c.isEnum() || KeyedType.isKeyed(c)) {
+        if (c.equals(String.class) || c.isEnum() || SchemaKeyedTypes.isKeyed(c)) {
             return "string";
         }
 
@@ -864,11 +937,6 @@ public class SchemaBuilder {
             return r.getDeclaredAnnotation(Desc.class).value();
         }
 
-        // suppress warnings on bukkit classes
-        if (r.getDeclaringClass().getName().startsWith("org.bukkit.")) {
-            return "Bukkit package classes and enums have no descriptions";
-        }
-
         warnings.addIfMissing("Missing @Desc on field " + r.getName() + " (" + r.getType() + ") in " + r.getDeclaringClass().getCanonicalName());
         return "No Field Description";
     }
@@ -882,5 +950,8 @@ public class SchemaBuilder {
             warnings.addIfMissing("Missing @Desc on " + r.getSimpleName() + " in " + (r.getDeclaringClass() != null ? r.getDeclaringClass().getCanonicalName() : " NOSRC"));
         }
         return "";
+    }
+
+    private record BlockStateGroup(List<String> blocks, List<PlatformBlockProperty> properties) {
     }
 }

@@ -1,6 +1,8 @@
 package art.arcane.iris.core.pregenerator.cache;
 
+import art.arcane.iris.engine.framework.PreservationRegistry;
 import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisServices;
 import art.arcane.volmlib.util.data.Varint;
 import art.arcane.volmlib.util.documentation.ChunkCoordinates;
 import art.arcane.volmlib.util.documentation.RegionCoordinates;
@@ -23,9 +25,11 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class PregenCacheImpl implements PregenCache {
     private static final ExecutorService DISPATCHER = Executors.newFixedThreadPool(4);
+    private static final AtomicBoolean DISPATCHER_REGISTERED = new AtomicBoolean();
     private static final short SIZE = 1024;
 
     private final File directory;
@@ -35,6 +39,10 @@ public class PregenCacheImpl implements PregenCache {
     public PregenCacheImpl(File directory, int maxSize) {
         this.directory = directory;
         this.maxSize = maxSize;
+        PreservationRegistry preservation = IrisServices.getOrNull(PreservationRegistry.class);
+        if (preservation != null && DISPATCHER_REGISTERED.compareAndSet(false, true)) {
+            preservation.register(DISPATCHER);
+        }
     }
 
     @Override

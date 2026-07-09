@@ -3,10 +3,17 @@ package art.arcane.iris.engine.object;
 import art.arcane.iris.core.nms.datapack.IDataFixer;
 import art.arcane.volmlib.util.data.Varint;
 import art.arcane.volmlib.util.io.IO;
-import lombok.*;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NonNull;
+import lombok.ToString;
 import lombok.experimental.Accessors;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 
 @Getter
 @ToString

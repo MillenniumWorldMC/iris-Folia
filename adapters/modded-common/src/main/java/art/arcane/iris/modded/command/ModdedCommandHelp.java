@@ -72,7 +72,8 @@ final class ModdedCommandHelp {
                 Entry.group("world", "Runtime Iris dimension creation, removal and status", "w"),
                 Entry.group("datapack", "World datapack install and status helpers", "datapacks", "dp"),
                 Entry.group("structure", "Iris structure index, info and placement tools", "struct", "str"),
-                Entry.command("goldenhash", "[radius] [threads] [capture|verify]", "Generate deterministic block hashes for parity testing", "gold")
+                Entry.command("goldenhash", "[radius] [threads] [capture|verify]", "Generate deterministic block hashes for parity testing", "gold"),
+                Entry.group("developer", "Developer diagnostics: Sentry test, network interfaces, region-file scan", "dev")
         ));
         SECTIONS.put("find", List.of(
                 Entry.command("biome", "<key>", "Find an Iris biome"),
@@ -162,6 +163,11 @@ final class ModdedCommandHelp {
         ));
         SECTIONS.put("struct", SECTIONS.get("structure"));
         SECTIONS.put("str", SECTIONS.get("structure"));
+        SECTIONS.put("developer", List.of(
+                Entry.command("sentry", "", "Send a test exception to the Iris error reporter"),
+                Entry.command("network", "", "List network interfaces and their addresses", "ip")
+        ));
+        SECTIONS.put("dev", SECTIONS.get("developer"));
     }
 
     private ModdedCommandHelp() {

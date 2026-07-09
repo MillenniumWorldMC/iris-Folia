@@ -18,7 +18,11 @@
 
 package art.arcane.iris.engine.object;
 
-import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.engine.object.annotations.ArrayType;
+import art.arcane.iris.engine.object.annotations.Desc;
+import art.arcane.iris.engine.object.annotations.RegistryListResource;
+import art.arcane.iris.engine.object.annotations.Required;
+import art.arcane.iris.engine.object.annotations.Snippet;
 import art.arcane.volmlib.util.collection.KList;
 import lombok.AllArgsConstructor;
 import lombok.Data;

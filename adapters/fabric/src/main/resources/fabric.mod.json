@@ -13,7 +13,8 @@
   "accessWidener": "irisworldgen.accesswidener",
   "mixins": ["irisworldgen.mixins.json"],
   "entrypoints": {
-    "main": ["art.arcane.iris.fabric.IrisFabricBootstrap"]
+    "main": ["art.arcane.iris.fabric.IrisFabricBootstrap"],
+    "client": ["art.arcane.iris.fabric.IrisFabricClient"]
   },
   "jars": [
     { "file": "META-INF/jars/fabric-api-base.jar" },
@@ -22,10 +23,12 @@
     { "file": "META-INF/jars/fabric-lifecycle-events-v1.jar" },
     { "file": "META-INF/jars/fabric-networking-api-v1.jar" },
     { "file": "META-INF/jars/fabric-command-api-v2.jar" },
-    { "file": "META-INF/jars/fabric-events-interaction-v0.jar" }
+    { "file": "META-INF/jars/fabric-events-interaction-v0.jar" },
+    { "file": "META-INF/jars/fabric-rendering-v1.jar" },
+    { "file": "META-INF/jars/fabric-key-mapping-api-v1.jar" }
   ],
   "depends": {
-    "fabricloader": ">=0.19.0",
+    "fabricloader": ">=0.19.3",
     "minecraft": "~${minecraftVersion}",
     "java": ">=25"
   }

@@ -25,7 +25,7 @@ import art.arcane.iris.util.common.plugin.VolmitSender;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-import java.awt.*;
+import java.awt.Desktop;
 import java.io.File;
 
 @Data

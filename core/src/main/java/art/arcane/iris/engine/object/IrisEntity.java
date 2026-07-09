@@ -25,8 +25,13 @@ import art.arcane.iris.core.loader.IrisRegistrant;
 import art.arcane.iris.core.service.ExternalDataSVC;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.platform.EngineBukkitOps;
-import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.engine.object.annotations.ArrayType;
+import art.arcane.iris.engine.object.annotations.Desc;
+import art.arcane.iris.engine.object.annotations.RegistryListEntityType;
+import art.arcane.iris.engine.object.annotations.RegistryListSpecialEntity;
+import art.arcane.iris.engine.object.annotations.Required;
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
+import art.arcane.iris.util.common.data.registry.RegistryUtil;
 import art.arcane.iris.platform.bukkit.BukkitWorld;
 import art.arcane.iris.spi.PlatformWorld;
 import art.arcane.volmlib.util.collection.KList;
@@ -42,9 +47,18 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
-import org.bukkit.*;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Sound;
 import org.bukkit.attribute.Attributable;
-import org.bukkit.entity.*;
+import org.bukkit.entity.Ageable;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Mob;
+import org.bukkit.entity.Panda;
+import org.bukkit.entity.Villager;
 import org.bukkit.entity.Panda.Gene;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.inventory.Inventory;
@@ -55,6 +69,7 @@ import org.bukkit.loot.Lootable;
 import org.bukkit.util.Vector;
 
 import java.util.Collection;
+import java.util.Locale;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -71,11 +86,12 @@ import static art.arcane.iris.util.common.data.registry.Particles.ITEM;
 @EqualsAndHashCode(callSuper = false)
 public class IrisEntity extends IrisRegistrant {
     @Required
-    @Desc("The type of entity to spawn. To spawn a mythic mob, set this type to unknown and define mythic type.")
-    private EntityType type = null;
+    @RegistryListEntityType
+    @Desc("The namespaced key of the entity type to spawn, such as minecraft:zombie or alexsmobs:grizzly_bear. To spawn a mob from another plugin or provider, set this type to unknown and define the special type.")
+    private String type = null;
 
-    @Desc("The SpawnReason to spawn the entity with.")
-    private CreatureSpawnEvent.SpawnReason reason = null;
+    @Desc("The SpawnReason name to spawn the entity with, such as NATURAL or COMMAND.")
+    private String reason = null;
 
     @Desc("The custom name of this entity")
     private String customName = "";
@@ -145,11 +161,11 @@ public class IrisEntity extends IrisRegistrant {
     @Desc("Simply moves the entity from below the surface slowly out of the ground as a spawn-in effect")
     private boolean spawnEffectRiseOutOfGround = false;
 
-    @Desc("The main gene for a panda if the entity type is a panda")
-    private Gene pandaMainGene = null;
+    @Desc("The main gene for a panda if the entity type is a panda. One of NORMAL, LAZY, WORRIED, PLAYFUL, BROWN, WEAK or AGGRESSIVE.")
+    private String pandaMainGene = null;
 
-    @Desc("The hidden gene for a panda if the entity type is a panda")
-    private Gene pandaHiddenGene = null;
+    @Desc("The hidden gene for a panda if the entity type is a panda. One of NORMAL, LAZY, WORRIED, PLAYFUL, BROWN, WEAK or AGGRESSIVE.")
+    private String pandaHiddenGene = null;
 
     @Desc("The this entity is ageable, set it's baby status")
     private boolean baby = false;
@@ -171,20 +187,51 @@ public class IrisEntity extends IrisRegistrant {
     @Desc("Run raw commands when this entity is spawned. Use {x}, {y}, and {z} for location. /summon pig {x} {y} {z}")
     private KList<IrisCommand> rawCommands = new KList<>();
 
-    public EntityType getType() {
-        return type == null ? EntityType.UNKNOWN : type;
+    public EntityType getBukkitType() {
+        if (type == null || type.isBlank()) {
+            return EntityType.UNKNOWN;
+        }
+
+        NamespacedKey key = NamespacedKey.fromString(type.trim().toLowerCase(Locale.ROOT));
+
+        if (key == null) {
+            return EntityType.UNKNOWN;
+        }
+
+        EntityType entityType = RegistryUtil.lookup(EntityType.class).get(key);
+        return entityType == null ? EntityType.UNKNOWN : entityType;
     }
 
-    public CreatureSpawnEvent.SpawnReason getReason() {
-        return reason == null ? CreatureSpawnEvent.SpawnReason.NATURAL : reason;
+    public CreatureSpawnEvent.SpawnReason getBukkitReason() {
+        if (reason == null || reason.isBlank()) {
+            return CreatureSpawnEvent.SpawnReason.NATURAL;
+        }
+
+        try {
+            return CreatureSpawnEvent.SpawnReason.valueOf(reason.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return CreatureSpawnEvent.SpawnReason.NATURAL;
+        }
     }
 
-    public Gene getPandaMainGene() {
-        return pandaMainGene == null ? Gene.NORMAL : pandaMainGene;
+    public Gene getBukkitPandaMainGene() {
+        return resolveGene(pandaMainGene);
     }
 
-    public Gene getPandaHiddenGene() {
-        return pandaHiddenGene == null ? Gene.NORMAL : pandaHiddenGene;
+    public Gene getBukkitPandaHiddenGene() {
+        return resolveGene(pandaHiddenGene);
+    }
+
+    private static Gene resolveGene(String gene) {
+        if (gene == null || gene.isBlank()) {
+            return Gene.NORMAL;
+        }
+
+        try {
+            return Gene.valueOf(gene.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return Gene.NORMAL;
+        }
     }
 
     public Entity spawn(Engine gen, Location at) {
@@ -307,8 +354,8 @@ public class IrisEntity extends IrisRegistrant {
         }
 
         if (e instanceof Panda) {
-            ((Panda) e).setMainGene(getPandaMainGene());
-            ((Panda) e).setMainGene(getPandaHiddenGene());
+            ((Panda) e).setMainGene(getBukkitPandaMainGene());
+            ((Panda) e).setHiddenGene(getBukkitPandaHiddenGene());
         }
 
         if (e instanceof Villager) {
@@ -401,7 +448,7 @@ public class IrisEntity extends IrisRegistrant {
             return null;
         }
 
-        if (EntityType.UNKNOWN.equals(getType()) && !isSpecialType()) {
+        if (EntityType.UNKNOWN.equals(getBukkitType()) && !isSpecialType()) {
             return null;
         }
 
@@ -435,7 +482,7 @@ public class IrisEntity extends IrisRegistrant {
         }
 
 
-        return BukkitPlatform.spawnEntity(at, getType(), getReason());
+        return BukkitPlatform.spawnEntity(at, getBukkitType(), getBukkitReason());
     }
 
     public boolean isSpecialType() {

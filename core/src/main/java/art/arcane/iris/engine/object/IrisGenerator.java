@@ -20,7 +20,11 @@ package art.arcane.iris.engine.object;
 
 import art.arcane.iris.core.loader.IrisRegistrant;
 import art.arcane.iris.engine.data.cache.AtomicCache;
-import art.arcane.iris.engine.object.annotations.*;
+import art.arcane.iris.engine.object.annotations.ArrayType;
+import art.arcane.iris.engine.object.annotations.Desc;
+import art.arcane.iris.engine.object.annotations.MaxNumber;
+import art.arcane.iris.engine.object.annotations.MinNumber;
+import art.arcane.iris.engine.object.annotations.Required;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.iris.util.project.interpolation.IrisInterpolation;
 import art.arcane.volmlib.util.json.JSONObject;

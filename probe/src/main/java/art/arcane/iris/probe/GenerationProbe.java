@@ -49,6 +49,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 
 public final class GenerationProbe {
     private static final String DIMENSION_KEY = "overworld";
@@ -59,6 +60,10 @@ public final class GenerationProbe {
     private static final class InertPreservation implements PreservationRegistry {
         @Override
         public void register(Thread thread) {
+        }
+
+        @Override
+        public void register(ExecutorService service) {
         }
 
         @Override

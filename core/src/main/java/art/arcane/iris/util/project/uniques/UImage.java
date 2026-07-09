@@ -1,6 +1,6 @@
 package art.arcane.iris.util.project.uniques;
 
-import java.awt.*;
+import java.awt.Color;
 
 public interface UImage {
     int getWidth();

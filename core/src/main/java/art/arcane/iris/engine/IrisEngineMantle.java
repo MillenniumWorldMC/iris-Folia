@@ -54,7 +54,11 @@ import art.arcane.volmlib.util.matter.MatterSlice;
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.util.common.parallel.HyperLock;
 import art.arcane.iris.util.common.parallel.MultiBurst;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
 
 import java.io.File;
 import java.io.IOException;

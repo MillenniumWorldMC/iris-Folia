@@ -21,6 +21,7 @@ package art.arcane.iris.util.project.interpolation;
 import com.google.common.util.concurrent.AtomicDouble;
 import art.arcane.volmlib.util.interpolation.Starcast;
 import art.arcane.iris.engine.object.NoiseStyle;
+import art.arcane.iris.spi.IrisLogging;
 import art.arcane.volmlib.util.format.Form;
 import art.arcane.volmlib.util.function.Consumer2;
 import art.arcane.volmlib.util.function.NoiseProvider;
@@ -324,20 +325,20 @@ public class IrisInterpolation {
 
         p.end();
 
-        System.out.println(m + ": " + Form.duration(p.getMilliseconds(), 8));
+        IrisLogging.info("%s", m + ": " + Form.duration(p.getMilliseconds(), 8));
     }
 
     public static void printOptimizedSrc(boolean arrays) {
-        System.out.println(generateOptimizedStarcast(3, arrays));
-        System.out.println(generateOptimizedStarcast(5, arrays));
-        System.out.println(generateOptimizedStarcast(6, arrays));
-        System.out.println(generateOptimizedStarcast(7, arrays));
-        System.out.println(generateOptimizedStarcast(9, arrays));
-        System.out.println(generateOptimizedStarcast(12, arrays));
-        System.out.println(generateOptimizedStarcast(24, arrays));
-        System.out.println(generateOptimizedStarcast(32, arrays));
-        System.out.println(generateOptimizedStarcast(48, arrays));
-        System.out.println(generateOptimizedStarcast(64, arrays));
+        IrisLogging.info("%s", generateOptimizedStarcast(3, arrays));
+        IrisLogging.info("%s", generateOptimizedStarcast(5, arrays));
+        IrisLogging.info("%s", generateOptimizedStarcast(6, arrays));
+        IrisLogging.info("%s", generateOptimizedStarcast(7, arrays));
+        IrisLogging.info("%s", generateOptimizedStarcast(9, arrays));
+        IrisLogging.info("%s", generateOptimizedStarcast(12, arrays));
+        IrisLogging.info("%s", generateOptimizedStarcast(24, arrays));
+        IrisLogging.info("%s", generateOptimizedStarcast(32, arrays));
+        IrisLogging.info("%s", generateOptimizedStarcast(48, arrays));
+        IrisLogging.info("%s", generateOptimizedStarcast(64, arrays));
     }
 
     public static String generateOptimizedStarcast(double checks, boolean array) {

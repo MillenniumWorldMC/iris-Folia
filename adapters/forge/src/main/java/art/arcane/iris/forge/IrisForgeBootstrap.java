@@ -19,22 +19,29 @@
 package art.arcane.iris.forge;
 
 import art.arcane.iris.modded.IrisModdedChunkGenerator;
+import art.arcane.iris.modded.ModdedDeathLoot;
 import art.arcane.iris.modded.ModdedEngineBootstrap;
 import art.arcane.iris.modded.ModdedForcedDatapack;
+import art.arcane.iris.modded.ModdedProtocolHandler;
 import art.arcane.iris.modded.command.IrisModdedCommands;
 import art.arcane.iris.modded.command.ModdedWandService;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraftforge.event.AddPackFindersEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingDropsEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.loading.FMLEnvironment;
 import net.minecraftforge.fml.loading.FMLLoader;
 import net.minecraftforge.registries.DeferredRegister;
 
@@ -49,14 +56,31 @@ public final class IrisForgeBootstrap {
             chunkGenerators.register(context.getModBusGroup());
         });
 
+        ForgeProtocolNetworking.register();
+
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            IrisForgeClient.init();
+        }
+
         ServerStartingEvent.BUS.addListener((ServerStartingEvent event) -> ModdedEngineBootstrap.start(event.getServer()));
         ServerStoppingEvent.BUS.addListener((ServerStoppingEvent event) -> ModdedEngineBootstrap.stop());
+        PlayerEvent.PlayerLoggedInEvent.BUS.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
+            if (event.getEntity() instanceof ServerPlayer player) {
+                ModdedProtocolHandler.onPlayerJoin(player);
+            }
+        });
+        PlayerEvent.PlayerLoggedOutEvent.BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
+            if (event.getEntity() instanceof ServerPlayer player) {
+                ModdedProtocolHandler.onPlayerDisconnect(player);
+            }
+        });
         AddPackFindersEvent.BUS.addListener((AddPackFindersEvent event) -> {
             if (event.getPackType() == PackType.SERVER_DATA) {
                 event.addRepositorySource(ModdedForcedDatapack.repositorySource());
             }
         });
         RegisterCommandsEvent.BUS.addListener((RegisterCommandsEvent event) -> IrisModdedCommands.register(event.getDispatcher()));
+        LivingDropsEvent.BUS.addListener((LivingDropsEvent event) -> ModdedDeathLoot.handle(event.getEntity()));
         PlayerInteractEvent.LeftClickBlock.BUS.addListener((Predicate<PlayerInteractEvent.LeftClickBlock>) (PlayerInteractEvent.LeftClickBlock event) ->
                 ModdedWandService.attackBlock(event.getEntity(), event.getLevel(), event.getHand(), event.getPos()));
         PlayerInteractEvent.RightClickBlock.BUS.addListener((Predicate<PlayerInteractEvent.RightClickBlock>) (PlayerInteractEvent.RightClickBlock event) ->

@@ -10,7 +10,8 @@ libs/
 
 collection/
 
-/core/src/main/java/art/arcane/iris/util/uniques/
+out/
+tools/simd-bench/out/
 
 DataPackExamples/
 

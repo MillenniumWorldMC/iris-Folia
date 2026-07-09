@@ -1,5 +1,16 @@
 package art.arcane.iris.engine.object;
 
+import org.bukkit.Bukkit;
+import org.bukkit.DyeColor;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
+import org.bukkit.Tag;
+import org.bukkit.block.Banner;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.CreatureSpawner;
+import org.bukkit.block.Sign;
 import art.arcane.iris.core.nms.container.Pair;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.volmlib.util.collection.KList;
@@ -11,8 +22,6 @@ import lombok.EqualsAndHashCode;
 import lombok.NonNull;
 import lombok.ToString;
 import org.apache.commons.io.function.IOFunction;
-import org.bukkit.*;
-import org.bukkit.block.*;
 import org.bukkit.block.banner.Pattern;
 import org.bukkit.block.banner.PatternType;
 import org.bukkit.block.sign.Side;

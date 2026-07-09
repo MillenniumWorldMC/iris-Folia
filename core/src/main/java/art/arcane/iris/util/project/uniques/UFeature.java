@@ -4,7 +4,7 @@ import art.arcane.volmlib.util.function.NoiseInjector;
 import art.arcane.iris.util.project.interpolation.InterpolationMethod;
 import art.arcane.volmlib.util.math.RNG;
 import art.arcane.iris.util.project.noise.CNG;
-import java.awt.*;
+import java.awt.Color;
 import java.util.List;
 import java.util.function.Consumer;
 

@@ -43,13 +43,19 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Unit;
+import net.minecraft.world.entity.EquipmentSlotGroup;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.CustomModelData;
 import net.minecraft.world.item.component.DyedItemColor;
+import net.minecraft.world.item.component.ItemAttributeModifiers;
 import net.minecraft.world.item.component.ItemLore;
+import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 
@@ -96,6 +102,21 @@ public final class ModdedItemTranslator {
         return out;
     }
 
+    public static ItemStack stack(IrisLoot loot, RNG rng, ServerLevel level) {
+        try {
+            ItemStack stack = baseStack(loot, rng);
+            if (stack == null || stack.isEmpty()) {
+                return null;
+            }
+            applyComponents(loot, stack, rng, level);
+            applyCustomNbt(stack, loot.getCustomNbt());
+            return stack;
+        } catch (Throwable e) {
+            IrisLogging.reportError(e);
+            return null;
+        }
+    }
+
     public static ItemStack item(IrisLoot loot, IrisLootTable table, RNG rng, ServerLevel level, int x, int y, int z) {
         if (loot.getChance().aquire(() -> NoiseStyle.STATIC.create(rng)).fit(1, loot.getRarity() * table.getRarity(), x, y, z) != 1) {
             return null;
@@ -134,14 +155,14 @@ public final class ModdedItemTranslator {
 
     private static void applyComponents(IrisLoot loot, ItemStack stack, RNG rng, ServerLevel level) {
         applyEnchantments(loot, stack, rng, level);
-        consumeAttributeDraws(loot, rng);
+        applyAttributes(loot, stack, rng, level);
 
         if (loot.isUnbreakable()) {
             stack.set(DataComponents.UNBREAKABLE, Unit.INSTANCE);
         }
 
         if (loot.getItemFlags().isNotEmpty()) {
-            warnOnce("itemFlags", "Iris loot: itemFlags are not supported on modded; skipping flags");
+            applyItemFlags(loot, stack);
         }
 
         if (loot.getCustomModel() != null) {
@@ -165,7 +186,7 @@ public final class ModdedItemTranslator {
 
         String dye = readString(DYE_COLOR_FIELD, loot);
         if (dye != null) {
-            warnOnce("dyeColor", "Iris loot: dyeColor is not supported on modded; skipping");
+            applyDyeColor(stack, dye);
         }
 
         if (loot.getDisplayName() != null) {
@@ -208,16 +229,128 @@ public final class ModdedItemTranslator {
         }
     }
 
-    private static void consumeAttributeDraws(IrisLoot loot, RNG rng) {
+    private static void applyAttributes(IrisLoot loot, ItemStack stack, RNG rng, ServerLevel level) {
         if (loot.getAttributes().isEmpty()) {
             return;
         }
-        warnOnce("attributes", "Iris loot: attribute modifiers are not supported on modded; skipping");
+
+        Registry<Attribute> registry = level.registryAccess().lookupOrThrow(Registries.ATTRIBUTE);
+        ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.builder();
+        boolean changed = false;
+
         for (IrisAttributeModifier attribute : loot.getAttributes()) {
-            if (rng.nextDouble() < attribute.getChance()) {
-                attribute.getAmount(rng);
+            if (rng.nextDouble() >= attribute.getChance()) {
+                continue;
             }
+            double amount = attribute.getAmount(rng);
+            Holder<Attribute> holder = resolveAttribute(registry, attribute.getAttribute());
+            if (holder == null) {
+                warnOnce("attribute:" + attribute.getAttribute(), "Iris loot: unknown attribute '" + attribute.getAttribute() + "'");
+                continue;
+            }
+            Identifier modifierId = attributeModifierId(attribute.getName());
+            if (modifierId == null) {
+                continue;
+            }
+            AttributeModifier modifier = new AttributeModifier(modifierId, amount, operationFor(attribute.getOperation()));
+            builder.add(holder, modifier, EquipmentSlotGroup.ANY);
+            changed = true;
         }
+
+        if (changed) {
+            stack.set(DataComponents.ATTRIBUTE_MODIFIERS, builder.build());
+        }
+    }
+
+    public static Holder<Attribute> resolveAttribute(Registry<Attribute> registry, String key) {
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        String value = key.trim().toLowerCase(Locale.ROOT);
+        Holder<Attribute> direct = lookupAttribute(registry, Identifier.tryParse(value.indexOf(':') >= 0 ? value : "minecraft:" + value));
+        if (direct != null) {
+            return direct;
+        }
+        if (value.startsWith("generic_")) {
+            return lookupAttribute(registry, Identifier.tryParse("minecraft:" + value.substring("generic_".length())));
+        }
+        if (value.startsWith("generic.")) {
+            return lookupAttribute(registry, Identifier.tryParse("minecraft:" + value.substring("generic.".length())));
+        }
+        return null;
+    }
+
+    private static Holder<Attribute> lookupAttribute(Registry<Attribute> registry, Identifier id) {
+        if (id == null) {
+            return null;
+        }
+        Optional<Holder.Reference<Attribute>> holder = registry.get(id);
+        return holder.isPresent() ? holder.get() : null;
+    }
+
+    public static AttributeModifier.Operation operationFor(String operation) {
+        if (operation == null || operation.isBlank()) {
+            return AttributeModifier.Operation.ADD_VALUE;
+        }
+        return switch (operation.trim().toUpperCase(Locale.ROOT)) {
+            case "ADD_SCALAR", "ADD_MULTIPLIED_BASE" -> AttributeModifier.Operation.ADD_MULTIPLIED_BASE;
+            case "MULTIPLY_SCALAR_1", "ADD_MULTIPLIED_TOTAL" -> AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL;
+            default -> AttributeModifier.Operation.ADD_VALUE;
+        };
+    }
+
+    private static Identifier attributeModifierId(String name) {
+        String source = name == null || name.isBlank() ? "modifier" : name;
+        String normalized = source.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9/._-]", "_");
+        if (normalized.isBlank()) {
+            normalized = "modifier";
+        }
+        return Identifier.tryParse("iris:" + normalized);
+    }
+
+    private static void applyItemFlags(IrisLoot loot, ItemStack stack) {
+        TooltipDisplay display = stack.getOrDefault(DataComponents.TOOLTIP_DISPLAY, TooltipDisplay.DEFAULT);
+        boolean changed = false;
+
+        for (String flag : loot.getItemFlags()) {
+            if (flag == null || flag.isBlank()) {
+                continue;
+            }
+            DataComponentType<?> hidden = tooltipComponentFor(flag.trim().toUpperCase(Locale.ROOT));
+            if (hidden == null) {
+                warnOnce("itemFlag:" + flag, "Iris loot: item flag '" + flag + "' has no modded tooltip equivalent; skipping");
+                continue;
+            }
+            display = display.withHidden(hidden, true);
+            changed = true;
+        }
+
+        if (changed) {
+            stack.set(DataComponents.TOOLTIP_DISPLAY, display);
+        }
+    }
+
+    private static DataComponentType<?> tooltipComponentFor(String flag) {
+        return switch (flag) {
+            case "HIDE_ENCHANTS" -> DataComponents.ENCHANTMENTS;
+            case "HIDE_STORED_ENCHANTS" -> DataComponents.STORED_ENCHANTMENTS;
+            case "HIDE_ATTRIBUTES" -> DataComponents.ATTRIBUTE_MODIFIERS;
+            case "HIDE_UNBREAKABLE" -> DataComponents.UNBREAKABLE;
+            case "HIDE_DESTROYS" -> DataComponents.CAN_BREAK;
+            case "HIDE_PLACED_ON" -> DataComponents.CAN_PLACE_ON;
+            case "HIDE_DYE" -> DataComponents.DYED_COLOR;
+            case "HIDE_ARMOR_TRIM" -> DataComponents.TRIM;
+            default -> null;
+        };
+    }
+
+    private static void applyDyeColor(ItemStack stack, String dye) {
+        DyeColor color = DyeColor.byName(dye.trim().toLowerCase(Locale.ROOT), null);
+        if (color == null) {
+            warnOnce("dyeColor:" + dye, "Iris loot: unknown dyeColor '" + dye + "'");
+            return;
+        }
+        stack.set(DataComponents.BASE_COLOR, color);
     }
 
     private static void applyLore(IrisLoot loot, ItemStack stack) {

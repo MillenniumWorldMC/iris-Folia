@@ -23,7 +23,7 @@ import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisBiomeGeneratorLink;
 import art.arcane.iris.util.project.interpolation.IrisInterpolation;
 
-import java.awt.*;
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.util.function.BiFunction;

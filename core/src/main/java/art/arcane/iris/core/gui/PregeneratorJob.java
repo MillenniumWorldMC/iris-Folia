@@ -19,7 +19,10 @@
 package art.arcane.iris.core.gui;
 
 import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.protocol.IrisMessage;
 import art.arcane.iris.core.IrisSettings;
+import art.arcane.iris.core.protocol.IrisProtocolServer;
 import art.arcane.iris.core.pregenerator.IrisPregenerator;
 import art.arcane.iris.core.pregenerator.PregenListener;
 import art.arcane.iris.core.pregenerator.PregenTask;
@@ -345,6 +348,7 @@ public class PregeneratorJob implements PregenListener, PregenRenderSource {
     public void onRegionGenerated(int x, int z) {
         shouldGc();
         rgc++;
+        broadcastRegionDelta(x, z, IrisMessage.PregenRegionDelta.STATE_DONE);
     }
 
     private void shouldGc() {
@@ -353,9 +357,17 @@ public class PregeneratorJob implements PregenListener, PregenRenderSource {
         }
     }
 
+    private void broadcastRegionDelta(int regionX, int regionZ, int state) {
+        IrisProtocolServer protocolServer = IrisServices.getOrNull(IrisProtocolServer.class);
+        if (protocolServer == null) {
+            return;
+        }
+        protocolServer.broadcastPregenRegionDelta(pregenerator.getJobId(), regionX, regionZ, state);
+    }
+
     @Override
     public void onRegionGenerating(int x, int z) {
-
+        broadcastRegionDelta(x, z, IrisMessage.PregenRegionDelta.STATE_GENERATING);
     }
 
     @Override

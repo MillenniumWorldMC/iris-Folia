@@ -18,16 +18,40 @@
 
 package art.arcane.iris.engine;
 
+import art.arcane.iris.engine.framework.Engine;
+import art.arcane.iris.engine.framework.EngineEffects;
+import art.arcane.iris.engine.framework.EngineMetrics;
+import art.arcane.iris.engine.framework.EngineMode;
+import art.arcane.iris.engine.framework.EngineTarget;
+import art.arcane.iris.engine.framework.EngineWorldManager;
+import art.arcane.iris.engine.framework.EngineWorldManagerProvider;
+import art.arcane.iris.engine.framework.GenerationSessionException;
+import art.arcane.iris.engine.framework.GenerationSessionLease;
+import art.arcane.iris.engine.framework.GenerationSessionManager;
+import art.arcane.iris.engine.framework.PreservationRegistry;
+import art.arcane.iris.engine.framework.SeedManager;
+import art.arcane.iris.engine.framework.WrongEngineBroException;
+import art.arcane.iris.engine.object.IrisBiome;
+import art.arcane.iris.engine.object.IrisBiomePaletteLayer;
+import art.arcane.iris.engine.object.IrisDecorator;
+import art.arcane.iris.engine.object.IrisDimension;
+import art.arcane.iris.engine.object.IrisDimensionMode;
+import art.arcane.iris.engine.object.IrisDimensionModeType;
+import art.arcane.iris.engine.object.IrisEngineData;
+import art.arcane.iris.engine.object.IrisObjectPlacement;
+import art.arcane.iris.engine.object.IrisRegion;
 import art.arcane.iris.spi.IrisLogging;
 import com.google.common.util.concurrent.AtomicDouble;
 import com.google.gson.Gson;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.protocol.IrisMessage;
 import art.arcane.iris.core.ServerConfigurator;
 import art.arcane.iris.core.events.IrisEngineHotloadEvent;
 import art.arcane.iris.core.datapack.DatapackIngestService;
 import art.arcane.iris.core.gui.PregeneratorJob;
 import art.arcane.iris.core.loader.IrisData;
+import art.arcane.iris.core.protocol.IrisProtocolServer;
 import art.arcane.iris.core.loader.ResourceLoader;
 import art.arcane.iris.core.nms.container.BlockPos;
 import art.arcane.iris.core.nms.container.Pair;
@@ -35,9 +59,7 @@ import art.arcane.iris.core.project.IrisProject;
 import art.arcane.iris.core.structure.StructureIndexService;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.data.cache.AtomicCache;
-import art.arcane.iris.engine.framework.*;
 import art.arcane.iris.engine.mantle.EngineMantle;
-import art.arcane.iris.engine.object.*;
 import art.arcane.iris.util.common.data.B;
 import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.spi.PlatformBiome;
@@ -264,6 +286,7 @@ public class IrisEngine implements Engine {
             J.a(() -> DatapackIngestService.refreshWorkspace(getData()));
         } catch (Throwable e) {
             IrisLogging.error("FAILED TO SETUP ENGINE!");
+            IrisLogging.reportError(e);
             e.printStackTrace();
         }
 
@@ -403,18 +426,38 @@ public class IrisEngine implements Engine {
     }
 
     public void hotloadSilently() {
-        getData().dump();
-        getData().clearLists();
-        getTarget().setDimension(getData().getDimensionLoader().load(getDimension().getLoadKey()));
-        prehotload();
-        setupEngine();
-        if (getWorld().hasRealWorld()) {
-            J.a(() -> {
-                synchronized (ServerConfigurator.class) {
-                    ServerConfigurator.installDataPacks(false);
-                }
-            });
+        try {
+            getData().dump();
+            getData().clearLists();
+            getTarget().setDimension(getData().getDimensionLoader().load(getDimension().getLoadKey()));
+            prehotload();
+            setupEngine();
+            if (getWorld().hasRealWorld()) {
+                J.a(() -> {
+                    synchronized (ServerConfigurator.class) {
+                        ServerConfigurator.installDataPacks(false);
+                    }
+                });
+            }
+            broadcastStudioHotload(false, "");
+        } catch (RuntimeException | Error e) {
+            broadcastStudioHotload(true, e.getClass().getSimpleName() + ": " + e.getMessage());
+            throw e;
         }
+    }
+
+    private void broadcastStudioHotload(boolean failed, String message) {
+        IrisProtocolServer protocolServer = IrisServices.getOrNull(IrisProtocolServer.class);
+        if (protocolServer == null) {
+            return;
+        }
+        IrisDimension dimension = getDimension();
+        String packKey = dimension == null ? "" : dimension.getLoadKey();
+        protocolServer.broadcastStudioHotload(packKey, 0, failed, message);
+        protocolServer.broadcastToast(
+                failed ? IrisMessage.Toast.KIND_ERROR : IrisMessage.Toast.KIND_SUCCESS,
+                "Studio Hotload",
+                failed ? packKey + " failed" : packKey);
     }
 
     @Override
@@ -431,6 +474,7 @@ public class IrisEngine implements Engine {
                         IrisLogging.error("Failed to read Engine Data! Corrupted File? recreating...");
                     }
                 } catch (IOException e) {
+                    IrisLogging.reportError(e);
                     e.printStackTrace();
                 }
             }
@@ -448,6 +492,7 @@ public class IrisEngine implements Engine {
                     try {
                         IO.writeAll(f, new Gson().toJson(data));
                     } catch (IOException e) {
+                        IrisLogging.reportError(e);
                         e.printStackTrace();
                     }
                 } else {
@@ -724,6 +769,7 @@ public class IrisEngine implements Engine {
             IrisLogging.debug("Saved Engine Data");
         } catch (IOException e) {
             IrisLogging.error("Failed to save Engine Data");
+            IrisLogging.reportError(e);
             e.printStackTrace();
         }
     }
@@ -755,6 +801,7 @@ public class IrisEngine implements Engine {
     public void fail(String error, Throwable e) {
         failing = true;
         IrisLogging.error(error);
+        IrisLogging.reportError(e);
         e.printStackTrace();
     }
 

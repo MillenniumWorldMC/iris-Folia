@@ -21,6 +21,7 @@ package art.arcane.iris.modded;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.modded.api.ModdedCustomContentRegistry;
 import art.arcane.iris.spi.IrisLogging;
+import art.arcane.volmlib.util.data.UnresolvedKeyLog;
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
@@ -83,7 +84,7 @@ public final class ModdedBlockResolution {
     private static final Set<Block> PLACE_ONTO_LEAVES = blockSet(
             "acacia_leaves", "birch_leaves", "dark_oak_leaves", "jungle_leaves", "oak_leaves", "spruce_leaves");
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static long lastWarnMs;
+    private static final UnresolvedKeyLog UNRESOLVED = new UnresolvedKeyLog("Iris modded block resolution", 30_000L);
 
     private ModdedBlockResolution() {
     }
@@ -150,13 +151,14 @@ public final class ModdedBlockResolution {
         return map;
     }
 
-    private static boolean shouldWarn() {
-        long now = System.currentTimeMillis();
-        if (now - lastWarnMs >= 1000) {
-            lastWarnMs = now;
-            return true;
+    private static void warnUnresolved(String key, String message) {
+        if (UNRESOLVED.firstOccurrence(key)) {
+            IrisLogging.warn(message);
         }
-        return false;
+        String summary = UNRESOLVED.pollSummary();
+        if (summary != null) {
+            IrisLogging.warn(summary);
+        }
     }
 
     public static BlockState airState() {
@@ -192,7 +194,7 @@ public final class ModdedBlockResolution {
             return parsed;
         }
         IrisLogging.error("Can't find block data for " + bdxf);
-        return resolveNoCompat("STONE");
+        return new Parsed(AIR, null);
     }
 
     static Parsed resolveNoCompat(String bdxf) {
@@ -222,8 +224,8 @@ public final class ModdedBlockResolution {
                 if (provided != null) {
                     return new Parsed(provided, null);
                 }
-                if (warn && shouldWarn()) {
-                    IrisLogging.warn("Unknown Block Data '" + bd + "'");
+                if (warn) {
+                    warnUnresolved(bd, "Unknown Block Data '" + bd + "'");
                 }
                 return new Parsed(AIR, null);
             }
@@ -231,8 +233,8 @@ public final class ModdedBlockResolution {
             return bdx;
         } catch (Throwable e) {
             e.printStackTrace();
-            if (warn && shouldWarn()) {
-                IrisLogging.warn("Unknown Block Data '" + bdxf + "'");
+            if (warn) {
+                warnUnresolved(bdxf, "Unknown Block Data '" + bdxf + "'");
             }
         }
 
@@ -297,8 +299,8 @@ public final class ModdedBlockResolution {
             }
 
             if (bx == null) {
-                if (warn && shouldWarn()) {
-                    IrisLogging.warn("Unknown Block Data: " + ix);
+                if (warn) {
+                    warnUnresolved(ix, "Unknown Block Data: " + ix);
                 }
                 return null;
             }

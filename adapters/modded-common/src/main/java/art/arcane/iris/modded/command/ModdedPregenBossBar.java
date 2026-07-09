@@ -1,6 +1,10 @@
 package art.arcane.iris.modded.command;
 
 import art.arcane.iris.core.gui.PregeneratorJob;
+import art.arcane.iris.core.protocol.IrisProtocolServer;
+import art.arcane.iris.core.protocol.IrisSession;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.spi.protocol.IrisProtocol;
 import art.arcane.volmlib.util.format.Form;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -25,6 +29,9 @@ public final class ModdedPregenBossBar {
     public static synchronized void begin(ServerPlayer player) {
         clear();
         if (player == null) {
+            return;
+        }
+        if (hasClientPregenHud(player)) {
             return;
         }
         viewer = player.getUUID();
@@ -82,6 +89,15 @@ public final class ModdedPregenBossBar {
             name.append(ModdedCommandFeedback.text("  failed " + Form.f(progress.failed()), ModdedCommandFeedback.REQUIRED));
         }
         return name;
+    }
+
+    private static boolean hasClientPregenHud(ServerPlayer player) {
+        IrisProtocolServer protocol = IrisServices.getOrNull(IrisProtocolServer.class);
+        if (protocol == null) {
+            return false;
+        }
+        IrisSession session = protocol.registry().get(player.getUUID().toString());
+        return session != null && session.isReady() && session.hasCapability(IrisProtocol.CAPABILITY_PREGEN);
     }
 
     private static double clamp01(double value) {

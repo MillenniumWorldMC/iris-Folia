@@ -19,6 +19,8 @@
 package art.arcane.iris.core.pack;
 
 import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisPlatforms;
+import art.arcane.iris.spi.PlatformRegistries;
 import art.arcane.volmlib.util.json.JSONArray;
 import art.arcane.volmlib.util.json.JSONObject;
 
@@ -35,6 +37,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -98,7 +101,124 @@ public final class PackValidator {
             warnings.add("Unused-resource GC pass failed: " + e.getMessage());
         }
 
+        runContentKeyValidation(packFolder, warnings);
+
         return new PackValidationResult(packName, blockingErrors, warnings, removedUnusedFiles, validatedAt);
+    }
+
+    private static void runContentKeyValidation(File packFolder, List<String> warnings) {
+        try {
+            if (!IrisPlatforms.isBound()) {
+                return;
+            }
+            PlatformRegistries registries = IrisPlatforms.get().registries();
+            if (registries == null) {
+                return;
+            }
+            List<String> blockKeys = registries.blockKeys();
+            List<String> itemKeys = registries.itemKeys();
+            List<String> entityKeys = registries.entityKeys();
+            if (blockKeys == null || blockKeys.isEmpty() || itemKeys == null || itemKeys.isEmpty() || entityKeys == null || entityKeys.isEmpty()) {
+                return;
+            }
+
+            ReferencedContentKeys referenced = collectReferencedContentKeys(packFolder);
+            List<ContentKeyValidator.ContentKeyError> errors = ContentKeyValidator.validate(
+                    registries, referenced.blocks(), referenced.items(), referenced.entities());
+            for (ContentKeyValidator.ContentKeyError error : errors) {
+                warnings.add(error.message());
+            }
+        } catch (Throwable e) {
+            IrisLogging.reportError("PackValidator content-key validation failed for pack '" + packFolder.getName() + "'", e);
+        }
+    }
+
+    private static ReferencedContentKeys collectReferencedContentKeys(File packFolder) {
+        Set<String> blocks = new HashSet<>();
+        Set<String> items = new HashSet<>();
+        Set<String> entities = new HashSet<>();
+        Set<String> customBlocks = deriveRegistrantKeys(new File(packFolder, "blocks"));
+
+        try (Stream<Path> stream = Files.walk(packFolder.toPath())) {
+            List<Path> files = stream.filter(Files::isRegularFile)
+                    .filter(PackValidator::isScannableJsonPath)
+                    .toList();
+            for (Path path : files) {
+                String relative = packFolder.toPath().relativize(path).toString().replace(File.separatorChar, '/');
+                boolean inLoot = relative.startsWith("loot/");
+                boolean inEntities = relative.startsWith("entities/");
+                JSONObject json;
+                try {
+                    json = new JSONObject(Files.readString(path, StandardCharsets.UTF_8));
+                } catch (Throwable ignored) {
+                    continue;
+                }
+                collectFromNode(json, blocks, inLoot ? items : null, inEntities ? entities : null, customBlocks);
+            }
+        } catch (Throwable e) {
+            IrisLogging.reportError("PackValidator failed to walk pack for content-key extraction", e);
+        }
+
+        return new ReferencedContentKeys(blocks, items, entities);
+    }
+
+    private static void collectFromNode(Object node, Set<String> blocks, Set<String> items, Set<String> entities, Set<String> customBlocks) {
+        if (node instanceof JSONObject obj) {
+            for (String key : obj.keySet()) {
+                Object value = obj.get(key);
+                if (value instanceof String str) {
+                    if ("block".equals(key)) {
+                        addBlockRef(str, blocks, customBlocks);
+                    } else if (items != null && "type".equals(key)) {
+                        addSimpleRef(str, items);
+                    } else if (entities != null && "type".equals(key)) {
+                        addSimpleRef(str, entities);
+                    }
+                } else {
+                    collectFromNode(value, blocks, items, entities, customBlocks);
+                }
+            }
+        } else if (node instanceof JSONArray arr) {
+            for (int i = 0; i < arr.length(); i++) {
+                collectFromNode(arr.get(i), blocks, items, entities, customBlocks);
+            }
+        }
+    }
+
+    private static void addBlockRef(String raw, Set<String> blocks, Set<String> customBlocks) {
+        String value = raw.trim().toLowerCase(Locale.ROOT);
+        int bracket = value.indexOf('[');
+        if (bracket >= 0) {
+            value = value.substring(0, bracket).trim();
+        }
+        if (value.isEmpty() || customBlocks.contains(value)) {
+            return;
+        }
+        blocks.add(value);
+    }
+
+    private static void addSimpleRef(String raw, Set<String> target) {
+        String value = raw.trim().toLowerCase(Locale.ROOT);
+        if (!value.isEmpty()) {
+            target.add(value);
+        }
+    }
+
+    private static Set<String> deriveRegistrantKeys(File folder) {
+        Set<String> keys = new HashSet<>();
+        if (!folder.isDirectory()) {
+            return keys;
+        }
+        for (File file : listJsonRecursive(folder)) {
+            String key = deriveKey(folder, file);
+            if (key != null && !key.isBlank()) {
+                keys.add(key.toLowerCase(Locale.ROOT));
+            }
+        }
+        return keys;
+    }
+
+    private record ReferencedContentKeys(Set<String> blocks, Set<String> items, Set<String> entities) {
     }
 
     private static void validateDimensions(File packFolder, File[] dimensionFiles, List<String> blockingErrors, List<String> warnings) {

@@ -26,7 +26,12 @@ import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineMode;
 import art.arcane.iris.engine.framework.EngineStage;
 import art.arcane.iris.engine.framework.IrisEngineMode;
-import art.arcane.iris.engine.modifier.*;
+import art.arcane.iris.engine.modifier.IrisCarveModifier;
+import art.arcane.iris.engine.modifier.IrisCustomModifier;
+import art.arcane.iris.engine.modifier.IrisDepositModifier;
+import art.arcane.iris.engine.modifier.IrisFloatingChildBiomeModifier;
+import art.arcane.iris.engine.modifier.IrisPerfectionModifier;
+import art.arcane.iris.engine.modifier.IrisPostModifier;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.util.common.scheduling.J;
 

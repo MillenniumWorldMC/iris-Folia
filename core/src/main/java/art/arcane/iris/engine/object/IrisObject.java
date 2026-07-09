@@ -39,7 +39,10 @@ import art.arcane.volmlib.util.json.JSONObject;
 import art.arcane.volmlib.util.math.BlockPosition;
 import art.arcane.volmlib.util.math.Position2;
 import art.arcane.volmlib.util.math.RNG;
-import art.arcane.iris.util.common.math.*;
+import art.arcane.iris.util.common.math.AxisAlignedBB;
+import art.arcane.iris.util.common.math.IrisBlockVector;
+import art.arcane.iris.util.common.math.IrisVector;
+import art.arcane.iris.util.common.math.Vector3i;
 import art.arcane.volmlib.util.matter.MatterMarker;
 import art.arcane.iris.util.common.parallel.BurstExecutor;
 import art.arcane.iris.util.common.parallel.MultiBurst;
@@ -56,8 +59,19 @@ import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
 
-import java.io.*;
-import java.util.*;
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -502,7 +516,10 @@ public class IrisObject extends IrisRegistrant {
 
         try {
             latch.await();
-        } catch (InterruptedException ignored) {}
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while writing object", interrupted);
+        }
         if (ref.get() != null)
             throw ref.get();
     }

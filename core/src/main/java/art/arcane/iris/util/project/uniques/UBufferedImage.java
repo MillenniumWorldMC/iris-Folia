@@ -1,6 +1,6 @@
 package art.arcane.iris.util.project.uniques;
 
-import java.awt.*;
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorModel;
 import java.awt.image.WritableRaster;

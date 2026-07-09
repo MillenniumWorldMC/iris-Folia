@@ -5,7 +5,12 @@ import art.arcane.volmlib.util.collection.KList;
 import art.arcane.iris.util.common.format.C;
 import art.arcane.volmlib.util.format.Form;
 import oshi.SystemInfo;
-import oshi.hardware.*;
+import oshi.hardware.CentralProcessor;
+import oshi.hardware.Display;
+import oshi.hardware.GraphicsCard;
+import oshi.hardware.HWDiskStore;
+import oshi.hardware.HardwareAbstractionLayer;
+import oshi.hardware.PowerSource;
 import oshi.software.os.OSFileStore;
 import oshi.software.os.OperatingSystem;
 
