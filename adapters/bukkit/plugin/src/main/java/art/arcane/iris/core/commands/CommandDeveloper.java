@@ -218,7 +218,7 @@ public class CommandDeveloper implements DirectorExecutor {
             Iris.service(StudioSVC.class).downloadSearch(sender(), pack.getLoadKey(), true);
         }
 
-        Iris.service(StudioSVC.class).installIntoWorld(sender(), pack.getLoadKey(), folder);
+        Iris.service(StudioSVC.class).installIntoWorld(sender(), pack, folder);
     }
 
     @Director(description = "Test")

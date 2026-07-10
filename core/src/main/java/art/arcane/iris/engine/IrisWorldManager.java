@@ -67,6 +67,8 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -78,6 +80,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -86,6 +90,8 @@ import java.util.stream.Stream;
 @EqualsAndHashCode(callSuper = true)
 @Data
 public class IrisWorldManager extends EngineAssignedWorldManager {
+    private static final int MAX_FORCED_CHUNK_UPDATES = 128;
+
     private final Looper looper;
     private final int id;
     private final KList<Runnable> updateQueue = new KList<>();
@@ -100,11 +106,16 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
     private final Set<Long> markerFlagQueue = ConcurrentHashMap.newKeySet();
     private final Set<Long> discoveredFlagQueue = ConcurrentHashMap.newKeySet();
     private final Set<Long> markerScanQueue = ConcurrentHashMap.newKeySet();
+    private final Set<Long> chunkUpdateQueue = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean chunkUpdateScanScheduled = new AtomicBoolean();
+    private final AtomicBoolean chunkDiscoveryScanScheduled = new AtomicBoolean();
     private int entityCount = 0;
     private int actuallySpawned = 0;
     private int cooldown = 0;
-    private List<Entity> precount = new KList<>();
+    private int forcedChunkUpdateCursor = 0;
+    private volatile boolean playersPresent = false;
     private KSet<Position2> injectBiomes = new KSet<>();
+    private volatile int loadedChunkCount = 0;
 
     public IrisWorldManager() {
         super(null);
@@ -126,7 +137,7 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
         cl = new ChronoLatch(3000);
         clw = new ChronoLatch(1000, true);
         cleanupService = Executors.newSingleThreadScheduledExecutor(runnable -> {
-            var thread = new Thread(runnable, "Iris Mantle Cleanup " + getTarget().getWorld().name());
+            Thread thread = new Thread(runnable, "Iris Mantle Cleanup " + getTarget().getWorld().name());
             thread.setPriority(Thread.MIN_PRIORITY);
             return thread;
         });
@@ -139,16 +150,16 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
                 }
 
                 if (!getEngine().getWorld().hasRealWorld() && clw.flip()) {
-                    getEngine().getWorld().tryGetRealWorld();
+                    J.runGlobal(() -> getEngine().getWorld().tryGetRealWorld());
                 }
 
                 if (getEngine().getWorld().hasRealWorld()) {
-                    if (getEngine().getWorld().getPlayers().isEmpty()) {
-                        return 5000;
-                    }
-
                     if (chunkUpdater.flip()) {
                         updateChunks();
+                    }
+
+                    if (!playersPresent) {
+                        return 5000;
                     }
 
                     if (chunkDiscovery.flip()) {
@@ -161,19 +172,6 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
 
                     if (!IrisSettings.get().getWorld().isMarkerEntitySpawningSystem() && !IrisSettings.get().getWorld().isAmbientEntitySpawningSystem()) {
                         return 3000;
-                    }
-
-                    if (precount != null) {
-                        entityCount = 0;
-                        for (Entity i : precount) {
-                            if (i instanceof LivingEntity) {
-                                if (!i.isDead()) {
-                                    entityCount++;
-                                }
-                            }
-                        }
-
-                        precount = null;
                     }
 
                     onAsyncTick();
@@ -202,23 +200,46 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
             return;
         }
 
-        for (Player player : getEngine().getWorld().getPlayers()) {
-            if (player == null || !player.isOnline()) {
-                continue;
-            }
+        if (!chunkDiscoveryScanScheduled.compareAndSet(false, true)) {
+            return;
+        }
 
-            J.runEntity(player, () -> {
-                int centerX = PowerOfTwoCoordinates.blockToChunkFloor(player.getLocation().getBlockX());
-                int centerZ = PowerOfTwoCoordinates.blockToChunkFloor(player.getLocation().getBlockZ());
-                int radius = 1;
-                for (int x = -radius; x <= radius; x++) {
-                    for (int z = -radius; z <= radius; z++) {
-                        int chunkX = centerX + x;
-                        int chunkZ = centerZ + z;
-                        raiseDiscoveredChunkFlag(world, chunkX, chunkZ);
-                    }
+        boolean scheduled = J.runGlobal(() -> {
+            try {
+                if (getEngine().isClosed() || !world.equals(getEngine().getWorld().realWorld())) {
+                    return;
                 }
-            });
+
+                for (Player player : world.getPlayers()) {
+                    if (player == null) {
+                        continue;
+                    }
+
+                    J.runEntity(player, () -> {
+                        if (!player.isOnline() || !world.equals(player.getWorld())) {
+                            return;
+                        }
+
+                        int centerX = PowerOfTwoCoordinates.blockToChunkFloor(player.getLocation().getBlockX());
+                        int centerZ = PowerOfTwoCoordinates.blockToChunkFloor(player.getLocation().getBlockZ());
+                        int radius = 1;
+                        for (int x = -radius; x <= radius; x++) {
+                            for (int z = -radius; z <= radius; z++) {
+                                int chunkX = centerX + x;
+                                int chunkZ = centerZ + z;
+                                raiseDiscoveredChunkFlag(world, chunkX, chunkZ);
+                            }
+                        }
+                    });
+                }
+            } catch (Throwable e) {
+                IrisLogging.reportError(e);
+            } finally {
+                chunkDiscoveryScanScheduled.set(false);
+            }
+        });
+        if (!scheduled) {
+            chunkDiscoveryScanScheduled.set(false);
         }
     }
 
@@ -261,24 +282,98 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
             return;
         }
 
-        for (Player player : getEngine().getWorld().getPlayers()) {
-            if (player == null || !player.isOnline()) {
-                continue;
+        if (!chunkUpdateScanScheduled.compareAndSet(false, true)) {
+            return;
+        }
+
+        boolean scheduled = J.runGlobal(() -> updateChunksOnGlobal(world));
+        if (!scheduled) {
+            chunkUpdateScanScheduled.set(false);
+        }
+    }
+
+    private void updateChunksOnGlobal(World world) {
+        try {
+            if (getEngine().isClosed() || !world.equals(getEngine().getWorld().realWorld())) {
+                return;
             }
 
-            J.runEntity(player, () -> {
-                int centerX = PowerOfTwoCoordinates.blockToChunkFloor(player.getLocation().getBlockX());
-                int centerZ = PowerOfTwoCoordinates.blockToChunkFloor(player.getLocation().getBlockZ());
-                int radius = 1;
+            List<Player> players = new ArrayList<>(world.getPlayers());
+            playersPresent = !players.isEmpty();
+            loadedChunkCount = world.getLoadedChunks().length;
+            for (Player player : players) {
+                if (player == null) {
+                    continue;
+                }
 
-                for (int x = -radius; x <= radius; x++) {
-                    for (int z = -radius; z <= radius; z++) {
-                        int targetX = centerX + x;
-                        int targetZ = centerZ + z;
-                        J.runRegion(world, targetX, targetZ, () -> updateChunkRegion(world, targetX, targetZ));
-                    }
+                J.runEntity(player, () -> schedulePlayerChunkUpdates(world, player));
+            }
+
+            scheduleForcedChunkUpdates(world);
+        } catch (Throwable e) {
+            IrisLogging.reportError(e);
+        } finally {
+            chunkUpdateScanScheduled.set(false);
+        }
+    }
+
+    private void schedulePlayerChunkUpdates(World world, Player player) {
+        if (!player.isOnline() || !world.equals(player.getWorld())) {
+            return;
+        }
+
+        int centerX = PowerOfTwoCoordinates.blockToChunkFloor(player.getLocation().getBlockX());
+        int centerZ = PowerOfTwoCoordinates.blockToChunkFloor(player.getLocation().getBlockZ());
+        int radius = 1;
+        for (int x = -radius; x <= radius; x++) {
+            for (int z = -radius; z <= radius; z++) {
+                scheduleChunkUpdate(world, centerX + x, centerZ + z);
+            }
+        }
+    }
+
+    private void scheduleForcedChunkUpdates(World world) {
+        List<Position2> forcedChunks = new ArrayList<>();
+        for (Chunk chunk : world.getForceLoadedChunks()) {
+            forcedChunks.add(new Position2(chunk.getX(), chunk.getZ()));
+        }
+        forcedChunks.sort(Comparator.comparingInt(Position2::getX).thenComparingInt(Position2::getZ));
+
+        int forcedChunkCount = forcedChunks.size();
+        if (forcedChunkCount == 0) {
+            forcedChunkUpdateCursor = 0;
+            return;
+        }
+
+        int updateCount = Math.min(forcedChunkCount, MAX_FORCED_CHUNK_UPDATES);
+        int start = Math.floorMod(forcedChunkUpdateCursor, forcedChunkCount);
+        for (int i = 0; i < updateCount; i++) {
+            Position2 chunk = forcedChunks.get((start + i) % forcedChunkCount);
+            scheduleChunkUpdate(world, chunk.getX(), chunk.getZ());
+        }
+        forcedChunkUpdateCursor = (start + updateCount) % forcedChunkCount;
+    }
+
+    private void scheduleChunkUpdate(World world, int chunkX, int chunkZ) {
+        long key = Cache.key(chunkX, chunkZ);
+        if (!chunkUpdateQueue.add(key)) {
+            return;
+        }
+
+        try {
+            boolean scheduled = J.runRegion(world, chunkX, chunkZ, () -> {
+                try {
+                    updateChunkRegion(world, chunkX, chunkZ);
+                } finally {
+                    chunkUpdateQueue.remove(key);
                 }
             });
+            if (!scheduled) {
+                chunkUpdateQueue.remove(key);
+            }
+        } catch (Throwable e) {
+            chunkUpdateQueue.remove(key);
+            IrisLogging.reportError(e);
         }
     }
 
@@ -407,34 +502,41 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
             return false;
         }
 
+        if (cl.flip()) {
+            try {
+                World realWorld = getEngine().getWorld().realWorld();
+                if (realWorld == null) {
+                    entityCount = 0;
+                } else if (J.isFolia()) {
+                    entityCount = getFoliaLivingEntityCount(realWorld);
+                } else {
+                    CompletableFuture<Integer> future = new CompletableFuture<>();
+                    boolean scheduled = J.runGlobal(() -> {
+                        try {
+                            int count = 0;
+                            for (Entity entity : realWorld.getEntities()) {
+                                if (entity instanceof LivingEntity && !entity.isDead()) {
+                                    count++;
+                                }
+                            }
+                            future.complete(count);
+                        } catch (Throwable ex) {
+                            future.completeExceptionally(ex);
+                        }
+                    });
+                    entityCount = scheduled ? future.get(2, TimeUnit.SECONDS) : 0;
+                }
+            } catch (Throwable e) {
+                IrisLogging.reportError(e);
+                close();
+            }
+        }
+
         double epx = getEntitySaturation();
         if (epx > IrisSettings.get().getWorld().getTargetSpawnEntitiesPerChunk()) {
             IrisLogging.debug("Can't spawn. The entity per chunk ratio is at " + Form.pc(epx, 2) + " > 100% (total entities " + entityCount + ")");
             J.sleep(5000);
             return false;
-        }
-
-        if (cl.flip()) {
-            try {
-                World realWorld = getEngine().getWorld().realWorld();
-                if (realWorld == null) {
-                    precount = new KList<>();
-                } else if (J.isFolia()) {
-                    precount = getFoliaEntitySnapshot(realWorld);
-                } else {
-                    CompletableFuture<List<Entity>> future = new CompletableFuture<>();
-                    J.s(() -> {
-                        try {
-                            future.complete(realWorld.getEntities());
-                        } catch (Throwable ex) {
-                            future.completeExceptionally(ex);
-                        }
-                    });
-                    precount = future.get(2, TimeUnit.SECONDS);
-                }
-            } catch (Throwable e) {
-                close();
-            }
         }
 
         int spawnBuffer = RNG.r.i(2, 12);
@@ -443,14 +545,14 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
             return false;
         }
 
-        Chunk[] cc = getLoadedChunksSnapshot(world);
+        Position2[] cc = getLoadedChunkPositionsSnapshot(world);
         while (spawnBuffer-- > 0) {
             if (cc.length == 0) {
                 IrisLogging.debug("Can't spawn. No chunks!");
                 return false;
             }
 
-            Chunk c = cc[RNG.r.nextInt(cc.length)];
+            Position2 c = cc[RNG.r.nextInt(cc.length)];
             spawnChunkSafely(world, c.getX(), c.getZ(), false);
         }
 
@@ -475,48 +577,76 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
         return job.targetsWorldName(world.getName());
     }
 
-    private Chunk[] getLoadedChunksSnapshot(World world) {
+    private Position2[] getLoadedChunkPositionsSnapshot(World world) {
         if (world == null) {
-            return new Chunk[0];
+            return new Position2[0];
         }
 
-        CompletableFuture<Chunk[]> future = new CompletableFuture<>();
-        J.s(() -> {
+        CompletableFuture<Position2[]> future = new CompletableFuture<>();
+        boolean scheduled = J.runGlobal(() -> {
             try {
-                future.complete(world.getLoadedChunks());
+                Chunk[] chunks = world.getLoadedChunks();
+                Position2[] positions = new Position2[chunks.length];
+                for (int i = 0; i < chunks.length; i++) {
+                    positions[i] = new Position2(chunks[i].getX(), chunks[i].getZ());
+                }
+                loadedChunkCount = positions.length;
+                future.complete(positions);
             } catch (Throwable e) {
                 future.completeExceptionally(e);
             }
         });
+        if (!scheduled) {
+            return new Position2[0];
+        }
 
         try {
             return future.get(2, TimeUnit.SECONDS);
         } catch (Throwable e) {
             IrisLogging.reportError(e);
-            return new Chunk[0];
+            return new Position2[0];
         }
     }
 
-    private List<Entity> getFoliaEntitySnapshot(World world) {
-        Map<String, Entity> snapshot = new ConcurrentHashMap<>();
-        List<Player> players = getEngine().getWorld().getPlayers();
-        if (players == null || players.isEmpty()) {
-            return new KList<>();
+    private int getFoliaLivingEntityCount(World world) {
+        CompletableFuture<List<Player>> playerFuture = new CompletableFuture<>();
+        boolean scheduled = J.runGlobal(() -> {
+            try {
+                playerFuture.complete(new ArrayList<>(world.getPlayers()));
+            } catch (Throwable e) {
+                playerFuture.completeExceptionally(e);
+            }
+        });
+        if (!scheduled) {
+            return 0;
         }
+
+        List<Player> players;
+        try {
+            players = playerFuture.get(2, TimeUnit.SECONDS);
+        } catch (Throwable e) {
+            IrisLogging.reportError(e);
+            return 0;
+        }
+
+        Map<String, Entity> candidates = new ConcurrentHashMap<>();
 
         CountDownLatch latch = new CountDownLatch(players.size());
         for (Player player : players) {
-            if (player == null || !player.isOnline() || !world.equals(player.getWorld())) {
+            if (player == null) {
                 latch.countDown();
                 continue;
             }
 
             if (!J.runEntity(player, () -> {
                 try {
-                    snapshot.put(player.getUniqueId().toString(), player);
+                    if (!player.isOnline() || !world.equals(player.getWorld())) {
+                        return;
+                    }
+                    candidates.put(player.getUniqueId().toString(), player);
                     for (Entity nearby : player.getNearbyEntities(64, 64, 64)) {
-                        if (nearby != null && world.equals(nearby.getWorld())) {
-                            snapshot.put(nearby.getUniqueId().toString(), nearby);
+                        if (nearby != null) {
+                            candidates.put(nearby.getUniqueId().toString(), nearby);
                         }
                     }
                 } finally {
@@ -533,9 +663,28 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
             Thread.currentThread().interrupt();
         }
 
-        KList<Entity> entities = new KList<>();
-        entities.addAll(snapshot.values());
-        return entities;
+        AtomicInteger count = new AtomicInteger();
+        CountDownLatch entityLatch = new CountDownLatch(candidates.size());
+        for (Entity entity : candidates.values()) {
+            if (!J.runEntity(entity, () -> {
+                try {
+                    if (entity instanceof LivingEntity && world.equals(entity.getWorld()) && !entity.isDead()) {
+                        count.incrementAndGet();
+                    }
+                } finally {
+                    entityLatch.countDown();
+                }
+            })) {
+                entityLatch.countDown();
+            }
+        }
+
+        try {
+            entityLatch.await(2, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return count.get();
     }
 
     private void spawnChunkSafely(World world, int chunkX, int chunkZ, boolean initial) {
@@ -1039,7 +1188,7 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
 
     @Override
     public int getChunkCount() {
-        return getEngine().getWorld().realWorld().getLoadedChunks().length;
+        return loadedChunkCount;
     }
 
     @Override
@@ -1048,7 +1197,7 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
             return 1;
         }
 
-        return (double) entityCount / (getEngine().getWorld().realWorld().getLoadedChunks().length + 1) * 1.28;
+        return (double) entityCount / (loadedChunkCount + 1) * 1.28;
     }
 
     @Data

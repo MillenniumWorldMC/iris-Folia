@@ -394,10 +394,10 @@ public class IrisFloatingChildBiomeModifier extends EngineAssignedModifier<Platf
 
     private MatterBiomeInject createSkyBiomeMatter(IrisBiome target, int wx, int wz) {
         if (target.isCustom()) {
-            IrisBiomeCustom custom = target.getCustomBiome(rng, wx, 0, wz);
+            IrisBiomeCustom custom = target.getCustomBiome(rng, getEngine(), wx, 0, wz);
             return BiomeInjectMatter.get(IrisPlatforms.get().biomeWriter().biomeIdFor(getDimension().getLoadKey() + ":" + custom.getId()));
         }
 
-        return BiomeInjectMatter.get(IrisPlatforms.get().biomeWriter().biomeIdFor(target.getSkyBiomeKey(rng, wx, 0, wz)));
+        return BiomeInjectMatter.get(IrisPlatforms.get().biomeWriter().biomeIdFor(target.getSkyBiomeKey(rng, getEngine(), wx, 0, wz)));
     }
 }

@@ -1221,7 +1221,10 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
 
         if (!ff.exists()) {
             ff.mkdirs();
-            service(StudioSVC.class).installIntoWorld(getSender(), dim.getLoadKey(), w.worldFolder());
+            dim = service(StudioSVC.class).installIntoWorld(getSender(), dim, w.worldFolder());
+            if (dim == null) {
+                throw new IllegalStateException("Failed to install dimension pack for " + id);
+            }
         }
 
         return new BukkitChunkGenerator(w, false, ff, dim.getLoadKey());
@@ -1243,9 +1246,8 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
                     for (String reason : result.getBlockingErrors()) {
                         Iris.error("  - " + reason);
                     }
-                } else if (!result.getWarnings().isEmpty() || !result.getRemovedUnusedFiles().isEmpty()) {
+                } else if (!result.getWarnings().isEmpty()) {
                     Iris.info("Pack '" + result.getPackName() + "' validated ("
-                            + result.getRemovedUnusedFiles().size() + " unused file(s) quarantined to .iris-trash/, "
                             + result.getWarnings().size() + " warning(s)).");
                     for (String warning : result.getWarnings()) {
                         Iris.warn("  [" + result.getPackName() + "] " + warning);

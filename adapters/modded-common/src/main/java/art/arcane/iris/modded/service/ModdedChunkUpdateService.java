@@ -44,6 +44,7 @@ import net.minecraft.nbt.NbtUtils;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -108,15 +109,20 @@ public final class ModdedChunkUpdateService implements ModdedTickableService {
             if (engine == null || engine.isClosed() || engine.getMantle().getMantle().isClosed()) {
                 continue;
             }
-            if (level.players().isEmpty() || isPregenActive(engine)) {
+            if (!hasUpdateTargets(!level.players().isEmpty(), !level.getForceLoadedChunks().isEmpty()) || isPregenActive(engine)) {
                 continue;
             }
             try {
                 updateNearPlayers(engine, level);
+                updateForcedChunks(engine, level);
             } catch (Throwable e) {
                 IrisLogging.reportError(e);
             }
         }
+    }
+
+    static boolean hasUpdateTargets(boolean hasPlayers, boolean hasForcedChunks) {
+        return hasPlayers || hasForcedChunks;
     }
 
     private boolean isPregenActive(Engine engine) {
@@ -133,6 +139,12 @@ public final class ModdedChunkUpdateService implements ModdedTickableService {
                     updateChunk(engine, level, centerX + dx, centerZ + dz);
                 }
             }
+        }
+    }
+
+    private void updateForcedChunks(Engine engine, ServerLevel level) {
+        for (long chunkKey : level.getForceLoadedChunks()) {
+            updateChunk(engine, level, ChunkPos.getX(chunkKey), ChunkPos.getZ(chunkKey));
         }
     }
 

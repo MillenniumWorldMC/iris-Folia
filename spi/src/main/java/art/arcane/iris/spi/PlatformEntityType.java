@@ -26,5 +26,7 @@ public interface PlatformEntityType {
 
     String namespace();
 
+    String spawnCategory();
+
     Object nativeHandle();
 }

@@ -31,6 +31,9 @@ public enum IrisBiomeCustomSpawnType {
     @Desc("Eg bats")
     AMBIENT,
 
+    @Desc("Axolotls")
+    AXOLOTLS,
+
     @Desc("Odd spawn group but ok")
     UNDERGROUND_WATER_CREATURE,
 

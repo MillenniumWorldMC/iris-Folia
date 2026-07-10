@@ -20,6 +20,8 @@ package art.arcane.iris.modded;
 
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.GenerationSessionException;
+import art.arcane.iris.engine.object.IrisBiome;
+import art.arcane.iris.engine.object.IrisBiomeCustom;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.iris.spi.PlatformBlockState;
@@ -38,6 +40,8 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.WorldGenRegion;
+import net.minecraft.util.random.WeightedList;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelHeightAccessor;
@@ -49,6 +53,7 @@ import net.minecraft.world.level.biome.BiomeManager;
 import net.minecraft.world.level.biome.BiomeResolver;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Climate;
+import net.minecraft.world.level.biome.MobSpawnSettings;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -65,6 +70,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -136,8 +142,11 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
     private final String defaultPack;
     private final String defaultDimensionKey;
     private final ConcurrentHashMap<String, Holder<Biome>> biomeHolders = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Biome, Holder<Biome>> vanillaSpawnBiomes = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<SpawnTableKey, WeightedList<MobSpawnSettings.SpawnerData>> mergedSpawnTables = new ConcurrentHashMap<>();
     private final Set<String> missingBiomeWarnings = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean announced = new AtomicBoolean(false);
+    private volatile boolean vanillaSpawnBiomesInitialized;
     private volatile Engine engine;
     private volatile String activePack;
     private volatile String activeDimensionKey;
@@ -166,6 +175,7 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
         this.announced.set(false);
         this.biomeHolders.clear();
         this.missingBiomeWarnings.clear();
+        resetVanillaSpawnBiomes();
     }
 
     public synchronized void unbindEngine() {
@@ -177,6 +187,7 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
         this.announced.set(false);
         this.biomeHolders.clear();
         this.missingBiomeWarnings.clear();
+        resetVanillaSpawnBiomes();
     }
 
     public synchronized void resetToDefault() {
@@ -259,6 +270,82 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
     public void onHotload() {
         biomeHolders.clear();
         missingBiomeWarnings.clear();
+        resetVanillaSpawnBiomes();
+    }
+
+    @Override
+    public WeightedList<MobSpawnSettings.SpawnerData> getMobsAt(
+            Holder<Biome> biome, StructureManager structureManager, MobCategory category, BlockPos pos) {
+        WeightedList<MobSpawnSettings.SpawnerData> explicitSpawns = biome.value().getMobSettings().getMobs(category);
+        WeightedList<MobSpawnSettings.SpawnerData> resolvedSpawns = super.getMobsAt(
+                biome, structureManager, category, pos);
+        if (resolvedSpawns != explicitSpawns) {
+            return resolvedSpawns;
+        }
+
+        Registry<Biome> registry = structureManager.registryAccess().lookupOrThrow(Registries.BIOME);
+        initializeVanillaSpawnBiomes(registry);
+        Holder<Biome> vanillaSpawnBiome = vanillaSpawnBiomes.get(biome.value());
+        if (vanillaSpawnBiome == null) {
+            return explicitSpawns;
+        }
+
+        WeightedList<MobSpawnSettings.SpawnerData> vanillaSpawns = vanillaSpawnBiome.value().getMobSettings().getMobs(category);
+        if (explicitSpawns.isEmpty()) {
+            return vanillaSpawns;
+        }
+        if (vanillaSpawns.isEmpty()) {
+            return explicitSpawns;
+        }
+
+        SpawnTableKey key = new SpawnTableKey(biome.value(), category);
+        return mergedSpawnTables.computeIfAbsent(key, ignored -> NativeSpawnTableMerger.merge(vanillaSpawns, explicitSpawns));
+    }
+
+    private synchronized void initializeVanillaSpawnBiomes(Registry<Biome> registry) {
+        if (vanillaSpawnBiomesInitialized) {
+            return;
+        }
+        Engine current = engineOrNull();
+        if (current == null) {
+            return;
+        }
+
+        String namespace = current.getDimension().getLoadKey().toLowerCase(Locale.ROOT);
+        for (IrisBiome irisBiome : current.getDimension().getAllBiomes(current)) {
+            if (irisBiome == null || !irisBiome.isCustom()) {
+                continue;
+            }
+            Holder<Biome> vanillaHolder = resolveBiomeHolder(registry, irisBiome.getVanillaDerivativeKey());
+            if (vanillaHolder == null) {
+                continue;
+            }
+            for (IrisBiomeCustom customBiome : irisBiome.getCustomDerivitives()) {
+                Holder<Biome> customHolder = resolveBiomeHolder(registry, namespace + ":" + customBiome.getId());
+                if (customHolder != null) {
+                    vanillaSpawnBiomes.putIfAbsent(customHolder.value(), vanillaHolder);
+                }
+            }
+        }
+        vanillaSpawnBiomesInitialized = true;
+    }
+
+    private Holder<Biome> resolveBiomeHolder(Registry<Biome> registry, String key) {
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        Identifier identifier = Identifier.tryParse(key);
+        if (identifier == null) {
+            return null;
+        }
+        Optional<Holder.Reference<Biome>> reference = registry.get(identifier);
+        return reference.<Holder<Biome>>map((Holder.Reference<Biome> value) -> value).orElse(null);
+    }
+
+    private synchronized void resetVanillaSpawnBiomes() {
+        vanillaSpawnBiomes.clear();
+        mergedSpawnTables.clear();
+        vanillaSpawnBiomesInitialized = false;
     }
 
     @Override
@@ -490,5 +577,8 @@ public final class IrisModdedChunkGenerator extends ChunkGenerator {
     @Override
     public void addDebugScreenInfo(List<String> info, RandomState randomState, BlockPos pos) {
         info.add("Iris dimension: " + dimensionKey);
+    }
+
+    private record SpawnTableKey(Biome biome, MobCategory category) {
     }
 }

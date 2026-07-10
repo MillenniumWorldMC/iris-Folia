@@ -77,7 +77,7 @@ public final class ModdedPregenMethod implements PregeneratorMethod {
         this.maxInFlight = Math.max(8, pregen.getModdedPregenInFlight());
         this.minInFlight = Math.max(4, Math.min(16, maxInFlight / 4));
         this.semaphore = new Semaphore(maxInFlight, true);
-        this.adaptiveLimit = new AtomicInteger(maxInFlight);
+        this.adaptiveLimit = new AtomicInteger(sync ? 1 : maxInFlight);
         this.timeoutSeconds = Math.max(120, pregen.getChunkLoadTimeoutSeconds());
         this.backpressure = new PregenMantleBackpressure(
                 this::getMantle,
@@ -179,6 +179,7 @@ public final class ModdedPregenMethod implements PregeneratorMethod {
         CompletableFuture<?> loadFuture = CompletableFuture
                 .supplyAsync(() -> level.getChunkSource().addTicketAndLoadWithRadius(PREGEN_TICKET, pos, 0), level.getServer())
                 .thenCompose((CompletableFuture<?> inner) -> inner);
+        markSubmitted();
         try {
             Object result = loadFuture.get(timeoutSeconds, TimeUnit.SECONDS);
             if (result instanceof ChunkResult<?> chunkResult && !chunkResult.isSuccess()) {
@@ -196,6 +197,7 @@ public final class ModdedPregenMethod implements PregeneratorMethod {
             LOGGER.warn("Iris pregen chunk {},{} failed: {}", x, z, e.toString());
             listener.onChunkFailed(x, z);
         } finally {
+            markFinished();
             level.getServer().execute(() -> level.getChunkSource().removeTicketWithRadius(PREGEN_TICKET, pos, 0));
         }
     }
@@ -255,6 +257,9 @@ public final class ModdedPregenMethod implements PregeneratorMethod {
 
     private void markFinished() {
         inFlight.decrementAndGet();
+        if (sync) {
+            return;
+        }
         synchronized (permitMonitor) {
             permitMonitor.notifyAll();
         }

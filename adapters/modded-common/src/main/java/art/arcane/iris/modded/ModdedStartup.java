@@ -88,8 +88,8 @@ public final class ModdedStartup {
                     for (String reason : result.getBlockingErrors()) {
                         LOGGER.error("  - {}", reason);
                     }
-                } else if (!result.getWarnings().isEmpty() || !result.getRemovedUnusedFiles().isEmpty()) {
-                    LOGGER.info("Iris pack '{}' validated ({} unused file(s) quarantined to .iris-trash/, {} warning(s)).", result.getPackName(), result.getRemovedUnusedFiles().size(), result.getWarnings().size());
+                } else if (!result.getWarnings().isEmpty()) {
+                    LOGGER.info("Iris pack '{}' validated ({} warning(s)).", result.getPackName(), result.getWarnings().size());
                     for (String warning : result.getWarnings()) {
                         LOGGER.warn("  [{}] {}", result.getPackName(), warning);
                     }

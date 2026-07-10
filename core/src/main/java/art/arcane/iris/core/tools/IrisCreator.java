@@ -166,7 +166,11 @@ public class IrisCreator {
 
         reportStudioProgress(0.16D, "prepare_world_pack");
         if (!studio() || benchmark) {
-            IrisServices.get(StudioSVC.class).installIntoWorld(sender, d.getLoadKey(), new File(Bukkit.getWorldContainer(), name()));
+            d = IrisServices.get(StudioSVC.class).installIntoWorld(sender, d, new File(Bukkit.getWorldContainer(), name()));
+            if (d == null) {
+                throw new IrisException("Failed to install dimension pack for " + dimension());
+            }
+            dimension = d.getLoadKey();
         }
         if (studio()) {
             IrisRuntimeSchedulerMode runtimeSchedulerMode = IrisRuntimeSchedulerMode.resolve(IrisSettings.get().getPregen());
@@ -178,7 +182,7 @@ public class IrisCreator {
         AtomicDouble pp = new AtomicDouble(0);
         AtomicBoolean done = new AtomicBoolean(false);
         WorldCreator wc = new IrisWorldCreator()
-                .dimension(dimension)
+                .dimension(d)
                 .name(name)
                 .seed(seed)
                 .studio(studio)

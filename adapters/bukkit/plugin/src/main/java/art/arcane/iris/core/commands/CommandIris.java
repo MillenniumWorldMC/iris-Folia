@@ -135,7 +135,7 @@ public class CommandIris implements DirectorExecutor {
         try {
             worldCreation = true;
             IrisToolbelt.createWorld()
-                    .dimension(dimension.getLoadKey())
+                    .dimension(resolvedType)
                     .name(name)
                     .seed(seed)
                     .sender(sender())
@@ -199,7 +199,7 @@ public class CommandIris implements DirectorExecutor {
         sender().sendMessage(C.YELLOW + "Preparing world files and bukkit.yml for next startup...");
 
         File worldFolder = new File(Bukkit.getWorldContainer(), name);
-        IrisDimension installed = Iris.service(StudioSVC.class).installIntoWorld(sender(), dimension.getLoadKey(), worldFolder);
+        IrisDimension installed = Iris.service(StudioSVC.class).installIntoWorld(sender(), dimension, worldFolder);
         if (installed == null) {
             sender().sendMessage(C.RED + "Failed to stage world files for dimension \"" + dimension.getLoadKey() + "\".");
             return false;
@@ -587,6 +587,7 @@ public class CommandIris implements DirectorExecutor {
                         IrisData data = IrisData.get(pack);
                         for (String key : data.getDimensionLoader().getPossibleKeys()) {
                             options.add(key);
+                            options.add(pack.getName() + ":" + key);
                         }
                     } catch (Throwable ex) {
                         Iris.warn("Failed to read dimension keys from pack %s: %s%s",

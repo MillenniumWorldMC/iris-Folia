@@ -40,6 +40,7 @@ import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KSet;
 import art.arcane.iris.util.common.data.DataProvider;
 import art.arcane.volmlib.util.io.IO;
+import art.arcane.volmlib.util.json.JSONArray;
 import art.arcane.volmlib.util.json.JSONObject;
 import art.arcane.volmlib.util.mantle.flag.MantleFlag;
 import art.arcane.volmlib.util.math.Position2;
@@ -56,9 +57,17 @@ import org.bukkit.block.Biome;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Pattern;
 
 @Accessors(chain = true)
 @NoArgsConstructor
@@ -67,6 +76,8 @@ import java.util.Map;
 @EqualsAndHashCode(callSuper = false, doNotUseGetters = true)
 @ToString(doNotUseGetters = true)
 public class IrisDimension extends IrisRegistrant {
+    private static final Pattern RESOURCE_KEY_PATTERN = Pattern.compile("[a-z0-9_.-]+:[a-z0-9/._-]+");
+
     private final transient AtomicCache<Position2> parallaxSize = new AtomicCache<>();
     private final transient AtomicCache<CNG> rockLayerGenerator = new AtomicCache<>();
     private final transient AtomicCache<CNG> fluidLayerGenerator = new AtomicCache<>();
@@ -523,12 +534,104 @@ public class IrisDimension extends IrisRegistrant {
                     output.getParentFile().mkdirs();
                     try {
                         IO.writeAll(output, json);
+                        installBiomeTags(datapacks, namespace + ":" + customBiomeId, customBiome.getTags());
                     } catch (IOException e) {
                         IrisLogging.reportError(e);
                         e.printStackTrace();
                     }
                 }
             }
+        }
+    }
+
+    public static void clearGeneratedBiomeTags(KList<File> folders) {
+        for (File datapacks : folders) {
+            File dataFolder = new File(datapacks, "iris/data");
+            File[] namespaces = dataFolder.listFiles(File::isDirectory);
+            if (namespaces == null) {
+                continue;
+            }
+            for (File namespace : namespaces) {
+                IO.delete(new File(namespace, "tags/worldgen/biome"));
+            }
+        }
+    }
+
+    static void installBiomeTags(File datapacks, String biomeKey, KList<String> tags) throws IOException {
+        if (tags == null || tags.isEmpty()) {
+            return;
+        }
+        for (String rawTag : tags) {
+            String tag = normalizeResourceKey(rawTag);
+            if (tag == null) {
+                IrisLogging.error("Invalid custom biome tag '" + rawTag + "' for " + biomeKey);
+                continue;
+            }
+            int separator = tag.indexOf(':');
+            String namespace = tag.substring(0, separator);
+            String path = tag.substring(separator + 1);
+            Path tagRoot = new File(datapacks, "iris/data/" + namespace + "/tags/worldgen/biome").toPath()
+                    .toAbsolutePath().normalize();
+            Path output = tagRoot.resolve(path + ".json").normalize();
+            if (!output.startsWith(tagRoot)) {
+                IrisLogging.error("Unsafe custom biome tag '" + rawTag + "' for " + biomeKey);
+                continue;
+            }
+            writeBiomeTag(output, biomeKey);
+        }
+    }
+
+    private static String normalizeResourceKey(String key) {
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        String normalized = key.trim().toLowerCase(Locale.ROOT);
+        if (normalized.indexOf(':') < 0) {
+            normalized = "minecraft:" + normalized;
+        }
+        return RESOURCE_KEY_PATTERN.matcher(normalized).matches() ? normalized : null;
+    }
+
+    static void writeBiomeTag(Path output, String biomeKey) throws IOException {
+        synchronized (IrisDimension.class) {
+            Set<String> values = new TreeSet<>();
+            if (Files.isRegularFile(output)) {
+                JSONObject existing = new JSONObject(Files.readString(output, StandardCharsets.UTF_8));
+                JSONArray existingValues = existing.optJSONArray("values");
+                if (existingValues != null) {
+                    for (int index = 0; index < existingValues.length(); index++) {
+                        String value = existingValues.optString(index, null);
+                        if (value != null && !value.isBlank()) {
+                            values.add(value);
+                        }
+                    }
+                }
+            }
+            values.add(biomeKey);
+
+            JSONArray outputValues = new JSONArray();
+            for (String value : values) {
+                outputValues.put(value);
+            }
+            JSONObject tag = new JSONObject();
+            tag.put("replace", false);
+            tag.put("values", outputValues);
+            writeAtomic(output, tag.toString(4));
+        }
+    }
+
+    private static void writeAtomic(Path output, String content) throws IOException {
+        Files.createDirectories(output.getParent());
+        Path temporary = Files.createTempFile(output.getParent(), output.getFileName().toString(), ".tmp");
+        try {
+            Files.writeString(temporary, content, StandardCharsets.UTF_8);
+            try {
+                Files.move(temporary, output, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temporary, output, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
         }
     }
 

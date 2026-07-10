@@ -18,8 +18,10 @@
 
 package art.arcane.iris.core.pack;
 
+import art.arcane.iris.engine.object.IrisBiomeCustomSpawnType;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.IrisPlatforms;
+import art.arcane.iris.spi.PlatformEntityType;
 import art.arcane.iris.spi.PlatformRegistries;
 import art.arcane.volmlib.util.json.JSONArray;
 import art.arcane.volmlib.util.json.JSONObject;
@@ -28,17 +30,16 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 public final class PackValidator {
@@ -50,19 +51,9 @@ public final class PackValidator {
     private static final String CACHE_FOLDER = "cache";
     private static final String OBJECTS_FOLDER = "objects";
     private static final String DIMENSIONS_FOLDER = "dimensions";
-    private static final List<String> MANAGED_RESOURCE_FOLDERS = List.of(
-            "biomes",
-            "regions",
-            "entities",
-            "spawners",
-            "loot",
-            "generators",
-            "expressions",
-            "markers",
-            "blocks",
-            "mods"
-    );
-    private static final DateTimeFormatter TRASH_STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    private static final List<String> STRUCTURE_HOST_FOLDERS = List.of(DIMENSIONS_FOLDER, "regions", "biomes");
+    private static final List<String> UNSUPPORTED_STRUCTURE_TRANSFORM_FIELDS = List.of("rotation", "translate", "scale");
+    private static final Pattern RESOURCE_KEY_PATTERN = Pattern.compile("[a-z0-9_.-]+:[a-z0-9/._-]+");
 
     private PackValidator() {
     }
@@ -71,39 +62,376 @@ public final class PackValidator {
         String packName = packFolder == null ? "<unknown>" : packFolder.getName();
         List<String> blockingErrors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
-        List<String> removedUnusedFiles = new ArrayList<>();
         long validatedAt = System.currentTimeMillis();
 
         if (packFolder == null || !packFolder.isDirectory()) {
             blockingErrors.add("Pack folder does not exist or is not a directory.");
-            return new PackValidationResult(packName, blockingErrors, warnings, removedUnusedFiles, validatedAt);
+            return new PackValidationResult(packName, blockingErrors, warnings, validatedAt);
         }
 
         File dimensionsFolder = new File(packFolder, DIMENSIONS_FOLDER);
         if (!dimensionsFolder.isDirectory()) {
             blockingErrors.add("Missing dimensions/ folder.");
-            return new PackValidationResult(packName, blockingErrors, warnings, removedUnusedFiles, validatedAt);
+            return new PackValidationResult(packName, blockingErrors, warnings, validatedAt);
         }
 
         File[] dimensionFiles = dimensionsFolder.listFiles(f -> f.isFile() && f.getName().endsWith(".json"));
         if (dimensionFiles == null || dimensionFiles.length == 0) {
             blockingErrors.add("No dimension JSON files under dimensions/.");
-            return new PackValidationResult(packName, blockingErrors, warnings, removedUnusedFiles, validatedAt);
+            return new PackValidationResult(packName, blockingErrors, warnings, validatedAt);
         }
 
         validateDimensions(packFolder, dimensionFiles, blockingErrors, warnings);
-
-        try {
-            String packTextCorpus = buildPackTextCorpus(packFolder);
-            runUnusedResourceGc(packFolder, packTextCorpus, removedUnusedFiles, warnings);
-        } catch (Throwable e) {
-            IrisLogging.reportError("PackValidator GC pass failed for pack '" + packName + "'", e);
-            warnings.add("Unused-resource GC pass failed: " + e.getMessage());
-        }
+        blockingErrors.addAll(validateUnsupportedStructureTransforms(packFolder));
+        blockingErrors.addAll(validateSpawnerEntityReferences(
+                new File(packFolder, "spawners"), new File(packFolder, "entities")));
+        blockingErrors.addAll(validateCustomBiomeSpawns(
+                new File(packFolder, "biomes"), PackValidator::resolveEntitySpawnCategory));
 
         runContentKeyValidation(packFolder, warnings);
 
-        return new PackValidationResult(packName, blockingErrors, warnings, removedUnusedFiles, validatedAt);
+        return new PackValidationResult(packName, blockingErrors, warnings, validatedAt);
+    }
+
+    static List<String> validateUnsupportedStructureTransforms(File packFolder) {
+        List<String> blockingErrors = new ArrayList<>();
+        if (packFolder == null || !packFolder.isDirectory()) {
+            return blockingErrors;
+        }
+
+        for (String folderName : STRUCTURE_HOST_FOLDERS) {
+            File resourceFolder = new File(packFolder, folderName);
+            if (!resourceFolder.isDirectory()) {
+                continue;
+            }
+            List<File> resourceFiles = listJsonRecursive(resourceFolder);
+            resourceFiles.sort(Comparator.comparing(File::getPath));
+            String resourceType = structureHostType(folderName);
+            for (File resourceFile : resourceFiles) {
+                JSONObject resource;
+                try {
+                    resource = new JSONObject(Files.readString(resourceFile.toPath(), StandardCharsets.UTF_8));
+                } catch (Throwable ignored) {
+                    continue;
+                }
+
+                JSONArray placements = resource.optJSONArray("structures");
+                if (placements == null) {
+                    continue;
+                }
+                String resourceKey = deriveKey(resourceFolder, resourceFile);
+                for (int placementIndex = 0; placementIndex < placements.length(); placementIndex++) {
+                    JSONObject placement = placements.optJSONObject(placementIndex);
+                    if (placement == null) {
+                        continue;
+                    }
+                    for (String field : UNSUPPORTED_STRUCTURE_TRANSFORM_FIELDS) {
+                        if (placement.has(field)) {
+                            blockingErrors.add(resourceType + " '" + resourceKey + "' structures[" + placementIndex
+                                    + "] declares unsupported field '" + field
+                                    + "'. Structure placement transforms are not supported; remove the field.");
+                        }
+                    }
+                }
+            }
+        }
+        return blockingErrors;
+    }
+
+    private static String structureHostType(String folderName) {
+        return switch (folderName) {
+            case "dimensions" -> "Dimension";
+            case "regions" -> "Region";
+            case "biomes" -> "Biome";
+            default -> "Resource";
+        };
+    }
+
+    static List<String> validateSpawnerEntityReferences(File spawnersFolder, File entitiesFolder) {
+        List<String> blockingErrors = new ArrayList<>();
+        if (spawnersFolder == null || !spawnersFolder.isDirectory()) {
+            return blockingErrors;
+        }
+
+        Path entityRoot = entitiesFolder.toPath().toAbsolutePath().normalize();
+        Set<Path> validEntityFiles = new HashSet<>();
+        Map<Path, String> invalidEntityFiles = new HashMap<>();
+        List<File> spawnerFiles = listJsonRecursive(spawnersFolder);
+        spawnerFiles.sort(Comparator.comparing(File::getPath));
+        for (File spawnerFile : spawnerFiles) {
+            String spawnerKey = deriveKey(spawnersFolder, spawnerFile);
+            JSONObject spawner;
+            try {
+                spawner = new JSONObject(Files.readString(spawnerFile.toPath(), StandardCharsets.UTF_8));
+            } catch (Throwable e) {
+                blockingErrors.add("Spawner '" + spawnerKey + "' has invalid JSON: " + e.getMessage());
+                continue;
+            }
+
+            validateSpawnerSpawnEntries(spawnerKey, spawner, "spawns", entityRoot,
+                    validEntityFiles, invalidEntityFiles, blockingErrors);
+            validateSpawnerSpawnEntries(spawnerKey, spawner, "initialSpawns", entityRoot,
+                    validEntityFiles, invalidEntityFiles, blockingErrors);
+        }
+        return blockingErrors;
+    }
+
+    private static void validateSpawnerSpawnEntries(String spawnerKey,
+                                                    JSONObject spawner,
+                                                    String field,
+                                                    Path entityRoot,
+                                                    Set<Path> validEntityFiles,
+                                                    Map<Path, String> invalidEntityFiles,
+                                                    List<String> blockingErrors) {
+        if (!spawner.has(field)) {
+            return;
+        }
+        JSONArray entries = spawner.optJSONArray(field);
+        if (entries == null) {
+            blockingErrors.add("Spawner '" + spawnerKey + "' " + field + " must be an array.");
+            return;
+        }
+
+        for (int index = 0; index < entries.length(); index++) {
+            JSONObject entry = entries.optJSONObject(index);
+            if (entry == null) {
+                blockingErrors.add("Spawner '" + spawnerKey + "' " + field
+                        + " has a non-object entry at index " + index + ".");
+                continue;
+            }
+            if (!entry.has("entity") || entry.isNull("entity")) {
+                blockingErrors.add("Spawner '" + spawnerKey + "' " + field
+                        + " has an entry without an entity reference at index " + index + ".");
+                continue;
+            }
+
+            Object rawEntity = entry.get("entity");
+            if (!(rawEntity instanceof String entityKey)) {
+                blockingErrors.add("Spawner '" + spawnerKey + "' " + field
+                        + " entity reference at index " + index + " must be a string.");
+                continue;
+            }
+            if (entityKey.isBlank()) {
+                blockingErrors.add("Spawner '" + spawnerKey + "' " + field
+                        + " has a blank entity reference at index " + index + ".");
+                continue;
+            }
+
+            Path entityFile;
+            try {
+                if (entityKey.indexOf('\\') >= 0) {
+                    throw new IllegalArgumentException("backslash path separators are not portable");
+                }
+                entityFile = entityRoot.resolve(entityKey + ".json").normalize();
+            } catch (RuntimeException e) {
+                blockingErrors.add("Spawner '" + spawnerKey + "' " + field + " entry at index " + index
+                        + " has invalid entity reference '" + entityKey + "': " + e.getMessage());
+                continue;
+            }
+            if (!entityFile.startsWith(entityRoot)) {
+                blockingErrors.add("Spawner '" + spawnerKey + "' " + field + " entry at index " + index
+                        + " has unsafe entity reference '" + entityKey + "'.");
+                continue;
+            }
+            if (!Files.isRegularFile(entityFile)) {
+                blockingErrors.add("Spawner '" + spawnerKey + "' " + field + " entry at index " + index
+                        + " references missing entity '" + entityKey + "'.");
+                continue;
+            }
+
+            String invalidJson = invalidEntityFiles.get(entityFile);
+            if (invalidJson != null) {
+                blockingErrors.add("Spawner '" + spawnerKey + "' " + field + " entry at index " + index
+                        + " references malformed entity '" + entityKey + "': " + invalidJson);
+                continue;
+            }
+            if (validEntityFiles.contains(entityFile)) {
+                continue;
+            }
+
+            try {
+                new JSONObject(Files.readString(entityFile, StandardCharsets.UTF_8));
+                validEntityFiles.add(entityFile);
+            } catch (Throwable e) {
+                String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                invalidEntityFiles.put(entityFile, message);
+                blockingErrors.add("Spawner '" + spawnerKey + "' " + field + " entry at index " + index
+                        + " references malformed entity '" + entityKey + "': " + message);
+            }
+        }
+    }
+
+    static List<String> validateCustomBiomeSpawns(File biomesFolder, Function<String, SpawnCategoryResolution> categoryResolver) {
+        List<String> blockingErrors = new ArrayList<>();
+        if (biomesFolder == null || !biomesFolder.isDirectory()) {
+            return blockingErrors;
+        }
+
+        List<File> biomeFiles = listJsonRecursive(biomesFolder);
+        biomeFiles.sort(Comparator.comparing(File::getPath));
+        for (File biomeFile : biomeFiles) {
+            String biomeKey = deriveKey(biomesFolder, biomeFile);
+            JSONObject biome;
+            try {
+                biome = new JSONObject(Files.readString(biomeFile.toPath(), StandardCharsets.UTF_8));
+            } catch (Throwable e) {
+                blockingErrors.add("Biome '" + biomeKey + "' has invalid JSON: " + e.getMessage());
+                continue;
+            }
+
+            JSONArray derivatives = biome.optJSONArray("customDerivitives");
+            if (derivatives == null) {
+                if (biome.has("customDerivitives") && !biome.isNull("customDerivitives")) {
+                    blockingErrors.add("Biome '" + biomeKey + "' customDerivitives must be an array.");
+                }
+                continue;
+            }
+            for (int derivativeIndex = 0; derivativeIndex < derivatives.length(); derivativeIndex++) {
+                JSONObject derivative = derivatives.optJSONObject(derivativeIndex);
+                if (derivative == null) {
+                    blockingErrors.add("Biome '" + biomeKey + "' has a non-object custom derivative at index " + derivativeIndex + ".");
+                    continue;
+                }
+                validateCustomBiomeDerivativeTags(biomeKey, derivative, derivativeIndex, blockingErrors);
+                validateCustomBiomeDerivativeSpawns(
+                        biomeKey, derivative, derivativeIndex, categoryResolver, blockingErrors);
+            }
+        }
+        return blockingErrors;
+    }
+
+    private static void validateCustomBiomeDerivativeTags(String biomeKey,
+                                                           JSONObject derivative,
+                                                           int derivativeIndex,
+                                                           List<String> blockingErrors) {
+        if (!derivative.has("tags") || derivative.isNull("tags")) {
+            return;
+        }
+        String derivativeId = derivative.optString("id", "#" + derivativeIndex);
+        JSONArray tags = derivative.optJSONArray("tags");
+        if (tags == null) {
+            blockingErrors.add("Biome '" + biomeKey + "' custom derivative '" + derivativeId
+                    + "' tags must be an array.");
+            return;
+        }
+        for (int tagIndex = 0; tagIndex < tags.length(); tagIndex++) {
+            Object rawTag = tags.opt(tagIndex);
+            if (!(rawTag instanceof String tag)) {
+                blockingErrors.add("Biome '" + biomeKey + "' custom derivative '" + derivativeId
+                        + "' has a non-string tag at index " + tagIndex + ".");
+                continue;
+            }
+            String normalized = tag.trim().toLowerCase(Locale.ROOT);
+            if (normalized.indexOf(':') < 0) {
+                normalized = "minecraft:" + normalized;
+            }
+            if (!isSafeResourceKey(normalized)) {
+                blockingErrors.add("Biome '" + biomeKey + "' custom derivative '" + derivativeId
+                        + "' has invalid tag '" + tag + "'.");
+            }
+        }
+    }
+
+    private static boolean isSafeResourceKey(String key) {
+        if (!RESOURCE_KEY_PATTERN.matcher(key).matches()) {
+            return false;
+        }
+        int separator = key.indexOf(':');
+        String[] segments = key.substring(separator + 1).split("/");
+        for (String segment : segments) {
+            if (segment.equals("..")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void validateCustomBiomeDerivativeSpawns(String biomeKey,
+                                                             JSONObject derivative,
+                                                             int derivativeIndex,
+                                                             Function<String, SpawnCategoryResolution> categoryResolver,
+                                                             List<String> blockingErrors) {
+        JSONArray spawns = derivative.optJSONArray("spawns");
+        if (spawns == null) {
+            if (derivative.has("spawns") && !derivative.isNull("spawns")) {
+                String derivativeId = derivative.optString("id", "#" + derivativeIndex);
+                blockingErrors.add("Biome '" + biomeKey + "' custom derivative '" + derivativeId
+                        + "' spawns must be an array.");
+            }
+            return;
+        }
+        String derivativeId = derivative.optString("id", "#" + derivativeIndex);
+        for (int spawnIndex = 0; spawnIndex < spawns.length(); spawnIndex++) {
+            JSONObject spawn = spawns.optJSONObject(spawnIndex);
+            if (spawn == null) {
+                blockingErrors.add("Biome '" + biomeKey + "' custom derivative '" + derivativeId
+                        + "' has a non-object spawn at index " + spawnIndex + ".");
+                continue;
+            }
+
+            String type = spawn.optString("type", "").trim().toLowerCase(Locale.ROOT);
+            if (type.isEmpty()) {
+                blockingErrors.add("Biome '" + biomeKey + "' custom derivative '" + derivativeId
+                        + "' has a spawn without an entity type at index " + spawnIndex + ".");
+                continue;
+            }
+            String typeKey = type.indexOf(':') >= 0 ? type : "minecraft:" + type;
+            SpawnCategoryResolution resolution;
+            try {
+                resolution = categoryResolver == null ? null : categoryResolver.apply(typeKey);
+            } catch (Throwable e) {
+                IrisLogging.reportError("PackValidator failed to resolve spawn category for '" + typeKey + "'", e);
+                blockingErrors.add("Biome '" + biomeKey + "' custom derivative '" + derivativeId
+                        + "' spawn category lookup failed for '" + typeKey + "': " + e.getMessage());
+                continue;
+            }
+            if (resolution != null && !resolution.entityKnown()) {
+                blockingErrors.add("Biome '" + biomeKey + "' custom derivative '" + derivativeId
+                        + "' spawn references unknown entity type '" + typeKey + "'.");
+                continue;
+            }
+            String expectedGroup = resolution == null ? null : resolution.category();
+            String group = spawn.optString("group", "").trim();
+            if (group.isEmpty()) {
+                if (expectedGroup != null && !expectedGroup.isBlank()
+                        && !IrisBiomeCustomSpawnType.MISC.name().equalsIgnoreCase(expectedGroup)) {
+                    blockingErrors.add("Biome '" + biomeKey + "' custom derivative '" + derivativeId
+                            + "' spawn '" + typeKey + "' must declare group '"
+                            + expectedGroup.toUpperCase(Locale.ROOT) + "'.");
+                }
+                continue;
+            }
+
+            IrisBiomeCustomSpawnType configuredGroup;
+            try {
+                configuredGroup = IrisBiomeCustomSpawnType.valueOf(group);
+            } catch (IllegalArgumentException e) {
+                blockingErrors.add("Biome '" + biomeKey + "' custom derivative '" + derivativeId
+                        + "' spawn '" + typeKey + "' declares unknown group '" + group + "'.");
+                continue;
+            }
+
+            if (expectedGroup != null && !expectedGroup.isBlank()
+                    && !configuredGroup.name().equalsIgnoreCase(expectedGroup)) {
+                blockingErrors.add("Biome '" + biomeKey + "' custom derivative '" + derivativeId
+                        + "' spawn '" + typeKey + "' declares group '" + configuredGroup.name()
+                        + "' but the live entity registry requires '" + expectedGroup.toUpperCase(Locale.ROOT) + "'.");
+            }
+        }
+    }
+
+    private static SpawnCategoryResolution resolveEntitySpawnCategory(String typeKey) {
+        if (!IrisPlatforms.isBound()) {
+            return null;
+        }
+        PlatformRegistries registries = IrisPlatforms.get().registries();
+        if (registries == null) {
+            return null;
+        }
+        PlatformEntityType entityType = registries.entity(typeKey);
+        return entityType == null
+                ? SpawnCategoryResolution.unknown()
+                : SpawnCategoryResolution.known(entityType.spawnCategory());
     }
 
     private static void runContentKeyValidation(File packFolder, List<String> warnings) {
@@ -221,6 +549,16 @@ public final class PackValidator {
     private record ReferencedContentKeys(Set<String> blocks, Set<String> items, Set<String> entities) {
     }
 
+    record SpawnCategoryResolution(boolean entityKnown, String category) {
+        static SpawnCategoryResolution unknown() {
+            return new SpawnCategoryResolution(false, null);
+        }
+
+        static SpawnCategoryResolution known(String category) {
+            return new SpawnCategoryResolution(true, category);
+        }
+    }
+
     private static void validateDimensions(File packFolder, File[] dimensionFiles, List<String> blockingErrors, List<String> warnings) {
         File regionsFolder = new File(packFolder, "regions");
         File biomesFolder = new File(packFolder, "biomes");
@@ -299,24 +637,6 @@ public final class PackValidator {
         return resolved;
     }
 
-    private static String buildPackTextCorpus(File packFolder) {
-        StringBuilder sb = new StringBuilder(1 << 16);
-        try (Stream<Path> stream = Files.walk(packFolder.toPath())) {
-            stream.filter(Files::isRegularFile)
-                    .filter(PackValidator::isScannableJsonPath)
-                    .forEach(p -> {
-                        try {
-                            sb.append(Files.readString(p, StandardCharsets.UTF_8));
-                            sb.append('\n');
-                        } catch (Throwable ignored) {
-                        }
-                    });
-        } catch (Throwable e) {
-            IrisLogging.reportError("PackValidator failed to walk pack folder for corpus scan", e);
-        }
-        return sb.toString();
-    }
-
     private static boolean isScannableJsonPath(Path path) {
         String name = path.getFileName().toString();
         if (!name.endsWith(".json")) {
@@ -350,66 +670,6 @@ public final class PackValidator {
         return true;
     }
 
-    private static void runUnusedResourceGc(File packFolder, String corpus, List<String> removedUnusedFiles, List<String> warnings) {
-        if (corpus == null || corpus.isEmpty()) {
-            return;
-        }
-        File trashRoot = new File(packFolder, TRASH_ROOT + File.separator + LocalDateTime.now().format(TRASH_STAMP));
-        Set<File> scheduledForTrash = new LinkedHashSet<>();
-
-        for (String folderName : MANAGED_RESOURCE_FOLDERS) {
-            File resourceFolder = new File(packFolder, folderName);
-            if (!resourceFolder.isDirectory()) {
-                continue;
-            }
-
-            List<File> files = listJsonRecursive(resourceFolder);
-            for (File resourceFile : files) {
-                String key = deriveKey(resourceFolder, resourceFile);
-                if (key == null || key.isBlank()) {
-                    continue;
-                }
-                if (isReferenced(corpus, key)) {
-                    continue;
-                }
-                scheduledForTrash.add(resourceFile);
-            }
-        }
-
-        if (scheduledForTrash.isEmpty()) {
-            return;
-        }
-
-        for (File file : scheduledForTrash) {
-            try {
-                Path src = file.toPath();
-                Path relative = packFolder.toPath().relativize(src);
-                Path dest = trashRoot.toPath().resolve(relative);
-                Files.createDirectories(dest.getParent());
-                Files.move(src, dest, StandardCopyOption.REPLACE_EXISTING);
-                removedUnusedFiles.add(relative.toString().replace(File.separatorChar, '/'));
-            } catch (Throwable e) {
-                IrisLogging.reportError("PackValidator failed to move unused file " + file.getPath() + " to trash", e);
-                warnings.add("Failed to quarantine unused file " + file.getName() + ": " + e.getMessage());
-            }
-        }
-    }
-
-    private static boolean isReferenced(String corpus, String key) {
-        String needleQuoted = "\"" + key + "\"";
-        if (corpus.contains(needleQuoted)) {
-            return true;
-        }
-        int slash = key.indexOf('/');
-        if (slash > 0) {
-            String tail = key.substring(slash + 1);
-            if (!tail.isBlank() && corpus.contains("\"" + tail + "\"")) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private static List<File> listJsonRecursive(File root) {
         List<File> out = new ArrayList<>();
         try (Stream<Path> stream = Files.walk(root.toPath())) {
@@ -433,49 +693,6 @@ public final class PackValidator {
     private static String stripExtension(String name) {
         int dot = name.lastIndexOf('.');
         return dot <= 0 ? name : name.substring(0, dot);
-    }
-
-    public static int restoreTrash(File packFolder) {
-        if (packFolder == null || !packFolder.isDirectory()) {
-            return 0;
-        }
-        File trashRoot = new File(packFolder, TRASH_ROOT);
-        if (!trashRoot.isDirectory()) {
-            return 0;
-        }
-        File[] dumps = trashRoot.listFiles(File::isDirectory);
-        if (dumps == null || dumps.length == 0) {
-            return 0;
-        }
-        Arrays.sort(dumps, Comparator.comparing(File::getName));
-        File latestDump = dumps[dumps.length - 1];
-        int restored = 0;
-        try (Stream<Path> stream = Files.walk(latestDump.toPath())) {
-            List<Path> files = stream.filter(Files::isRegularFile).toList();
-            for (Path src : files) {
-                Path relative = latestDump.toPath().relativize(src);
-                Path dest = packFolder.toPath().resolve(relative);
-                Files.createDirectories(dest.getParent());
-                Files.move(src, dest, StandardCopyOption.REPLACE_EXISTING);
-                restored++;
-            }
-        } catch (Throwable e) {
-            IrisLogging.reportError("PackValidator failed to restore trash for pack " + packFolder.getName(), e);
-        }
-        deleteFolderQuiet(latestDump);
-        return restored;
-    }
-
-    private static void deleteFolderQuiet(File folder) {
-        if (folder == null || !folder.exists()) {
-            return;
-        }
-        try (Stream<Path> stream = Files.walk(folder.toPath())) {
-            stream.sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
-        } catch (Throwable ignored) {
-        }
     }
 
     public static Set<String> listReferencedKeysFromCorpus(String corpus) {

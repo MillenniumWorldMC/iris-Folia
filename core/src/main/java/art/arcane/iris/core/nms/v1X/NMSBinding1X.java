@@ -249,6 +249,11 @@ public class NMSBinding1X implements INMSBinding {
     }
 
     @Override
+    public String getEntitySpawnCategory(String key) {
+        return null;
+    }
+
+    @Override
     public MCAPaletteAccess createPalette() {
         IrisLogging.error("Cannot use the global data palette! Iris is incapable of using MCA generation on this version of minecraft!");
         return null;

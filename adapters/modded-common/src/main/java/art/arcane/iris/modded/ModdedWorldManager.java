@@ -57,87 +57,166 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 
 import java.util.HashSet;
-import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 public final class ModdedWorldManager implements EngineWorldManager {
-    private static final ConcurrentHashMap<Engine, Queue<Long>> INITIAL_QUEUES = new ConcurrentHashMap<>();
     private static final int MAX_INITIAL_QUEUE = 8192;
     private static final int MAX_INITIAL_DRAIN_PER_TICK = 8;
+    private static final int MAX_INITIAL_RECOVERY_PER_PASS = 128;
+    private static final int MANTLE_WARMUP_QUEUE_CAPACITY = 256;
+    private static final long INITIAL_RECOVERY_INTERVAL_MS = 1_000L;
     private static final long COUNT_INTERVAL_MS = 3_000L;
     private static final int ENTITY_SCAN_RADIUS = 64;
     private static final int PLAYER_CHUNK_RADIUS = 4;
     private static final int MIN_TICK_INTERVAL_MS = 1_000;
 
     private final Engine engine;
+    private final InitialSpawnQueue initialSpawnQueue;
+    private final Set<Long> mantleWarmups;
+    private final ThreadPoolExecutor mantleWarmupExecutor;
     private long lastAmbientAt;
     private long lastCountAt;
+    private long lastInitialRecoveryAt;
+    private volatile boolean closed;
     private volatile int cachedEntityCount;
     private volatile int cachedConsideredChunks;
     private volatile double cachedSaturation;
 
     public ModdedWorldManager(Engine engine) {
         this.engine = engine;
-        INITIAL_QUEUES.putIfAbsent(engine, new ConcurrentLinkedQueue<>());
+        this.initialSpawnQueue = new InitialSpawnQueue(MAX_INITIAL_QUEUE);
+        this.mantleWarmups = ConcurrentHashMap.newKeySet();
+        BlockingQueue<Runnable> warmupQueue = new ArrayBlockingQueue<>(MANTLE_WARMUP_QUEUE_CAPACITY);
+        this.mantleWarmupExecutor = new ThreadPoolExecutor(
+                1,
+                1,
+                30L,
+                TimeUnit.SECONDS,
+                warmupQueue,
+                runnable -> {
+                    Thread thread = new Thread(runnable, "Iris Initial Spawn Mantle Warmup");
+                    thread.setDaemon(true);
+                    thread.setPriority(Thread.MIN_PRIORITY);
+                    return thread;
+                },
+                new ThreadPoolExecutor.AbortPolicy());
+        this.mantleWarmupExecutor.allowCoreThreadTimeOut(true);
     }
 
     public static void enqueueGenerated(Engine engine, int chunkX, int chunkZ) {
-        if (engine == null) {
+        if (engine == null || engine.isClosed()) {
             return;
         }
-        Queue<Long> queue = INITIAL_QUEUES.get(engine);
-        if (queue == null || queue.size() >= MAX_INITIAL_QUEUE) {
-            return;
+        EngineWorldManager worldManager = engine.getWorldManager();
+        if (worldManager instanceof ModdedWorldManager moddedWorldManager) {
+            moddedWorldManager.initialSpawnQueue.offer(pack(chunkX, chunkZ));
         }
-        queue.add(pack(chunkX, chunkZ));
     }
 
     public void serverTick(ServerLevel level) {
-        if (engine.isClosed() || engine.getMantle().getMantle().isClosed()) {
+        if (closed || engine.isClosed() || engine.getMantle().getMantle().isClosed()) {
             return;
         }
         if (isPregenActive()) {
             return;
         }
+        recoverLoadedInitialSpawns(level);
         drainInitialSpawns(level);
         ambientTick(level);
     }
 
-    private void drainInitialSpawns(ServerLevel level) {
-        Queue<Long> queue = INITIAL_QUEUES.get(engine);
-        if (queue == null || queue.isEmpty()) {
-            return;
-        }
+    private void recoverLoadedInitialSpawns(ServerLevel level) {
         if (!markerSystemEnabled() && !ambientSystemEnabled()) {
-            queue.clear();
             return;
         }
+        long now = System.currentTimeMillis();
+        if (now - lastInitialRecoveryAt < INITIAL_RECOVERY_INTERVAL_MS) {
+            return;
+        }
+        lastInitialRecoveryAt = now;
 
-        int budget = MAX_INITIAL_DRAIN_PER_TICK;
-        while (budget-- > 0) {
-            Long key = queue.poll();
-            if (key == null) {
-                return;
+        Set<Long> candidates = new HashSet<>();
+        for (ServerPlayer player : level.players()) {
+            int centerX = player.blockPosition().getX() >> 4;
+            int centerZ = player.blockPosition().getZ() >> 4;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    candidates.add(pack(centerX + dx, centerZ + dz));
+                }
             }
+        }
+        candidates.addAll(level.getForceLoadedChunks());
+
+        Mantle<Matter> mantle = engine.getMantle().getMantle();
+        int recovered = 0;
+        for (long key : candidates) {
             int chunkX = unpackX(key);
             int chunkZ = unpackZ(key);
             if (level.getChunkSource().getChunkNow(chunkX, chunkZ) == null) {
                 continue;
             }
-            try {
-                initialSpawnChunk(level, chunkX, chunkZ);
-            } catch (Throwable e) {
-                IrisLogging.reportError(e);
+            if (mantle.isChunkLoaded(chunkX, chunkZ) && mantle.hasFlag(chunkX, chunkZ, MantleFlag.INITIAL_SPAWNED)) {
+                continue;
+            }
+            if (initialSpawnQueue.offer(key) && ++recovered >= MAX_INITIAL_RECOVERY_PER_PASS) {
+                return;
             }
         }
     }
 
-    private void initialSpawnChunk(ServerLevel level, int chunkX, int chunkZ) {
-        Mantle<Matter> mantle = engine.getMantle().getMantle();
-        if (!mantle.isChunkLoaded(chunkX, chunkZ) || mantle.hasFlag(chunkX, chunkZ, MantleFlag.INITIAL_SPAWNED)) {
+    private void drainInitialSpawns(ServerLevel level) {
+        if (initialSpawnQueue.isEmpty()) {
             return;
+        }
+        if (!markerSystemEnabled() && !ambientSystemEnabled()) {
+            initialSpawnQueue.clear();
+            return;
+        }
+
+        int budget = initialSpawnQueue.batchSize(MAX_INITIAL_DRAIN_PER_TICK);
+        while (budget-- > 0) {
+            Long key = initialSpawnQueue.poll();
+            if (key == null) {
+                return;
+            }
+            int chunkX = unpackX(key);
+            int chunkZ = unpackZ(key);
+            boolean retry = false;
+            try {
+                if (level.getChunkSource().getChunkNow(chunkX, chunkZ) == null) {
+                    retry = true;
+                    continue;
+                }
+                if (!initialSpawnChunk(level, chunkX, chunkZ)) {
+                    retry = true;
+                    warmupMantleChunkAsync(key, chunkX, chunkZ);
+                }
+            } catch (Throwable e) {
+                IrisLogging.reportError(e);
+                retry = true;
+            } finally {
+                if (retry) {
+                    initialSpawnQueue.retry(key);
+                } else {
+                    initialSpawnQueue.complete(key);
+                }
+            }
+        }
+    }
+
+    private boolean initialSpawnChunk(ServerLevel level, int chunkX, int chunkZ) {
+        Mantle<Matter> mantle = engine.getMantle().getMantle();
+        if (!mantle.isChunkLoaded(chunkX, chunkZ)) {
+            return false;
+        }
+        if (mantle.hasFlag(chunkX, chunkZ, MantleFlag.INITIAL_SPAWNED)) {
+            return true;
         }
 
         MantleChunk<Matter> chunk = mantle.getChunk(chunkX, chunkZ).use();
@@ -152,6 +231,33 @@ public final class ModdedWorldManager implements EngineWorldManager {
             });
         } finally {
             chunk.release();
+        }
+        return true;
+    }
+
+    private void warmupMantleChunkAsync(long key, int chunkX, int chunkZ) {
+        if (closed || !mantleWarmups.add(key)) {
+            return;
+        }
+        try {
+            mantleWarmupExecutor.execute(() -> warmupMantleChunk(key, chunkX, chunkZ));
+        } catch (RejectedExecutionException e) {
+            mantleWarmups.remove(key);
+        }
+    }
+
+    private void warmupMantleChunk(long key, int chunkX, int chunkZ) {
+        try {
+            Mantle<Matter> mantle = engine.getMantle().getMantle();
+            if (!closed && !engine.isClosed() && !mantle.isClosed() && !mantle.isChunkLoaded(chunkX, chunkZ)) {
+                mantle.getChunk(chunkX, chunkZ);
+            }
+        } catch (Throwable e) {
+            if (!closed && !engine.isClosed()) {
+                IrisLogging.reportError(e);
+            }
+        } finally {
+            mantleWarmups.remove(key);
         }
     }
 
@@ -575,7 +681,10 @@ public final class ModdedWorldManager implements EngineWorldManager {
 
     @Override
     public void close() {
-        INITIAL_QUEUES.remove(engine);
+        closed = true;
+        initialSpawnQueue.close();
+        mantleWarmupExecutor.shutdownNow();
+        mantleWarmups.clear();
     }
 
     @Override

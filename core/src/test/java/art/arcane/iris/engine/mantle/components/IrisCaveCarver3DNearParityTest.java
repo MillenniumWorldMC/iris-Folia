@@ -37,9 +37,11 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -115,6 +117,43 @@ public class IrisCaveCarver3DNearParityTest {
         assertEquals(firstCarved, secondCarved);
         assertEquals(firstCapture.carvedCells, secondCapture.carvedCells);
         assertEquals(firstCapture.carvedLiquids, secondCapture.carvedLiquids);
+    }
+
+    @Test
+    public void warpCacheDoesNotCrossContaminateCarverInstancesOnSameThread() throws Exception {
+        Engine engine = createEngine(128, 92);
+        IrisCaveProfile firstProfile = createProfile(true, false);
+        firstProfile.setWarpStyle(new IrisGeneratorStyle(NoiseStyle.SIMPLEX).zoomed(0.12D));
+        IrisCaveProfile secondProfile = createProfile(true, false);
+        secondProfile.setWarpStyle(new IrisGeneratorStyle(NoiseStyle.CELLULAR).zoomed(0.12D));
+        IrisCaveProfile controlProfile = createProfile(true, false);
+        controlProfile.setWarpStyle(new IrisGeneratorStyle(NoiseStyle.CELLULAR).zoomed(0.12D));
+        IrisCaveCarver3D firstCarver = new IrisCaveCarver3D(engine, firstProfile);
+        IrisCaveCarver3D secondCarver = new IrisCaveCarver3D(engine, secondProfile);
+        IrisCaveCarver3D controlCarver = new IrisCaveCarver3D(engine, controlProfile);
+        int x = 48;
+        int y = 64;
+        int z = -352;
+
+        double firstDensity = sampleDensity(firstCarver, x, y, z);
+        double secondDensity = sampleDensity(secondCarver, x, y, z);
+        AtomicReference<Double> controlDensity = new AtomicReference<>();
+        AtomicReference<Throwable> controlFailure = new AtomicReference<>();
+        Thread controlThread = new Thread(() -> {
+            try {
+                controlDensity.set(sampleDensity(controlCarver, x, y, z));
+            } catch (Throwable throwable) {
+                controlFailure.set(throwable);
+            }
+        }, "Iris cave warp cache control");
+        controlThread.start();
+        controlThread.join();
+
+        if (controlFailure.get() != null) {
+            throw new AssertionError(controlFailure.get());
+        }
+        assertNotEquals(firstDensity, controlDensity.get(), 0D);
+        assertEquals(controlDensity.get(), secondDensity, 0D);
     }
 
     @Test
@@ -275,6 +314,10 @@ public class IrisCaveCarver3DNearParityTest {
         long elapsed = System.nanoTime() - start;
         assertTrue(!capture.carvedCells.isEmpty());
         return elapsed;
+    }
+
+    private double sampleDensity(IrisCaveCarver3D carver, int x, int y, int z) throws Exception {
+        return (double) sampleDensityMethod.invoke(carver, x, y, z);
     }
 
     private long runNaiveOnce(IrisCaveCarver3D carver, int chunkX, int chunkZ, double[] columnWeights, IrisRange worldYRange, int[] precomputedSurfaceHeights, int worldHeight) throws Exception {

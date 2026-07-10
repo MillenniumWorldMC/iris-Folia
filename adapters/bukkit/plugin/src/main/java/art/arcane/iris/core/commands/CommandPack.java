@@ -19,6 +19,8 @@
 package art.arcane.iris.core.commands;
 
 import art.arcane.iris.Iris;
+import art.arcane.iris.core.pack.PackDirectoryResolver;
+import art.arcane.iris.core.pack.PackResourceCleanup;
 import art.arcane.iris.core.pack.PackValidationRegistry;
 import art.arcane.iris.core.pack.PackValidationResult;
 import art.arcane.iris.core.pack.PackValidator;
@@ -29,6 +31,7 @@ import art.arcane.volmlib.util.director.annotations.Director;
 import art.arcane.volmlib.util.director.annotations.Param;
 
 import java.io.File;
+import java.util.List;
 
 @Director(name = "pack", aliases = {"pk"}, description = "Pack validation and maintenance")
 public class CommandPack implements DirectorExecutor {
@@ -61,36 +64,115 @@ public class CommandPack implements DirectorExecutor {
             return;
         }
 
-        File target = new File(packsRoot, pack);
-        if (!target.isDirectory()) {
+        File target = PackDirectoryResolver.resolveExisting(packsRoot, pack);
+        if (target == null) {
             s.sendMessage(C.RED + "Pack '" + pack + "' not found under packs/.");
             return;
         }
         runValidate(s, target);
     }
 
-    @Director(description = "Restore most recent trashed files for a pack", aliases = {"r"})
-    public void restore(
-            @Param(description = "The pack folder name to restore")
-            String pack
+    @Director(description = "Preview or apply unused-resource cleanup", aliases = {"c"})
+    public void cleanup(
+            @Param(description = "The pack folder name to clean")
+            String pack,
+            @Param(description = "preview or apply", defaultValue = "preview")
+            String mode
     ) {
         VolmitSender s = sender();
-        if (pack == null || pack.isBlank()) {
-            s.sendMessage(C.RED + "You must specify a pack name.");
+        File packFolder = findPack(s, pack);
+        if (packFolder == null) {
             return;
         }
-        File packFolder = new File(Iris.instance.getDataFolder("packs"), pack);
-        if (!packFolder.isDirectory()) {
-            s.sendMessage(C.RED + "Pack '" + pack + "' not found under packs/.");
+        if ("apply".equalsIgnoreCase(mode)) {
+            PackResourceCleanup.ApplyResult result = PackResourceCleanup.apply(packFolder);
+            if (!result.success()) {
+                s.sendMessage(C.RED + result.error());
+                reportPaths(s, result.quarantinedPaths(), "still quarantined");
+                return;
+            }
+            if (!result.changed()) {
+                s.sendMessage(C.GREEN + "No cleanup candidates found for pack '" + pack + "'.");
+                return;
+            }
+            s.sendMessage(C.GREEN + "Quarantined " + result.quarantinedPaths().size()
+                    + " cleanup candidate(s) under " + result.quarantinePath() + ".");
+            reportPaths(s, result.quarantinedPaths(), "quarantined");
             return;
         }
-        int restored = PackValidator.restoreTrash(packFolder);
-        if (restored == 0) {
+        if (!"preview".equalsIgnoreCase(mode)) {
+            s.sendMessage(C.RED + "Cleanup mode must be preview or apply.");
+            return;
+        }
+        PackResourceCleanup.Preview preview = PackResourceCleanup.preview(packFolder);
+        if (!preview.success()) {
+            s.sendMessage(C.RED + preview.error());
+            return;
+        }
+        if (!preview.hasCandidates()) {
+            s.sendMessage(C.GREEN + "No cleanup candidates found for pack '" + pack + "'.");
+            return;
+        }
+        s.sendMessage(C.YELLOW + "Cleanup preview for pack '" + pack + "': "
+                + preview.candidatePaths().size() + " candidate(s). No files were changed.");
+        reportPaths(s, preview.candidatePaths(), "candidate");
+        s.sendMessage(C.GRAY + "Run /iris pack cleanup " + pack + " mode=apply to quarantine these candidates after a fresh scan.");
+    }
+
+    @Director(description = "Preview or apply restoration of the latest quarantine", aliases = {"r"})
+    public void restore(
+            @Param(description = "The pack folder name to restore")
+            String pack,
+            @Param(description = "preview or apply", defaultValue = "preview")
+            String mode
+    ) {
+        VolmitSender s = sender();
+        File packFolder = findPack(s, pack);
+        if (packFolder == null) {
+            return;
+        }
+        if ("apply".equalsIgnoreCase(mode)) {
+            PackResourceCleanup.RestoreResult result = PackResourceCleanup.restoreLatest(packFolder);
+            if (!result.conflicts().isEmpty()) {
+                s.sendMessage(C.RED + "Restore refused because " + result.conflicts().size() + " destination(s) already exist.");
+                reportPaths(s, result.conflicts(), "conflict");
+                return;
+            }
+            if (!result.success()) {
+                s.sendMessage(C.RED + result.error());
+                return;
+            }
+            if (!result.changed()) {
+                s.sendMessage(C.YELLOW + "Nothing to restore for pack '" + pack + "'.");
+                return;
+            }
+            s.sendMessage(C.GREEN + "Restored " + result.restoredPaths().size()
+                    + " file(s) from " + result.dumpPath() + ".");
+            reportPaths(s, result.restoredPaths(), "restored");
+            return;
+        }
+        if (!"preview".equalsIgnoreCase(mode)) {
+            s.sendMessage(C.RED + "Restore mode must be preview or apply.");
+            return;
+        }
+        PackResourceCleanup.RestorePreview preview = PackResourceCleanup.previewRestore(packFolder);
+        if (!preview.success()) {
+            s.sendMessage(C.RED + preview.error());
+            return;
+        }
+        if (!preview.hasFiles()) {
             s.sendMessage(C.YELLOW + "Nothing to restore for pack '" + pack + "'.");
             return;
         }
-        s.sendMessage(C.GREEN + "Restored " + restored + " file(s) from the most recent trash dump for pack '" + pack + "'.");
-        s.sendMessage(C.GRAY + "Re-run /iris pack validate " + pack + " to re-check.");
+        s.sendMessage(C.YELLOW + "Restore preview for " + preview.dumpPath() + ": "
+                + preview.filePaths().size() + " file(s). No files were changed.");
+        reportPaths(s, preview.filePaths(), "file");
+        if (!preview.conflicts().isEmpty()) {
+            s.sendMessage(C.RED + "Restore is blocked by " + preview.conflicts().size() + " existing destination(s).");
+            reportPaths(s, preview.conflicts(), "conflict");
+            return;
+        }
+        s.sendMessage(C.GRAY + "Run /iris pack restore " + pack + " mode=apply to restore after a fresh conflict check.");
     }
 
     @Director(description = "Show cached validation status for a pack", aliases = {"s"})
@@ -108,8 +190,7 @@ public class CommandPack implements DirectorExecutor {
                 String tag = result.isLoadable() ? (C.GREEN + "OK") : (C.RED + "BROKEN");
                 s.sendMessage(tag + C.RESET + " " + name
                         + C.GRAY + " (blocking=" + result.getBlockingErrors().size()
-                        + ", warnings=" + result.getWarnings().size()
-                        + ", trashed=" + result.getRemovedUnusedFiles().size() + ")");
+                        + ", warnings=" + result.getWarnings().size() + ")");
             });
             return;
         }
@@ -137,8 +218,7 @@ public class CommandPack implements DirectorExecutor {
     private void reportResult(VolmitSender s, PackValidationResult result) {
         if (result.isLoadable()) {
             s.sendMessage(C.GREEN + "Pack '" + result.getPackName() + "' is loadable."
-                    + C.GRAY + " (warnings=" + result.getWarnings().size()
-                    + ", trashed=" + result.getRemovedUnusedFiles().size() + ")");
+                    + C.GRAY + " (warnings=" + result.getWarnings().size() + ")");
         } else {
             s.sendMessage(C.RED + "Pack '" + result.getPackName() + "' is BROKEN:");
             for (String reason : result.getBlockingErrors()) {
@@ -152,12 +232,28 @@ public class CommandPack implements DirectorExecutor {
         if (result.getWarnings().size() > wMax) {
             s.sendMessage(C.GRAY + "  ... and " + (result.getWarnings().size() - wMax) + " more warning(s).");
         }
-        int tMax = Math.min(10, result.getRemovedUnusedFiles().size());
-        for (int i = 0; i < tMax; i++) {
-            s.sendMessage(C.GRAY + "  ~ trashed " + result.getRemovedUnusedFiles().get(i));
+    }
+
+    private File findPack(VolmitSender sender, String pack) {
+        if (pack == null || pack.isBlank()) {
+            sender.sendMessage(C.RED + "You must specify a pack name.");
+            return null;
         }
-        if (result.getRemovedUnusedFiles().size() > tMax) {
-            s.sendMessage(C.GRAY + "  ... and " + (result.getRemovedUnusedFiles().size() - tMax) + " more trashed file(s).");
+        File packFolder = PackDirectoryResolver.resolveExisting(Iris.instance.getDataFolder("packs"), pack);
+        if (packFolder == null) {
+            sender.sendMessage(C.RED + "Pack '" + pack + "' not found under packs/.");
+            return null;
+        }
+        return packFolder;
+    }
+
+    private void reportPaths(VolmitSender sender, List<String> paths, String label) {
+        int max = Math.min(10, paths.size());
+        for (int i = 0; i < max; i++) {
+            sender.sendMessage(C.GRAY + "  - " + label + ": " + paths.get(i));
+        }
+        if (paths.size() > max) {
+            sender.sendMessage(C.GRAY + "  ... and " + (paths.size() - max) + " more.");
         }
     }
 }

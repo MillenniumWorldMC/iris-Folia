@@ -81,23 +81,23 @@ public class IrisToolbelt {
             return null;
         }
 
-        String requested = dimension.trim();
-        if (requested.isEmpty()) {
+        PackReference reference = parsePackReference(dimension);
+        if (reference == null) {
             return null;
         }
 
         File packsFolder = IrisPlatforms.get().dataFolder("packs");
-        File pack = new File(packsFolder, requested);
+        File pack = new File(packsFolder, reference.pack());
         if (!pack.exists()) {
-            File found = findCaseInsensitivePack(packsFolder, requested);
+            File found = findCaseInsensitivePack(packsFolder, reference.pack());
             if (found != null) {
                 pack = found;
             }
         }
 
         if (!pack.exists()) {
-            IrisServices.get(StudioSVC.class).downloadSearch(new VolmitSender(Bukkit.getConsoleSender(), BukkitPlatform.volmitPlugin().getTag()), requested, false);
-            File found = findCaseInsensitivePack(packsFolder, requested);
+            IrisServices.get(StudioSVC.class).downloadSearch(new VolmitSender(Bukkit.getConsoleSender(), BukkitPlatform.volmitPlugin().getTag()), reference.pack(), false);
+            File found = findCaseInsensitivePack(packsFolder, reference.pack());
             if (found != null) {
                 pack = found;
             }
@@ -108,13 +108,16 @@ public class IrisToolbelt {
         }
 
         IrisData data = IrisData.get(pack);
-        IrisDimension resolved = data.getDimensionLoader().load(requested, false);
+        IrisDimension resolved = data.getDimensionLoader().load(reference.dimension(), false);
         if (resolved != null) {
             return resolved;
         }
+        if (reference.explicitDimension()) {
+            return null;
+        }
 
         String packName = pack.getName();
-        if (!packName.equals(requested)) {
+        if (!packName.equals(reference.pack())) {
             resolved = data.getDimensionLoader().load(packName, false);
             if (resolved != null) {
                 return resolved;
@@ -122,7 +125,7 @@ public class IrisToolbelt {
         }
 
         for (String key : data.getDimensionLoader().getPossibleKeys()) {
-            if (!key.equalsIgnoreCase(requested) && !key.equalsIgnoreCase(packName)) {
+            if (!key.equalsIgnoreCase(reference.pack()) && !key.equalsIgnoreCase(packName)) {
                 continue;
             }
 
@@ -133,6 +136,26 @@ public class IrisToolbelt {
         }
 
         return null;
+    }
+
+    static PackReference parsePackReference(String value) {
+        if (value == null) {
+            return null;
+        }
+        String requested = value.trim();
+        if (requested.isEmpty()) {
+            return null;
+        }
+        int separator = requested.indexOf(':');
+        if (separator < 0) {
+            return new PackReference(requested, requested, false);
+        }
+        String pack = requested.substring(0, separator).trim();
+        String dimension = requested.substring(separator + 1).trim();
+        if (pack.isEmpty() || dimension.isEmpty()) {
+            return null;
+        }
+        return new PackReference(pack, dimension, true);
     }
 
     private static File findCaseInsensitivePack(File packsFolder, String requested) {
@@ -502,5 +525,8 @@ public class IrisToolbelt {
 
     public static boolean removeWorld(World world) throws IOException {
         return IrisCreator.removeFromBukkitYml(world.getName());
+    }
+
+    record PackReference(String pack, String dimension, boolean explicitDimension) {
     }
 }

@@ -227,6 +227,7 @@ tasks.named('shadowJar', ShadowJar).configure {
     exclude('org/apache/commons/lang/enum/**')
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     relocate('org.objectweb.asm', 'art.arcane.iris.shadow.asm')
+    relocate('io.sentry', 'art.arcane.iris.shadow.sentry')
     relocate('com.sun.jna', 'art.arcane.iris.shadow.jna')
     relocate('oshi', 'art.arcane.iris.shadow.oshi')
     relocate('net.jpountz', 'art.arcane.iris.shadow.jpountz')

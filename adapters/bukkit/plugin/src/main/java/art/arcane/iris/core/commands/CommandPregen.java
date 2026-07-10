@@ -85,7 +85,9 @@ public class CommandPregen implements DirectorExecutor {
     @Director(description = "Stop the active pregeneration task", aliases = "x")
     public void stop() {
         if (PregeneratorJob.shutdownInstance()) {
-            Iris.info( C.BLUE + "Finishing up mca region...");
+            String message = C.BLUE + "Pregen stop requested; finishing active work before cancellation.";
+            sender().sendMessage(message);
+            Iris.info(message);
         } else {
             sender().sendMessage(C.YELLOW + "No active pregeneration tasks to stop");
         }

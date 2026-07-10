@@ -160,6 +160,7 @@ public class ServerConfigurator {
         }
         DimensionHeight height = new DimensionHeight(fixer);
         KList<File> folders = getDatapacksFolder();
+        IrisDimension.clearGeneratedBiomeTags(folders);
         DatapackIngestService.reapplyFromStaging(folders);
         java.util.concurrent.ConcurrentMap<String, KSet<String>> biomes = new java.util.concurrent.ConcurrentHashMap<>();
 

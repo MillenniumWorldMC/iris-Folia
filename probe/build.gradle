@@ -16,6 +16,7 @@ String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')
 dependencies {
     implementation(project(':core'))
     compileOnly(libs.spigot)
+    testImplementation('junit:junit:4.13.2')
     compileOnly(volmLibCoordinate) {
         transitive = false
     }
@@ -41,6 +42,10 @@ dependencies {
 tasks.named('run', JavaExec).configure {
     args(project(':core').layout.buildDirectory.dir('classes/java/main').get().asFile.absolutePath)
     jvmArgs('--add-modules', 'jdk.incubator.vector')
+    dependsOn(':core:compileJava')
+}
+
+tasks.named('test').configure {
     dependsOn(':core:compileJava')
 }
 

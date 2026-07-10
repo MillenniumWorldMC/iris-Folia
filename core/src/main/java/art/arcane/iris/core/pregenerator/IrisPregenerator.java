@@ -26,7 +26,6 @@ import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.tools.IrisPackBenchmarking;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KSet;
-import art.arcane.iris.util.common.format.C;
 import art.arcane.volmlib.util.format.Form;
 import art.arcane.volmlib.util.mantle.runtime.Mantle;
 import art.arcane.volmlib.util.math.M;
@@ -217,14 +216,19 @@ public class IrisPregenerator {
         } finally {
             shutdown();
         }
-        if (completed) {
+        if (completed && allVisitsComplete()) {
             logSuccessfulCompletion(p);
-        }
-        if (benchmarking == null) {
-            IrisLogging.info(C.IRIS + "Pregen stopped.");
         } else {
+            logIncompleteCompletion(p);
+        }
+        if (benchmarking != null) {
             benchmarking.finishedBenchmark(chunksPerSecondHistory);
         }
+    }
+
+    private boolean allVisitsComplete() {
+        long total = totalChunks.get();
+        return total > 0 && generated.get() + failed.get() >= total;
     }
 
     private void logSuccessfulCompletion(PrecisionStopwatch stopwatch) {
@@ -235,6 +239,19 @@ public class IrisPregenerator {
         IrisLogging.info("Pregen finished: generated=" + Form.f(generated.get())
                 + " total=" + Form.f(totalChunks.get())
                 + " failed=" + Form.f(failedCount)
+                + " duration=" + Form.duration((long) stopwatch.getMilliseconds()));
+    }
+
+    private void logIncompleteCompletion(PrecisionStopwatch stopwatch) {
+        long generatedCount = generated.get();
+        long failedCount = failed.get();
+        long total = totalChunks.get();
+        long remaining = Math.max(0L, total - generatedCount - failedCount);
+        String status = shutdown.get() ? "Pregen cancelled" : "Pregen stopped before completion";
+        IrisLogging.info(status + ": generated=" + Form.f(generatedCount)
+                + " total=" + Form.f(total)
+                + " failed=" + Form.f(failedCount)
+                + " remaining=" + Form.f(remaining)
                 + " duration=" + Form.duration((long) stopwatch.getMilliseconds()));
     }
 

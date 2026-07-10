@@ -26,18 +26,15 @@ public final class PackValidationResult {
     private final String packName;
     private final List<String> blockingErrors;
     private final List<String> warnings;
-    private final List<String> removedUnusedFiles;
     private final long validatedAtMillis;
 
     public PackValidationResult(String packName,
                                 List<String> blockingErrors,
                                 List<String> warnings,
-                                List<String> removedUnusedFiles,
                                 long validatedAtMillis) {
         this.packName = packName;
         this.blockingErrors = blockingErrors == null ? new ArrayList<>() : new ArrayList<>(blockingErrors);
         this.warnings = warnings == null ? new ArrayList<>() : new ArrayList<>(warnings);
-        this.removedUnusedFiles = removedUnusedFiles == null ? new ArrayList<>() : new ArrayList<>(removedUnusedFiles);
         this.validatedAtMillis = validatedAtMillis;
     }
 
@@ -55,10 +52,6 @@ public final class PackValidationResult {
 
     public List<String> getWarnings() {
         return Collections.unmodifiableList(warnings);
-    }
-
-    public List<String> getRemovedUnusedFiles() {
-        return Collections.unmodifiableList(removedUnusedFiles);
     }
 
     public long getValidatedAtMillis() {

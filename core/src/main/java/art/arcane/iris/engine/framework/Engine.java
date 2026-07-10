@@ -41,9 +41,11 @@ import art.arcane.iris.engine.object.IrisEngineData;
 import art.arcane.iris.engine.object.IrisLootMode;
 import art.arcane.iris.engine.object.IrisLootReference;
 import art.arcane.iris.engine.object.IrisLootTable;
+import art.arcane.iris.engine.object.IrisObject;
 import art.arcane.iris.engine.object.IrisObjectPlacement;
 import art.arcane.iris.engine.object.IrisPosition;
 import art.arcane.iris.engine.object.IrisRegion;
+import art.arcane.iris.engine.object.IrisStructure;
 import art.arcane.iris.engine.object.IrisWorld;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.PlatformBiome;
@@ -577,15 +579,24 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
             return null;
         }
 
-        String[] v = objectAt.split("\\Q@\\E");
-        String object = v[0];
-        if (object.isEmpty() || object.equals("null")) {
+        StructurePlacementMarker.Decoded marker = StructurePlacementMarker.decode(objectAt);
+        if (marker == null) {
             return null;
         }
+        String object = marker.objectKey();
         if (object.startsWith("procedural/")) {
             return null;
         }
-        int id = Integer.parseInt(v[1]);
+        int id = marker.placementId();
+
+        if (marker.structureAware()) {
+            IrisObject placedObject = getData().getObjectLoader().load(object);
+            IrisStructure structure = IrisData.loadAnyStructure(marker.structureKey(), getData());
+            IrisObjectPlacement placement = placedObject == null || structure == null
+                    ? null
+                    : structure.createLootPlacement(object);
+            return new PlacedObject(placement, placedObject, id, x, z);
+        }
 
 
         IrisRegion region = getRegion(x, z);

@@ -18,6 +18,7 @@
 
 package art.arcane.iris.platform.bukkit;
 
+import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.spi.PlatformEntityType;
 import org.bukkit.entity.EntityType;
 
@@ -32,12 +33,14 @@ public final class BukkitEntityType implements PlatformEntityType {
     private final EntityType type;
     private final String key;
     private final String namespace;
+    private final String spawnCategory;
 
     private BukkitEntityType(EntityType type, String key) {
         this.type = type;
         this.key = key;
         int colon = key.indexOf(':');
         this.namespace = colon >= 0 ? key.substring(0, colon) : "minecraft";
+        this.spawnCategory = INMS.get().getEntitySpawnCategory(key);
     }
 
     public static BukkitEntityType of(EntityType type) {
@@ -53,6 +56,11 @@ public final class BukkitEntityType implements PlatformEntityType {
     @Override
     public String namespace() {
         return namespace;
+    }
+
+    @Override
+    public String spawnCategory() {
+        return spawnCategory;
     }
 
     @Override

@@ -73,9 +73,16 @@ Mod (positional arguments):
 /iris create myworld overworld 1337
 ```
 
-`/iris pregen start` pregenerates around spawn; players with the client mod see the native HUD,
-everyone else gets a boss bar (modded) or console/status output. `/iris pregen status` reports
-progress on the plugin.
+Pregeneration requires a radius in blocks. On the plugin, optional arguments are keyed; on modded
+servers they are positional and composable:
+
+```
+/iris pregen start 352 world=myworld center=0,0 gui=false
+/iris pregen start 352 irisworldgen:myworld at 0 0 sync
+```
+
+Players with the client mod see the native HUD; everyone else gets a boss bar (modded) or
+console/status output. `/iris pregen status` reports progress on the plugin.
 
 ## Studio and VSCode workspace
 
@@ -104,7 +111,7 @@ files hotloads the changes and regenerates the schemas.
 Requirements: JDK 25 (set `JAVA_HOME` to it). The Gradle wrapper handles everything else.
 
 ```
-./gradlew buildAll
+./gradlew buildAllToOut
 ```
 
 builds every platform artifact into `dist/`:

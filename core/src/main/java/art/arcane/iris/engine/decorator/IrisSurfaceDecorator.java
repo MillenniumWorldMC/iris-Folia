@@ -52,13 +52,19 @@ public class IrisSurfaceDecorator extends IrisEngineDecorator {
     @Override
     public void decorate(int x, int z, int realX, int realX1, int realX_1, int realZ, int realZ1, int realZ_1,
                          Hunk<PlatformBlockState> data, IrisBiome biome, int height, int max) {
+        decorate(x, z, realX, realX1, realX_1, realZ, realZ1, realZ_1, data, biome, biome.getInferredType(), height, max);
+    }
+
+    @BlockCoordinates
+    public void decorate(int x, int z, int realX, int realX1, int realX_1, int realZ, int realZ1, int realZ_1,
+                         Hunk<PlatformBlockState> data, IrisBiome biome, InferredType inferredType, int height, int max) {
         int fluidHeight = getDimension().getFluidHeight();
-        if (biome.getInferredType().equals(InferredType.SHORE) && height < fluidHeight) {
+        if (inferredType == InferredType.SHORE && height < fluidHeight) {
             return;
         }
 
-        boolean underwater = height < fluidHeight && biome.getInferredType() != InferredType.CAVE;
-        boolean caveSkipFluid = biome.getInferredType() == InferredType.CAVE;
+        boolean underwater = isUnderwater(inferredType, height, fluidHeight);
+        boolean caveSkipFluid = skipsFluid(inferredType);
         RNG rng = getRNG(realX, realZ);
         IrisDecorator decorator = DecoratorCore.pickDecorator(biome, getPart(), partRNG, rng, getData(), realX, realZ);
 
@@ -78,5 +84,13 @@ public class IrisSurfaceDecorator extends IrisEngineDecorator {
 
         DecoratorCore.placeSurfaceSingle(decorator, x, z, realX, height, realZ,
                 data, rng, getData(), underwater, caveSkipFluid, getEngine().getMantle());
+    }
+
+    static boolean isUnderwater(InferredType inferredType, int height, int fluidHeight) {
+        return height < fluidHeight && inferredType != InferredType.CAVE;
+    }
+
+    static boolean skipsFluid(InferredType inferredType) {
+        return inferredType == InferredType.CAVE;
     }
 }

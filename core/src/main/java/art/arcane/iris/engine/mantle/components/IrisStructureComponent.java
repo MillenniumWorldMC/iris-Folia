@@ -23,6 +23,7 @@ import art.arcane.iris.engine.IrisComplex;
 import art.arcane.iris.engine.data.cache.Cache;
 import art.arcane.iris.engine.framework.PlacedStructurePiece;
 import art.arcane.iris.engine.framework.StructureAssembler;
+import art.arcane.iris.engine.framework.StructurePlacementMarker;
 import art.arcane.iris.engine.framework.StructurePlacementGrid;
 import art.arcane.iris.engine.mantle.ComponentFlag;
 import art.arcane.iris.engine.mantle.EngineMantle;
@@ -37,6 +38,7 @@ import art.arcane.iris.engine.object.IrisRegion;
 import art.arcane.iris.engine.object.IrisStructure;
 import art.arcane.iris.engine.object.IrisStructurePlacement;
 import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.util.project.noise.CNG;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.iris.util.project.context.ChunkContext;
@@ -331,10 +333,10 @@ public class IrisStructureComponent extends IrisMantleComponent {
 
     private void placeObject(MantleWriter writer, IrisStructure structure, PlacedStructurePiece p, ObjectPlaceMode mode, int y, RNG rng) {
         IrisObject object = p.getObject();
-        IrisObjectPlacement config = new IrisObjectPlacement();
+        String objectKey = object.getLoadKey();
+        IrisObjectPlacement config = structure.createLootPlacement(objectKey);
         config.setMode(mode);
         config.setRotation(p.getRotation());
-        config.getPlace().add(object.getLoadKey());
         if (!structure.getEdit().isEmpty()) {
             config.setEdit(structure.getEdit());
         }
@@ -342,7 +344,35 @@ public class IrisStructureComponent extends IrisMantleComponent {
             config.setForcePlace(true);
         }
         int placeY = (y == -1) ? -1 : y - getEngineMantle().getEngine().getMinHeight();
-        object.place(p.getX(), placeY, p.getZ(), writer, config, rng, null, null, getData());
+        String marker = structurePlacementMarker(structure, p, objectKey);
+        object.place(p.getX(), placeY, p.getZ(), writer, config, rng, (position, state) -> {
+            if (marker != null && shouldWriteStructureMarker(state)) {
+                writer.setData(position.getX(), position.getY(), position.getZ(), marker);
+            }
+        }, null, getData());
+    }
+
+    static boolean shouldWriteStructureMarker(PlatformBlockState state) {
+        return state != null && state.isStorageChest();
+    }
+
+    static int structurePlacementId(String structureKey, String objectKey, int x, int y, int z) {
+        int hash = 17;
+        hash = 31 * hash + structureKey.hashCode();
+        hash = 31 * hash + objectKey.hashCode();
+        hash = 31 * hash + x;
+        hash = 31 * hash + y;
+        hash = 31 * hash + z;
+        return hash & Integer.MAX_VALUE;
+    }
+
+    private static String structurePlacementMarker(IrisStructure structure, PlacedStructurePiece piece, String objectKey) {
+        String structureKey = structure.getLoadKey();
+        if (structureKey == null || structureKey.isBlank() || objectKey == null || objectKey.isBlank()) {
+            return null;
+        }
+        int placementId = structurePlacementId(structureKey, objectKey, piece.getX(), piece.getY(), piece.getZ());
+        return StructurePlacementMarker.encodeStructure(objectKey, placementId, structureKey);
     }
 
     @Override

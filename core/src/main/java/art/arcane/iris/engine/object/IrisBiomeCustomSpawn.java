@@ -32,6 +32,8 @@ import lombok.experimental.Accessors;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.EntityType;
 
+import java.util.Locale;
+
 @Snippet("custom-biome-spawn")
 @Accessors(chain = true)
 @NoArgsConstructor
@@ -45,11 +47,12 @@ public class IrisBiomeCustomSpawn {
     private String type = "minecraft:cow";
 
     public EntityType getType() {
-        if (type == null) {
+        String typeKey = getTypeKey();
+        if (typeKey == null) {
             return null;
         }
         return typeResolved.aquire(() -> {
-            NamespacedKey namespacedKey = NamespacedKey.fromString(type);
+            NamespacedKey namespacedKey = NamespacedKey.fromString(typeKey);
             return namespacedKey == null ? null : RegistryUtil.lookup(EntityType.class).get(namespacedKey);
         });
     }
@@ -58,7 +61,8 @@ public class IrisBiomeCustomSpawn {
         if (type == null || type.isBlank()) {
             return null;
         }
-        return type.contains(":") ? type : "minecraft:" + type;
+        String normalized = type.trim().toLowerCase(Locale.ROOT);
+        return normalized.contains(":") ? normalized : "minecraft:" + normalized;
     }
 
     @MinNumber(1)

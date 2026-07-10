@@ -63,7 +63,7 @@ public final class ModdedGoldenHash {
         File goldenDir = ModdedEngineBootstrap.loader().configDir().resolve("irisworldgen").resolve("golden").toFile();
         GoldenHashEngine.Request request = new GoldenHashEngine.Request(
                 engine.getWorld().name(),
-                level.getSeed(),
+                engine.getSeedManager().getSeed(),
                 ModdedEngineBootstrap.loader().minecraftVersion(),
                 engine.getMinHeight(),
                 engine.getMaxHeight(),
@@ -88,7 +88,7 @@ public final class ModdedGoldenHash {
         int chunks = (boundedRadius * 2 + 1) * (boundedRadius * 2 + 1);
         scan.ok("GoldenHash started: " + chunks + " chunk(s) around 0,0 in buffers (world untouched), threads=" + Math.max(1, threads) + " mode=" + mode);
         LOGGER.info("goldenhash start: dim={} seed={} radius={} threads={} mode={} file={}",
-                engine.getDimension().getLoadKey(), level.getSeed(), boundedRadius, Math.max(1, threads), mode, scan.hashEngine.getGoldenFile().getName());
+                engine.getDimension().getLoadKey(), engine.getSeedManager().getSeed(), boundedRadius, Math.max(1, threads), mode, scan.hashEngine.getGoldenFile().getName());
         Thread thread = new Thread(() -> {
             try {
                 scan.hashEngine.run();

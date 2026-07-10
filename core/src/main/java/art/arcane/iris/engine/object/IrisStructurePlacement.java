@@ -72,15 +72,6 @@ public class IrisStructurePlacement {
     @Desc("CONCENTRIC_RINGS only: how many placements share each ring before moving outward.")
     private int ringSpread = 3;
 
-    @Desc("rotation applied to the placed structure.")
-    private IrisObjectRotation rotation = new IrisObjectRotation();
-
-    @Desc("translation applied to the placed structure.")
-    private IrisObjectTranslate translate = new IrisObjectTranslate();
-
-    @Desc("scale applied to the placed structure.")
-    private IrisObjectScale scale = new IrisObjectScale();
-
     @Desc("When underground=false this is the minimum surface Y the placement is allowed at (a gate); when underground=true this is the lower bound of the Y band the structure is placed within.")
     private int minHeight = -2032;
 

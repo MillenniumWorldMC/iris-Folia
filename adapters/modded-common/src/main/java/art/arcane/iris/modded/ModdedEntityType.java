@@ -21,6 +21,7 @@ package art.arcane.iris.modded;
 import art.arcane.iris.spi.PlatformEntityType;
 import net.minecraft.world.entity.EntityType;
 
+import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class ModdedEntityType implements PlatformEntityType {
@@ -49,6 +50,11 @@ public final class ModdedEntityType implements PlatformEntityType {
     @Override
     public String namespace() {
         return namespace;
+    }
+
+    @Override
+    public String spawnCategory() {
+        return type.getCategory().getSerializedName().toLowerCase(Locale.ROOT);
     }
 
     @Override

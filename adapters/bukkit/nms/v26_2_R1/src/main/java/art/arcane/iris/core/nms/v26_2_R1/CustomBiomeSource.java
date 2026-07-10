@@ -25,6 +25,9 @@ import org.bukkit.craftbukkit.CraftWorld;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -40,6 +43,7 @@ public class CustomBiomeSource extends BiomeSource {
     private final Registry<Biome> biomeRegistry;
     private final AtomicCache<RegistryAccess> registryAccess = new AtomicCache<>();
     private final KMap<String, Holder<Biome>> customBiomes;
+    private final Map<Biome, Holder<Biome>> vanillaSpawnBiomes;
     private final Holder<Biome> fallbackBiome;
     private final ConcurrentHashMap<Long, Holder<Biome>> noiseBiomeCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, Holder<Biome>> structureBiomeCache = new ConcurrentHashMap<>();
@@ -51,6 +55,7 @@ public class CustomBiomeSource extends BiomeSource {
         this.biomeRegistry = ((RegistryAccess) getFor(RegistryAccess.Frozen.class, ((CraftServer) Bukkit.getServer()).getHandle().getServer())).lookup(Registries.BIOME).orElse(null);
         this.fallbackBiome = resolveFallbackBiome(this.biomeRegistry, this.biomeCustomRegistry);
         this.customBiomes = fillCustomBiomes(this.biomeCustomRegistry, engine, this.fallbackBiome);
+        this.vanillaSpawnBiomes = fillVanillaSpawnBiomes(this.biomeCustomRegistry, this.biomeRegistry, engine);
     }
 
     private static List<Holder<Biome>> getAllBiomes(Registry<Biome> customRegistry, Registry<Biome> registry, Engine engine, Holder<Biome> fallback) {
@@ -163,6 +168,38 @@ public class CustomBiomeSource extends BiomeSource {
         return m;
     }
 
+    private Map<Biome, Holder<Biome>> fillVanillaSpawnBiomes(Registry<Biome> customRegistry, Registry<Biome> registry, Engine engine) {
+        IdentityHashMap<Biome, Holder<Biome>> spawnBiomes = new IdentityHashMap<>();
+        if (customRegistry == null || registry == null) {
+            return Collections.unmodifiableMap(spawnBiomes);
+        }
+
+        for (IrisBiome irisBiome : engine.getAllBiomes()) {
+            if (!irisBiome.isCustom()) {
+                continue;
+            }
+            Holder<Biome> vanillaHolder = NMSBinding.biomeToBiomeBase(registry, irisBiome.getVanillaDerivative());
+            if (vanillaHolder == null) {
+                continue;
+            }
+            for (IrisBiomeCustom customBiome : irisBiome.getCustomDerivitives()) {
+                Holder<Biome> customHolder = resolveCustomBiomeHolder(customRegistry, engine, customBiome.getId());
+                if (customHolder != null) {
+                    spawnBiomes.putIfAbsent(customHolder.value(), vanillaHolder);
+                }
+            }
+        }
+
+        return Collections.unmodifiableMap(spawnBiomes);
+    }
+
+    Holder<Biome> getVanillaSpawnBiome(Holder<Biome> biome) {
+        if (biome == null) {
+            return null;
+        }
+        return vanillaSpawnBiomes.get(biome.value());
+    }
+
     private RegistryAccess registry() {
         return registryAccess.aquire(() -> (RegistryAccess) getFor(RegistryAccess.Frozen.class, ((CraftServer) Bukkit.getServer()).getHandle().getServer()));
     }
@@ -242,8 +279,8 @@ public class CustomBiomeSource extends BiomeSource {
         }
 
         org.bukkit.block.Biome vanillaBiome = resolution.underground
-                ? resolution.irisBiome.getGroundBiome(resolution.rng, resolution.blockX, resolution.blockY, resolution.blockZ)
-                : resolution.irisBiome.getSkyBiome(resolution.rng, resolution.blockX, resolution.blockY, resolution.blockZ);
+                ? resolution.irisBiome.getGroundBiome(resolution.rng, engine, resolution.blockX, resolution.blockY, resolution.blockZ)
+                : resolution.irisBiome.getSkyBiome(resolution.rng, engine, resolution.blockX, resolution.blockY, resolution.blockZ);
         Holder<Biome> holder = NMSBinding.biomeToBiomeBase(biomeRegistry, vanillaBiome);
         if (holder != null) {
             return holder;
@@ -253,7 +290,7 @@ public class CustomBiomeSource extends BiomeSource {
     }
 
     private Holder<Biome> resolveCustomHolder(BiomeResolution resolution) {
-        IrisBiomeCustom customBiome = resolution.irisBiome.getCustomBiome(resolution.rng, resolution.blockX, resolution.blockY, resolution.blockZ);
+        IrisBiomeCustom customBiome = resolution.irisBiome.getCustomBiome(resolution.rng, engine, resolution.blockX, resolution.blockY, resolution.blockZ);
         if (customBiome != null) {
             Holder<Biome> holder = customBiomes.get(customBiome.getId());
             if (holder != null) {

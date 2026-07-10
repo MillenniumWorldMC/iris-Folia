@@ -42,9 +42,9 @@ public class IrisDecorantActuator extends EngineAssignedActuator<PlatformBlockSt
     private static final Predicate<PlatformBlockState> PREDICATE_SOLID = (s) -> s != null && !B.isAirOrFluid(s);
     private final RNG rng;
     @Getter
-    private final EngineDecorator surfaceDecorator;
+    private final IrisSurfaceDecorator surfaceDecorator;
     @Getter
-    private final EngineDecorator ceilingDecorator;
+    private final IrisCeilingDecorator ceilingDecorator;
     @Getter
     private final EngineDecorator seaSurfaceDecorator;
     @Getter

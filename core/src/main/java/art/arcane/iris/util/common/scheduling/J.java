@@ -281,6 +281,41 @@ public class J {
         return true;
     }
 
+    public static boolean runGlobal(Runnable runnable) {
+        if (runnable == null) {
+            return false;
+        }
+
+        if (!BUKKIT_PRESENT) {
+            if (!IrisPlatforms.isBound()) {
+                return false;
+            }
+            IrisPlatforms.get().scheduler().global(runnable);
+            return true;
+        }
+
+        if (!isPluginEnabled()) {
+            return false;
+        }
+
+        if (isFolia()) {
+            return FoliaScheduler.runGlobal(BukkitPlatform.plugin(), runnable);
+        }
+
+        if (Bukkit.isPrimaryThread()) {
+            runnable.run();
+            return true;
+        }
+
+        try {
+            Bukkit.getScheduler().runTask(BukkitPlatform.plugin(), runnable);
+            return true;
+        } catch (UnsupportedOperationException e) {
+            FoliaScheduler.forceFoliaThreading(Bukkit.getServer());
+            return FoliaScheduler.runGlobal(BukkitPlatform.plugin(), runnable);
+        }
+    }
+
     public static boolean runRegion(World world, int chunkX, int chunkZ, Runnable runnable, int delayTicks) {
         if (world == null || runnable == null) {
             return false;

@@ -55,12 +55,12 @@ public class IrisBiomeActuator extends EngineAssignedActuator<PlatformBiome> {
                     PlatformBiome biome;
 
                     if (ib.isCustom()) {
-                        IrisBiomeCustom custom = ib.getCustomBiome(rng, x, 0, z);
+                        IrisBiomeCustom custom = ib.getCustomBiome(rng, getEngine(), x + xf, 0, z + zf);
                         String key = getDimension().getLoadKey() + ":" + custom.getId();
                         biome = IrisPlatforms.get().registries().biome(key);
                         matter = BiomeInjectMatter.get(IrisPlatforms.get().biomeWriter().biomeIdFor(key));
                     } else {
-                        String skyKey = ib.getSkyBiomeKey(rng, x, 0, z);
+                        String skyKey = ib.getSkyBiomeKey(rng, getEngine(), x + xf, 0, z + zf);
                         biome = IrisPlatforms.get().registries().biome(skyKey);
                         matter = BiomeInjectMatter.get(IrisPlatforms.get().biomeWriter().biomeIdFor(skyKey));
                     }

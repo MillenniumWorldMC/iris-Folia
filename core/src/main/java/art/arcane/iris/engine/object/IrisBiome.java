@@ -44,9 +44,14 @@ import art.arcane.volmlib.util.json.JSONObject;
 import art.arcane.volmlib.util.math.RNG;
 import art.arcane.iris.util.project.noise.CNG;
 import art.arcane.iris.util.common.plugin.VolmitSender;
+import art.arcane.iris.util.project.context.IrisContext;
+import com.googlecode.concurrentlinkedhashmap.ConcurrentLinkedHashMap;
+import lombok.AccessLevel;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.experimental.Accessors;
 import art.arcane.iris.spi.PlatformBlockState;
 import org.bukkit.NamespacedKey;
@@ -61,6 +66,8 @@ import java.util.EnumMap;
 @Data
 @EqualsAndHashCode(callSuper = false)
 public class IrisBiome extends IrisRegistrant implements IRare {
+    private static final int BIOME_GENERATOR_CACHE_SIZE = 8;
+
     private static final class States {
         private static final PlatformBlockState BARRIER = B.getState("BARRIER");
     }
@@ -76,7 +83,13 @@ public class IrisBiome extends IrisRegistrant implements IRare {
     private final transient AtomicCache<Color> cacheColorLayerLoad = new AtomicCache<>();
     private final transient AtomicCache<Color> cacheColorDepositLoad = new AtomicCache<>();
     private final transient AtomicCache<CNG> childrenCell = new AtomicCache<>();
-    private final transient AtomicCache<CNG> biomeGenerator = new AtomicCache<>();
+    @Getter(AccessLevel.NONE)
+    private final transient ConcurrentLinkedHashMap<Long, CNG> biomeGenerators = new ConcurrentLinkedHashMap.Builder<Long, CNG>()
+            .maximumWeightedCapacity(BIOME_GENERATOR_CACHE_SIZE)
+            .build();
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private transient volatile SeededBiomeGenerator recentBiomeGenerator;
     private final transient AtomicCache<Integer> maxHeight = new AtomicCache<>();
     private final transient AtomicCache<Integer> maxWithObjectHeight = new AtomicCache<>();
     private final transient AtomicCache<IrisBiome> realCarveBiome = new AtomicCache<>();
@@ -469,8 +482,39 @@ public class IrisBiome extends IrisRegistrant implements IRare {
     }
 
     public CNG getBiomeGenerator(RNG random) {
-        return biomeGenerator.aquire(() ->
-                biomeStyle.create(random.nextParallelRNG(213949 + 228888 + getRarity() + getName().length()), getLoader()));
+        IrisData loader = getLoader();
+        Engine engine = resolveBiomeGeneratorEngine(loader);
+        return getBiomeGenerator(random, engine);
+    }
+
+    public CNG getBiomeGenerator(RNG random, Engine engine) {
+        IrisData loader = getLoader();
+        long seed = engine == null ? random.getSeed() : engine.getSeedManager().getBiome();
+        SeededBiomeGenerator recent = recentBiomeGenerator;
+        if (recent != null && recent.seed == seed) {
+            return recent.generator;
+        }
+
+        CNG generator = biomeGenerators.computeIfAbsent(seed, ignored -> createBiomeGenerator(seed, loader));
+        recentBiomeGenerator = new SeededBiomeGenerator(seed, generator);
+        return generator;
+    }
+
+    private Engine resolveBiomeGeneratorEngine(IrisData loader) {
+        IrisContext context = IrisContext.get();
+        if (context != null) {
+            Engine contextEngine = context.getEngine();
+            if (!contextEngine.isClosed() && (loader == null || contextEngine.getData() == loader)) {
+                return contextEngine;
+            }
+        }
+
+        return loader == null ? null : loader.getEngine();
+    }
+
+    private CNG createBiomeGenerator(long seed, IrisData loader) {
+        int signature = 213949 + 228888 + getRarity() + getName().length();
+        return biomeStyle.createNoCache(new RNG(seed).nextParallelRNG(signature), loader);
     }
 
     public CNG getChildrenGenerator(RNG random, int sig, double scale) {
@@ -752,23 +796,31 @@ public class IrisBiome extends IrisRegistrant implements IRare {
     }
 
     public Biome getSkyBiome(RNG rng, double x, double y, double z) {
+        return getSkyBiome(rng, resolveBiomeGeneratorEngine(getLoader()), x, y, z);
+    }
+
+    public Biome getSkyBiome(RNG rng, Engine engine, double x, double y, double z) {
         if (biomeSkyScatter.size() == 1) {
             return getBiomeSkyScatterResolved().get(0);
         }
 
         if (biomeSkyScatter.isEmpty()) {
-            return getGroundBiome(rng, x, y, z);
+            return getGroundBiome(rng, engine, x, y, z);
         }
 
-        return getBiomeSkyScatterResolved().get(getBiomeGenerator(rng).fit(0, biomeSkyScatter.size() - 1, x, y, z));
+        return getBiomeSkyScatterResolved().get(getBiomeGenerator(rng, engine).fit(0, biomeSkyScatter.size() - 1, x, y, z));
     }
 
     public IrisBiomeCustom getCustomBiome(RNG rng, double x, double y, double z) {
+        return getCustomBiome(rng, resolveBiomeGeneratorEngine(getLoader()), x, y, z);
+    }
+
+    public IrisBiomeCustom getCustomBiome(RNG rng, Engine engine, double x, double y, double z) {
         if (customDerivitives.size() == 1) {
             return customDerivitives.get(0);
         }
 
-        return customDerivitives.get(getBiomeGenerator(rng).fit(0, customDerivitives.size() - 1, x, y, z));
+        return customDerivitives.get(getBiomeGenerator(rng, engine).fit(0, customDerivitives.size() - 1, x, y, z));
     }
 
     public KList<IrisBiome> getRealChildren(DataProvider g) {
@@ -801,6 +853,10 @@ public class IrisBiome extends IrisRegistrant implements IRare {
 
     //TODO: Test
     public Biome getGroundBiome(RNG rng, double x, double y, double z) {
+        return getGroundBiome(rng, resolveBiomeGeneratorEngine(getLoader()), x, y, z);
+    }
+
+    public Biome getGroundBiome(RNG rng, Engine engine, double x, double y, double z) {
         if (biomeScatter.isEmpty()) {
             return getDerivative();
         }
@@ -809,22 +865,30 @@ public class IrisBiome extends IrisRegistrant implements IRare {
             return getBiomeScatterResolved().get(0);
         }
 
-        return getBiomeGenerator(rng).fit(getBiomeScatterResolved(), x, y, z);
+        return getBiomeGenerator(rng, engine).fit(getBiomeScatterResolved(), x, y, z);
     }
 
     public String getSkyBiomeKey(RNG rng, double x, double y, double z) {
+        return getSkyBiomeKey(rng, resolveBiomeGeneratorEngine(getLoader()), x, y, z);
+    }
+
+    public String getSkyBiomeKey(RNG rng, Engine engine, double x, double y, double z) {
         if (biomeSkyScatter.size() == 1) {
             return namespacedBiomeKey(biomeSkyScatter.get(0));
         }
 
         if (biomeSkyScatter.isEmpty()) {
-            return getGroundBiomeKey(rng, x, y, z);
+            return getGroundBiomeKey(rng, engine, x, y, z);
         }
 
-        return namespacedBiomeKey(biomeSkyScatter.get(getBiomeGenerator(rng).fit(0, biomeSkyScatter.size() - 1, x, y, z)));
+        return namespacedBiomeKey(biomeSkyScatter.get(getBiomeGenerator(rng, engine).fit(0, biomeSkyScatter.size() - 1, x, y, z)));
     }
 
     public String getGroundBiomeKey(RNG rng, double x, double y, double z) {
+        return getGroundBiomeKey(rng, resolveBiomeGeneratorEngine(getLoader()), x, y, z);
+    }
+
+    public String getGroundBiomeKey(RNG rng, Engine engine, double x, double y, double z) {
         if (biomeScatter.isEmpty()) {
             return namespacedBiomeKey(derivative);
         }
@@ -833,7 +897,7 @@ public class IrisBiome extends IrisRegistrant implements IRare {
             return namespacedBiomeKey(biomeScatter.get(0));
         }
 
-        return namespacedBiomeKey(biomeScatter.get(getBiomeGenerator(rng).fit(0, biomeScatter.size() - 1, x, y, z)));
+        return namespacedBiomeKey(biomeScatter.get(getBiomeGenerator(rng, engine).fit(0, biomeScatter.size() - 1, x, y, z)));
     }
 
     public PlatformBlockState getSurfaceBlock(int x, int z, RNG rng, IrisData idm) {
@@ -930,5 +994,15 @@ public class IrisBiome extends IrisRegistrant implements IRare {
     @Override
     public void scanForErrors(JSONObject p, VolmitSender sender) {
 
+    }
+
+    private static final class SeededBiomeGenerator {
+        private final long seed;
+        private final CNG generator;
+
+        private SeededBiomeGenerator(long seed, CNG generator) {
+            this.seed = seed;
+            this.generator = generator;
+        }
     }
 }

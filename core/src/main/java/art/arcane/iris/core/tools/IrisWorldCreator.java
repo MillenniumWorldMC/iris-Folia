@@ -33,6 +33,7 @@ public class IrisWorldCreator {
     private String name;
     private boolean studio = false;
     private String dimensionName = null;
+    private IrisDimension dimension;
     private long seed = 1337;
 
     public IrisWorldCreator() {
@@ -41,6 +42,13 @@ public class IrisWorldCreator {
 
     public IrisWorldCreator dimension(String loadKey) {
         this.dimensionName = loadKey;
+        this.dimension = null;
+        return this;
+    }
+
+    public IrisWorldCreator dimension(IrisDimension dimension) {
+        this.dimension = dimension;
+        this.dimensionName = dimension.getLoadKey();
         return this;
     }
 
@@ -65,7 +73,7 @@ public class IrisWorldCreator {
     }
 
     public WorldCreator create() {
-        IrisDimension dim = IrisData.loadAnyDimension(dimensionName, null);
+        IrisDimension dim = dimension == null ? IrisData.loadAnyDimension(dimensionName, null) : dimension;
 
         IrisWorld w = IrisWorld.builder()
                 .name(name)
@@ -87,7 +95,7 @@ public class IrisWorldCreator {
     }
 
     private World.Environment findEnvironment() {
-        IrisDimension dim = IrisData.loadAnyDimension(dimensionName, null);
+        IrisDimension dim = dimension == null ? IrisData.loadAnyDimension(dimensionName, null) : dimension;
         if (dim == null || dim.getEnvironment() == null) {
             return World.Environment.NORMAL;
         } else {

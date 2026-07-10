@@ -19,6 +19,10 @@
 package art.arcane.iris.core.project;
 
 import art.arcane.iris.core.loader.IrisData;
+import art.arcane.iris.core.loader.ResourceLoader;
+import art.arcane.iris.engine.object.IrisJigsawPiece;
+import art.arcane.iris.engine.object.IrisStructure;
+import art.arcane.iris.engine.object.IrisStructurePlacement;
 import art.arcane.iris.engine.object.annotations.Desc;
 import art.arcane.iris.engine.object.annotations.MaxNumber;
 import art.arcane.iris.engine.object.annotations.MinNumber;
@@ -50,6 +54,10 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class SchemaBuilderParityTest {
     private static final List<String> POTION_KEYS = List.of("minecraft:speed", "minecraft:slow_falling", "sniffer_mod:mega_boost");
@@ -106,6 +114,26 @@ public class SchemaBuilderParityTest {
         JSONObject flavor = schema.getJSONObject("properties").getJSONObject("flavor");
         assertEquals("string", flavor.getString("type"));
         assertEquals(List.of("ALPHA", "BETA"), enumValues(schema.getJSONObject("definitions"), flavorDefinitionKey()));
+    }
+
+    @Test
+    public void structurePlacementSchemaOmitsUnsupportedTransforms() {
+        IrisData data = mock(IrisData.class);
+        ResourceLoader<IrisStructure> structureLoader = mock(ResourceLoader.class);
+        ResourceLoader<IrisJigsawPiece> pieceLoader = mock(ResourceLoader.class);
+        when(data.getStructureLoader()).thenReturn(structureLoader);
+        when(data.getJigsawPieceLoader()).thenReturn(pieceLoader);
+        when(structureLoader.getPossibleKeys()).thenReturn(new String[0]);
+        when(pieceLoader.getPossibleKeys()).thenReturn(new String[0]);
+
+        JSONObject properties = new SchemaBuilder(IrisStructurePlacement.class, data)
+                .construct().getJSONObject("properties");
+
+        assertTrue(properties.has("structures"));
+        assertTrue(properties.has("distribution"));
+        assertFalse(properties.has("rotation"));
+        assertFalse(properties.has("translate"));
+        assertFalse(properties.has("scale"));
     }
 
     private static String flavorDefinitionKey() {

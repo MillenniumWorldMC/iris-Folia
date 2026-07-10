@@ -464,7 +464,7 @@ public class MantleCarvingComponent extends IrisMantleComponent {
     }
 
     protected int computeRadius() {
-        return 0;
+        return 1;
     }
 
     private int[] prepareChunkSurfaceHeights(int chunkX, int chunkZ, ChunkContext context, int[] scratch) {

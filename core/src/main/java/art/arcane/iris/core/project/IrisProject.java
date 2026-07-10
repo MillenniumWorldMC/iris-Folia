@@ -646,7 +646,7 @@ public class IrisProject {
         biomes.forEach((i) -> i.getGenerators().forEach((j) -> generators.add(j.getCachedGenerator(() -> dm))));
         biomes.forEach((r) -> r.getLoot().getTables().forEach((i) -> loot.add(dm.getLootLoader().load(i))));
         biomes.forEach((r) -> r.getEntitySpawners().forEach((sp) -> spawners.add(dm.getSpawnerLoader().load(sp))));
-        spawners.forEach((i) -> i.getSpawns().forEach((j) -> entities.add(dm.getEntityLoader().load(j.getEntity()))));
+        collectSpawnerEntityKeys(spawners).forEach((i) -> entities.add(dm.getEntityLoader().load(i)));
         KMap<String, String> renameObjects = new KMap<>();
         String a;
         StringBuilder b = new StringBuilder();
@@ -767,6 +767,15 @@ public class IrisProject {
         }
         sender.sendMessage("Failed!");
         return null;
+    }
+
+    static KSet<String> collectSpawnerEntityKeys(KSet<IrisSpawner> spawners) {
+        KSet<String> entityKeys = new KSet<>();
+        for (IrisSpawner spawner : spawners) {
+            spawner.getSpawns().forEach((spawn) -> entityKeys.add(spawn.getEntity()));
+            spawner.getInitialSpawns().forEach((spawn) -> entityKeys.add(spawn.getEntity()));
+        }
+        return entityKeys;
     }
 
     public void compile(VolmitSender sender) {

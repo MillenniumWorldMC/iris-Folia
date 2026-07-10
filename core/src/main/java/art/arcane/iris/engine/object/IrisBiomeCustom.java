@@ -65,6 +65,10 @@ public class IrisBiomeCustom {
     @Desc("The biome's mob spawns")
     private KList<IrisBiomeCustomSpawn> spawns = new KList<>();
 
+    @ArrayType(min = 1, type = String.class)
+    @Desc("Biome tags to opt this custom biome into, such as minecraft:allows_surface_slime_spawns")
+    private KList<String> tags = new KList<>();
+
     @Desc("The biome's downfall type")
     private IrisBiomeCustomPrecipType downfallType = IrisBiomeCustomPrecipType.rain;
 

@@ -18,6 +18,8 @@
 
 package art.arcane.iris.modded.command;
 
+import art.arcane.iris.core.pack.PackDirectoryResolver;
+import art.arcane.iris.core.pack.PackResourceCleanup;
 import art.arcane.iris.core.pack.PackValidationRegistry;
 import art.arcane.iris.core.pack.PackValidationResult;
 import art.arcane.iris.core.pack.PackValidator;
@@ -58,12 +60,27 @@ public final class ModdedPackCommands {
                 .then(Commands.argument("pack", StringArgumentType.word()).suggests(IrisModdedCommands.PACK_NAMES)
                         .executes((CommandContext<CommandSourceStack> context) -> validate(context.getSource(), StringArgumentType.getString(context, "pack")))));
 
+        root.then(Commands.literal("cleanup")
+                .then(Commands.argument("pack", StringArgumentType.word()).suggests(IrisModdedCommands.PACK_NAMES)
+                        .executes((CommandContext<CommandSourceStack> context) -> cleanup(context.getSource(), StringArgumentType.getString(context, "pack"), false))
+                        .then(Commands.literal("apply")
+                                .executes((CommandContext<CommandSourceStack> context) -> cleanup(context.getSource(), StringArgumentType.getString(context, "pack"), true)))));
+        root.then(Commands.literal("c")
+                .then(Commands.argument("pack", StringArgumentType.word()).suggests(IrisModdedCommands.PACK_NAMES)
+                        .executes((CommandContext<CommandSourceStack> context) -> cleanup(context.getSource(), StringArgumentType.getString(context, "pack"), false))
+                        .then(Commands.literal("apply")
+                                .executes((CommandContext<CommandSourceStack> context) -> cleanup(context.getSource(), StringArgumentType.getString(context, "pack"), true)))));
+
         root.then(Commands.literal("restore")
                 .then(Commands.argument("pack", StringArgumentType.word()).suggests(IrisModdedCommands.PACK_NAMES)
-                        .executes((CommandContext<CommandSourceStack> context) -> restore(context.getSource(), StringArgumentType.getString(context, "pack")))));
+                        .executes((CommandContext<CommandSourceStack> context) -> restore(context.getSource(), StringArgumentType.getString(context, "pack"), false))
+                        .then(Commands.literal("apply")
+                                .executes((CommandContext<CommandSourceStack> context) -> restore(context.getSource(), StringArgumentType.getString(context, "pack"), true)))));
         root.then(Commands.literal("r")
                 .then(Commands.argument("pack", StringArgumentType.word()).suggests(IrisModdedCommands.PACK_NAMES)
-                        .executes((CommandContext<CommandSourceStack> context) -> restore(context.getSource(), StringArgumentType.getString(context, "pack")))));
+                        .executes((CommandContext<CommandSourceStack> context) -> restore(context.getSource(), StringArgumentType.getString(context, "pack"), false))
+                        .then(Commands.literal("apply")
+                                .executes((CommandContext<CommandSourceStack> context) -> restore(context.getSource(), StringArgumentType.getString(context, "pack"), true)))));
 
         root.then(Commands.literal("status")
                 .executes((CommandContext<CommandSourceStack> context) -> status(context.getSource(), null))
@@ -99,8 +116,8 @@ public final class ModdedPackCommands {
                 targets.add(dir);
             }
         } else {
-            File target = new File(packsRoot, pack);
-            if (!target.isDirectory()) {
+            File target = PackDirectoryResolver.resolveExisting(packsRoot, pack);
+            if (target == null) {
                 IrisModdedCommands.fail(source, "Pack '" + pack + "' not found under " + packsRoot.getAbsolutePath());
                 return 0;
             }
@@ -133,19 +150,45 @@ public final class ModdedPackCommands {
         return 1;
     }
 
-    private static int restore(CommandSourceStack source, String pack) {
-        File packFolder = new File(packsRoot(), pack);
-        if (!packFolder.isDirectory()) {
+    private static int cleanup(CommandSourceStack source, String pack, boolean apply) {
+        File packFolder = PackDirectoryResolver.resolveExisting(packsRoot(), pack);
+        if (packFolder == null) {
             IrisModdedCommands.fail(source, "Pack '" + pack + "' not found under " + packsRoot().getAbsolutePath());
             return 0;
         }
-        int restored = PackValidator.restoreTrash(packFolder);
-        if (restored == 0) {
-            IrisModdedCommands.fail(source, "Nothing to restore for pack '" + pack + "'.");
+        MinecraftServer server = source.getServer();
+        Thread thread = new Thread(() -> {
+            if (apply) {
+                PackResourceCleanup.ApplyResult result = PackResourceCleanup.apply(packFolder);
+                server.execute(() -> reportCleanupApply(source, pack, result));
+            } else {
+                PackResourceCleanup.Preview result = PackResourceCleanup.preview(packFolder);
+                server.execute(() -> reportCleanupPreview(source, pack, result));
+            }
+        }, "Iris Pack Cleanup");
+        thread.setDaemon(true);
+        thread.start();
+        return 1;
+    }
+
+    private static int restore(CommandSourceStack source, String pack, boolean apply) {
+        File packFolder = PackDirectoryResolver.resolveExisting(packsRoot(), pack);
+        if (packFolder == null) {
+            IrisModdedCommands.fail(source, "Pack '" + pack + "' not found under " + packsRoot().getAbsolutePath());
             return 0;
         }
-        IrisModdedCommands.ok(source, "Restored " + restored + " file(s) from the most recent trash dump for pack '" + pack + "'.");
-        IrisModdedCommands.ok(source, "Re-run /iris pack validate " + pack + " to re-check.");
+        MinecraftServer server = source.getServer();
+        Thread thread = new Thread(() -> {
+            if (apply) {
+                PackResourceCleanup.RestoreResult result = PackResourceCleanup.restoreLatest(packFolder);
+                server.execute(() -> reportRestoreApply(source, pack, result));
+            } else {
+                PackResourceCleanup.RestorePreview result = PackResourceCleanup.previewRestore(packFolder);
+                server.execute(() -> reportRestorePreview(source, pack, result));
+            }
+        }, "Iris Pack Restore");
+        thread.setDaemon(true);
+        thread.start();
         return 1;
     }
 
@@ -161,8 +204,7 @@ public final class ModdedPackCommands {
                 String tag = result.isLoadable() ? "OK" : "BROKEN";
                 IrisModdedCommands.ok(source, tag + " " + entry.getKey()
                         + " (blocking=" + result.getBlockingErrors().size()
-                        + ", warnings=" + result.getWarnings().size()
-                        + ", trashed=" + result.getRemovedUnusedFiles().size() + ")");
+                        + ", warnings=" + result.getWarnings().size() + ")");
             }
             return 1;
         }
@@ -178,8 +220,7 @@ public final class ModdedPackCommands {
     private static void report(CommandSourceStack source, PackValidationResult result) {
         if (result.isLoadable()) {
             IrisModdedCommands.ok(source, "Pack '" + result.getPackName() + "' is loadable."
-                    + " (warnings=" + result.getWarnings().size()
-                    + ", trashed=" + result.getRemovedUnusedFiles().size() + ")");
+                    + " (warnings=" + result.getWarnings().size() + ")");
         } else {
             IrisModdedCommands.fail(source, "Pack '" + result.getPackName() + "' is BROKEN:");
             for (String reason : result.getBlockingErrors()) {
@@ -193,12 +234,84 @@ public final class ModdedPackCommands {
         if (result.getWarnings().size() > warningMax) {
             IrisModdedCommands.ok(source, "  ... and " + (result.getWarnings().size() - warningMax) + " more warning(s).");
         }
-        int trashMax = Math.min(10, result.getRemovedUnusedFiles().size());
-        for (int i = 0; i < trashMax; i++) {
-            IrisModdedCommands.ok(source, "  ~ trashed " + result.getRemovedUnusedFiles().get(i));
+    }
+
+    private static void reportCleanupPreview(CommandSourceStack source, String pack, PackResourceCleanup.Preview result) {
+        if (!result.success()) {
+            IrisModdedCommands.fail(source, result.error());
+            return;
         }
-        if (result.getRemovedUnusedFiles().size() > trashMax) {
-            IrisModdedCommands.ok(source, "  ... and " + (result.getRemovedUnusedFiles().size() - trashMax) + " more trashed file(s).");
+        if (!result.hasCandidates()) {
+            IrisModdedCommands.ok(source, "No cleanup candidates found for pack '" + pack + "'.");
+            return;
+        }
+        IrisModdedCommands.ok(source, "Cleanup preview for pack '" + pack + "': "
+                + result.candidatePaths().size() + " candidate(s). No files were changed.");
+        reportPaths(source, result.candidatePaths(), "candidate");
+        IrisModdedCommands.ok(source, "Run /iris pack cleanup " + pack + " apply to quarantine after a fresh scan.");
+    }
+
+    private static void reportCleanupApply(CommandSourceStack source, String pack, PackResourceCleanup.ApplyResult result) {
+        if (!result.success()) {
+            IrisModdedCommands.fail(source, result.error());
+            reportPaths(source, result.quarantinedPaths(), "still quarantined");
+            return;
+        }
+        if (!result.changed()) {
+            IrisModdedCommands.ok(source, "No cleanup candidates found for pack '" + pack + "'.");
+            return;
+        }
+        IrisModdedCommands.ok(source, "Quarantined " + result.quarantinedPaths().size()
+                + " cleanup candidate(s) under " + result.quarantinePath() + ".");
+        reportPaths(source, result.quarantinedPaths(), "quarantined");
+    }
+
+    private static void reportRestorePreview(CommandSourceStack source, String pack, PackResourceCleanup.RestorePreview result) {
+        if (!result.success()) {
+            IrisModdedCommands.fail(source, result.error());
+            return;
+        }
+        if (!result.hasFiles()) {
+            IrisModdedCommands.ok(source, "Nothing to restore for pack '" + pack + "'.");
+            return;
+        }
+        IrisModdedCommands.ok(source, "Restore preview for " + result.dumpPath() + ": "
+                + result.filePaths().size() + " file(s). No files were changed.");
+        reportPaths(source, result.filePaths(), "file");
+        if (!result.conflicts().isEmpty()) {
+            IrisModdedCommands.fail(source, "Restore is blocked by " + result.conflicts().size() + " existing destination(s).");
+            reportPaths(source, result.conflicts(), "conflict");
+            return;
+        }
+        IrisModdedCommands.ok(source, "Run /iris pack restore " + pack + " apply to restore after a fresh conflict check.");
+    }
+
+    private static void reportRestoreApply(CommandSourceStack source, String pack, PackResourceCleanup.RestoreResult result) {
+        if (!result.conflicts().isEmpty()) {
+            IrisModdedCommands.fail(source, "Restore refused because " + result.conflicts().size() + " destination(s) already exist.");
+            reportPaths(source, result.conflicts(), "conflict");
+            return;
+        }
+        if (!result.success()) {
+            IrisModdedCommands.fail(source, result.error());
+            return;
+        }
+        if (!result.changed()) {
+            IrisModdedCommands.ok(source, "Nothing to restore for pack '" + pack + "'.");
+            return;
+        }
+        IrisModdedCommands.ok(source, "Restored " + result.restoredPaths().size()
+                + " file(s) from " + result.dumpPath() + ".");
+        reportPaths(source, result.restoredPaths(), "restored");
+    }
+
+    private static void reportPaths(CommandSourceStack source, List<String> paths, String label) {
+        int max = Math.min(10, paths.size());
+        for (int i = 0; i < max; i++) {
+            IrisModdedCommands.ok(source, "  - " + label + ": " + paths.get(i));
+        }
+        if (paths.size() > max) {
+            IrisModdedCommands.ok(source, "  ... and " + (paths.size() - max) + " more.");
         }
     }
 }

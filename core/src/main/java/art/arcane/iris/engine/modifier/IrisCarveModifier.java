@@ -168,7 +168,6 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
                             : resolveCustomBiome(customBiomeCache, customBiome);
 
                     if (biome != null) {
-                        biome.setInferredType(InferredType.CAVE);
                         PlatformBlockState data = biome.getWall().get(rng, worldX, yy, worldZ, getData());
                         int columnIndex = PowerOfTwoCoordinates.packLocal16(rx, rz);
 
@@ -461,7 +460,6 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
             return;
         }
 
-        biome.setInferredType(InferredType.CAVE);
 
         KList<PlatformBlockState> floorLayers = biome.generateLayers(getDimension(), worldX, worldZ, rng, 3, zoneFloor, getData(), getComplex());
         for (int i = 0; i < zoneFloor - 1; i++) {
@@ -550,7 +548,6 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
             return;
         }
 
-        biome.setInferredType(InferredType.CAVE);
 
         KList<PlatformBlockState> blocks = biome.generateLayers(getDimension(), xx, zz, rng, 3, zone.floor, getData(), getComplex());
 
@@ -600,9 +597,9 @@ public class IrisCarveModifier extends EngineAssignedModifier<PlatformBlockState
 
         for (IrisDecorator decorator : biome.getDecorators()) {
             if (decorator.getPartOf().equals(IrisDecorationPart.NONE) && zone.getFloor() > 0 && B.isSolid(output.getRaw(rx, zone.getFloor() - 1, rz))) {
-                decorant.getSurfaceDecorator().decorate(rx, rz, xx, xx, xx, zz, zz, zz, output, biome, zone.getFloor() - 1, zone.airThickness());
+                decorant.getSurfaceDecorator().decorate(rx, rz, xx, xx, xx, zz, zz, zz, output, biome, InferredType.CAVE, zone.getFloor() - 1, zone.airThickness());
             } else if (decorator.getPartOf().equals(IrisDecorationPart.CEILING) && zone.getCeiling() + 1 < maxY && B.isSolid(output.getRaw(rx, zone.getCeiling() + 1, rz))) {
-                decorant.getCeilingDecorator().decorate(rx, rz, xx, xx, xx, zz, zz, zz, output, biome, zone.getCeiling(), zone.airThickness());
+                decorant.getCeilingDecorator().decorate(rx, rz, xx, xx, xx, zz, zz, zz, output, biome, InferredType.CAVE, zone.getCeiling(), zone.airThickness());
             }
         }
     }

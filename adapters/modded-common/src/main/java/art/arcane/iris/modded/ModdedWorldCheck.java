@@ -40,49 +40,85 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class ModdedWorldCheck {
+    private static final int EXIT_PASS = 0;
+    private static final int EXIT_FAILURE = 1;
+    private static final long SERVER_WAIT_TIMEOUT_MILLIS = 600000L;
+    private static final long SERVER_WAIT_INTERVAL_MILLIS = 250L;
     private static final Logger LOGGER = LoggerFactory.getLogger("Iris");
+    private static final ProcessExit PROCESS_EXIT = Runtime.getRuntime()::exit;
 
     private ModdedWorldCheck() {
     }
 
     public static void schedule() {
-        Thread thread = new Thread(ModdedWorldCheck::waitAndRun, "Iris World Check");
-        thread.setDaemon(true);
-        thread.start();
+        coordinatorThread(() -> waitAndRun(PROCESS_EXIT)).start();
     }
 
-    private static void waitAndRun() {
+    static Thread coordinatorThread(Runnable coordinator) {
+        Thread thread = new Thread(coordinator, "Iris World Check");
+        thread.setDaemon(false);
+        return thread;
+    }
+
+    private static void waitAndRun(ProcessExit processExit) {
         long start = System.currentTimeMillis();
         MinecraftServer server = null;
-        while (System.currentTimeMillis() - start < 600000L) {
-            MinecraftServer candidate = ModdedEngineBootstrap.currentServer();
-            if (candidate != null && candidate.isReady()) {
-                server = candidate;
-                break;
+        boolean ready = false;
+        int exitCode = EXIT_FAILURE;
+        try {
+            while (System.currentTimeMillis() - start < SERVER_WAIT_TIMEOUT_MILLIS) {
+                MinecraftServer candidate = ModdedEngineBootstrap.currentServer();
+                if (candidate != null) {
+                    server = candidate;
+                    if (candidate.isReady()) {
+                        ready = true;
+                        break;
+                    }
+                }
+                Thread.sleep(SERVER_WAIT_INTERVAL_MILLIS);
             }
-            try {
-                Thread.sleep(250L);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+
+            if (!ready) {
+                LOGGER.error("[worldcheck] server did not become ready within 10 minutes");
                 return;
             }
-        }
 
-        if (server == null) {
-            LOGGER.error("[worldcheck] server did not become ready within 10 minutes");
-            return;
-        }
-
-        MinecraftServer serverRef = server;
-        AtomicBoolean pass = new AtomicBoolean(false);
-        try {
+            MinecraftServer serverRef = server;
+            AtomicBoolean pass = new AtomicBoolean(false);
             serverRef.submit(() -> pass.set(run(serverRef))).join();
+            exitCode = pass.get() ? EXIT_PASS : EXIT_FAILURE;
+        } catch (InterruptedException e) {
+            LOGGER.error("[worldcheck] coordinator interrupted", e);
+            Thread.currentThread().interrupt();
         } catch (Throwable e) {
             LOGGER.error("[worldcheck] check failed", e);
+        } finally {
+            int resultCode = exitCode;
+            LOGGER.info("[worldcheck] shutting down dev server (result={})", resultCode == EXIT_PASS ? "PASS" : "FAIL");
+            MinecraftServer serverRef = server;
+            stopAndExit(serverRef == null ? null : () -> serverRef.halt(true), resultCode, processExit);
         }
+    }
 
-        LOGGER.info("[worldcheck] shutting down dev server (result={})", pass.get() ? "PASS" : "FAIL");
-        serverRef.halt(false);
+    static void stopAndExit(Runnable serverStop, int requestedExitCode, ProcessExit processExit) {
+        int exitCode = requestedExitCode;
+        boolean interrupted = Thread.interrupted();
+        if (interrupted) {
+            exitCode = EXIT_FAILURE;
+        }
+        try {
+            if (serverStop != null) {
+                serverStop.run();
+            }
+        } catch (Throwable e) {
+            exitCode = EXIT_FAILURE;
+            LOGGER.error("[worldcheck] server shutdown failed", e);
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        processExit.exit(exitCode);
     }
 
     private static boolean run(MinecraftServer server) {
@@ -185,5 +221,10 @@ public final class ModdedWorldCheck {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    @FunctionalInterface
+    interface ProcessExit {
+        void exit(int status);
     }
 }

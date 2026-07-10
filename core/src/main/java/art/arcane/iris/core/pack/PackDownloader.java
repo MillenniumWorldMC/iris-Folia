@@ -30,13 +30,18 @@ import java.io.File;
 import java.io.IOException;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 
 public final class PackDownloader {
+    private static final Pattern GITHUB_REPOSITORY = Pattern.compile("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+");
+    private static final Pattern GITHUB_REF = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._/-]*");
+    private static final Pattern COMMIT_SHA = Pattern.compile("[0-9a-fA-F]{40}");
+
     private PackDownloader() {
     }
 
-    public static String download(File packsFolder, String repo, String branch, boolean forceOverwrite, boolean directUrl, Consumer<String> feedback) throws IOException {
-        String url = directUrl ? branch : "https://codeload.github.com/" + repo + "/zip/refs/heads/" + branch;
+    public static String download(File packsFolder, String repo, String ref, boolean forceOverwrite, boolean directUrl, Consumer<String> feedback) throws IOException {
+        String url = directUrl ? ref : resolveGithubArchiveUrl(repo, ref);
         feedback.accept("Downloading " + url + " "); //The extra space stops a bug in adventure API from repeating the last letter of the URL
         File zip = WebCache.getNonCachedFile("pack-" + repo, url);
         File temp = WebCache.getTemp();
@@ -136,6 +141,57 @@ public final class PackDownloader {
         return key;
     }
 
+    static String resolveGithubArchiveUrl(String repo, String ref) {
+        if (repo == null || !GITHUB_REPOSITORY.matcher(repo).matches()) {
+            throw new IllegalArgumentException("Invalid GitHub repository '" + repo + "'");
+        }
+        String[] repositoryParts = repo.split("/", -1);
+        if (repositoryParts[0].equals(".") || repositoryParts[0].equals("..")
+                || repositoryParts[1].equals(".") || repositoryParts[1].equals("..")) {
+            throw new IllegalArgumentException("Invalid GitHub repository '" + repo + "'");
+        }
+        if (ref == null || ref.isBlank()) {
+            throw new IllegalArgumentException("GitHub reference cannot be empty");
+        }
+        if (COMMIT_SHA.matcher(ref).matches()) {
+            return "https://github.com/" + repo + "/archive/" + ref + ".zip";
+        }
+        if (ref.startsWith("refs/") && !ref.startsWith("refs/heads/") && !ref.startsWith("refs/tags/")) {
+            throw new IllegalArgumentException("Unsupported GitHub reference '" + ref + "'");
+        }
+
+        String qualifiedRef;
+        if (ref.startsWith("refs/heads/") || ref.startsWith("refs/tags/")) {
+            qualifiedRef = ref;
+        } else {
+            qualifiedRef = "refs/heads/" + ref;
+        }
+        validateGithubRef(qualifiedRef);
+        return "https://codeload.github.com/" + repo + "/zip/" + qualifiedRef;
+    }
+
+    private static void validateGithubRef(String qualifiedRef) {
+        String refPath = qualifiedRef.startsWith("refs/heads/")
+                ? qualifiedRef.substring("refs/heads/".length())
+                : qualifiedRef.substring("refs/tags/".length());
+        if (!GITHUB_REF.matcher(refPath).matches()
+                || refPath.contains("..")
+                || refPath.contains("//")
+                || refPath.contains("@{")
+                || refPath.endsWith("/")
+                || refPath.endsWith(".")
+                || refPath.endsWith(".lock")) {
+            throw new IllegalArgumentException("Invalid GitHub reference '" + qualifiedRef + "'");
+        }
+
+        String[] segments = refPath.split("/");
+        for (String segment : segments) {
+            if (segment.startsWith(".") || segment.endsWith(".lock")) {
+                throw new IllegalArgumentException("Invalid GitHub reference '" + qualifiedRef + "'");
+            }
+        }
+    }
+
     private static void validateDownloaded(File packEntry, Consumer<String> feedback) {
         try {
             PackValidationResult result = PackValidator.validate(packEntry);
@@ -146,9 +202,8 @@ public final class PackDownloader {
                 for (String reason : result.getBlockingErrors()) {
                     feedback.accept("  - " + reason);
                 }
-            } else if (!result.getWarnings().isEmpty() || !result.getRemovedUnusedFiles().isEmpty()) {
+            } else if (!result.getWarnings().isEmpty()) {
                 feedback.accept("Pack '" + result.getPackName() + "' validated ("
-                        + result.getRemovedUnusedFiles().size() + " unused file(s) quarantined to .iris-trash/, "
                         + result.getWarnings().size() + " warning(s)).");
             } else {
                 feedback.accept("Pack '" + result.getPackName() + "' validated.");

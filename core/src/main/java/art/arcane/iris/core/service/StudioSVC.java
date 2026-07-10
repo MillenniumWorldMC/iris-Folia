@@ -130,8 +130,17 @@ public class StudioSVC implements IrisService {
         queueStudioWorldDeletionOnStartup(worldNamesToDelete);
     }
 
-    public IrisDimension installIntoWorld(VolmitSender sender, String type, File folder) {
-        return installInto(sender, type, new File(folder, "iris/pack"));
+    public IrisDimension installIntoWorld(VolmitSender sender, IrisDimension dimension, File folder) {
+        File target = new File(folder, "iris/pack");
+        File source = dimension.getLoader().getDataFolder();
+        sender.sendMessage("Installing Package: " + source.getName() + ":" + dimension.getLoadKey());
+        try {
+            FileUtils.copyDirectory(source, target);
+        } catch (IOException e) {
+            IrisLogging.reportError(e);
+            return null;
+        }
+        return IrisData.get(target).getDimensionLoader().load(dimension.getLoadKey());
     }
 
     public IrisDimension installInto(VolmitSender sender, String type, File folder) {

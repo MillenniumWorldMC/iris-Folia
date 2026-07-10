@@ -131,7 +131,8 @@ final class ModdedCommandHelp {
         SECTIONS.put("s", SECTIONS.get("studio"));
         SECTIONS.put("pack", List.of(
                 Entry.command("validate", "[pack]", "Validate a pack or every pack", "v"),
-                Entry.command("restore", "<pack>", "Restore the latest trashed files for a pack", "r"),
+                Entry.command("cleanup", "<pack> [apply]", "Preview or quarantine unused-resource candidates", "c"),
+                Entry.command("restore", "<pack> [apply]", "Preview or restore the latest quarantine", "r"),
                 Entry.command("status", "[pack]", "Show cached validation status", "s")
         ));
         SECTIONS.put("pk", SECTIONS.get("pack"));

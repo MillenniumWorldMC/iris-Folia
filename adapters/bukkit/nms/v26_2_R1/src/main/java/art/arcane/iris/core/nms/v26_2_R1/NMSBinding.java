@@ -52,6 +52,7 @@ import net.minecraft.core.IdMapper;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.ByteTag;
 import net.minecraft.nbt.CollectionTag;
@@ -210,6 +211,16 @@ public class NMSBinding implements INMSBinding {
     @Override
     public boolean hasTile(Material material) {
         return !CraftBlockState.class.equals(CraftBlockStates.getBlockStateType(material));
+    }
+
+    @Override
+    public String getEntitySpawnCategory(String key) {
+        Identifier identifier = Identifier.parse(key);
+        if (!BuiltInRegistries.ENTITY_TYPE.containsKey(identifier)) {
+            throw new IllegalArgumentException("Unknown native entity type: " + key);
+        }
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(identifier);
+        return type.getCategory().getSerializedName().toLowerCase(Locale.ROOT);
     }
 
     @Override

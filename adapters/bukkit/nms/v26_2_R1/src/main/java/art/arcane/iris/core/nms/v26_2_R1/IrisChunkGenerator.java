@@ -25,6 +25,7 @@ import net.minecraft.world.level.levelgen.WorldgenRandom;
 import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -40,7 +41,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.WorldGenRegion;
+import net.minecraft.util.random.Weighted;
 import net.minecraft.util.random.WeightedList;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -68,6 +71,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class IrisChunkGenerator extends CustomChunkGenerator {
     private static final WrappedField<ChunkGenerator, BiomeSource> BIOME_SOURCE;
@@ -75,6 +79,7 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
     private final ChunkGenerator delegate;
     private final Engine engine;
     private final CustomBiomeSource customBiomeSource;
+    private final ConcurrentHashMap<SpawnTableKey, WeightedList<MobSpawnSettings.SpawnerData>> mergedSpawnTables = new ConcurrentHashMap<>();
     private volatile Set<String> reachableStructureKeysCache;
 
     public IrisChunkGenerator(ChunkGenerator delegate, long seed, Engine engine, World world) {
@@ -225,7 +230,28 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
 
     @Override
     public WeightedList<MobSpawnSettings.SpawnerData> getMobsAt(Holder<Biome> holder, StructureManager structuremanager, MobCategory enumcreaturetype, BlockPos blockposition) {
-        return delegate.getMobsAt(holder, structuremanager, enumcreaturetype, blockposition);
+        Holder<Biome> vanillaSpawnBiome = customBiomeSource.getVanillaSpawnBiome(holder);
+        if (vanillaSpawnBiome == null) {
+            return delegate.getMobsAt(holder, structuremanager, enumcreaturetype, blockposition);
+        }
+
+        WeightedList<MobSpawnSettings.SpawnerData> vanillaSpawns = vanillaSpawnBiome.value().getMobSettings().getMobs(enumcreaturetype);
+        WeightedList<MobSpawnSettings.SpawnerData> resolvedSpawns = delegate.getMobsAt(
+                vanillaSpawnBiome, structuremanager, enumcreaturetype, blockposition);
+        if (resolvedSpawns != vanillaSpawns) {
+            return resolvedSpawns;
+        }
+
+        WeightedList<MobSpawnSettings.SpawnerData> explicitSpawns = holder.value().getMobSettings().getMobs(enumcreaturetype);
+        if (explicitSpawns.isEmpty()) {
+            return vanillaSpawns;
+        }
+        if (vanillaSpawns.isEmpty()) {
+            return explicitSpawns;
+        }
+
+        SpawnTableKey key = new SpawnTableKey(holder.value(), enumcreaturetype);
+        return mergedSpawnTables.computeIfAbsent(key, ignored -> mergeSpawnTables(vanillaSpawns, explicitSpawns));
     }
 
     @Override
@@ -352,6 +378,24 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
         delegate.spawnOriginalMobs(regionlimitedworldaccess);
     }
 
+    private static WeightedList<MobSpawnSettings.SpawnerData> mergeSpawnTables(
+            WeightedList<MobSpawnSettings.SpawnerData> vanillaSpawns,
+            WeightedList<MobSpawnSettings.SpawnerData> explicitSpawns) {
+        List<Weighted<MobSpawnSettings.SpawnerData>> entries = new ArrayList<>(
+                vanillaSpawns.unwrap().size() + explicitSpawns.unwrap().size());
+        Set<EntityType<?>> explicitTypes = new HashSet<>();
+        for (Weighted<MobSpawnSettings.SpawnerData> entry : explicitSpawns.unwrap()) {
+            explicitTypes.add(entry.value().type());
+        }
+        for (Weighted<MobSpawnSettings.SpawnerData> entry : vanillaSpawns.unwrap()) {
+            if (!explicitTypes.contains(entry.value().type())) {
+                entries.add(entry);
+            }
+        }
+        entries.addAll(explicitSpawns.unwrap());
+        return WeightedList.of(entries);
+    }
+
     @Override
     public int getSpawnHeight(LevelHeightAccessor levelheightaccessor) {
         return delegate.getSpawnHeight(levelheightaccessor);
@@ -427,5 +471,8 @@ public class IrisChunkGenerator extends CustomChunkGenerator {
         } catch (IllegalAccessException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private record SpawnTableKey(Biome biome, MobCategory category) {
     }
 }

@@ -10,8 +10,10 @@ import java.io.PrintStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class IrisPregeneratorInitTest {
@@ -51,6 +53,35 @@ public class IrisPregeneratorInitTest {
         String output = runCompletionOnClose(true);
 
         assertTrue(output.contains("Pregen finished: generated=8 total=9 failed=1"));
+    }
+
+    @Test
+    public void cancellationSummaryDoesNotReportPartialRunAsFinished() {
+        IrisSettings previousSettings = IrisSettings.settings;
+        PrintStream previousOut = System.out;
+        IrisSettings.settings = new IrisSettings();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(output, true, StandardCharsets.UTF_8));
+        AtomicReference<IrisPregenerator> pregeneratorReference = new AtomicReference<>();
+        CancelAfterFirstChunkMethod method = new CancelAfterFirstChunkMethod(pregeneratorReference);
+        PregenTask task = PregenTask.builder()
+                .center(new Position2(0, 0))
+                .radiusX(1)
+                .radiusZ(1)
+                .build();
+        try {
+            IrisPregenerator pregenerator = new IrisPregenerator(task, method, new NoOpPregenListener());
+            pregeneratorReference.set(pregenerator);
+
+            pregenerator.start();
+
+            String summary = output.toString(StandardCharsets.UTF_8);
+            assertTrue(summary.contains("Pregen cancelled: generated=1 total=9 failed=0 remaining=8"));
+            assertFalse(summary.contains("Pregen finished:"));
+        } finally {
+            System.setOut(previousOut);
+            IrisSettings.settings = previousSettings;
+        }
     }
 
     private String runCompletionOnClose(boolean failLast) {
@@ -165,6 +196,55 @@ public class IrisPregeneratorInitTest {
         public void generateChunk(int x, int z, PregenListener listener) {
             pending++;
             this.listener = listener;
+        }
+
+        @Override
+        public Mantle getMantle() {
+            return null;
+        }
+    }
+
+    private static final class CancelAfterFirstChunkMethod implements PregeneratorMethod {
+        private final AtomicReference<IrisPregenerator> pregeneratorReference;
+        private boolean cancelled;
+
+        private CancelAfterFirstChunkMethod(AtomicReference<IrisPregenerator> pregeneratorReference) {
+            this.pregeneratorReference = pregeneratorReference;
+        }
+
+        @Override
+        public void init() {
+        }
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public void save() {
+        }
+
+        @Override
+        public boolean supportsRegions(int x, int z, PregenListener listener) {
+            return false;
+        }
+
+        @Override
+        public String getMethod(int x, int z) {
+            return "test";
+        }
+
+        @Override
+        public void generateRegion(int x, int z, PregenListener listener) {
+        }
+
+        @Override
+        public void generateChunk(int x, int z, PregenListener listener) {
+            listener.onChunkGenerated(x, z);
+            if (!cancelled) {
+                cancelled = true;
+                pregeneratorReference.get().close();
+            }
         }
 
         @Override

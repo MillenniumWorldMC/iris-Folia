@@ -55,6 +55,11 @@ sourceSets {
             srcDir '../modded-common/src/main/resources'
         }
     }
+    test {
+        java {
+            srcDir '../modded-common/src/test/java'
+        }
+    }
 }
 
 repositories {
@@ -102,6 +107,7 @@ configurations.create('jij') {
 dependencies {
     minecraft("com.mojang:minecraft:${minecraftVersion}")
     implementation("net.fabricmc:fabric-loader:${fabricLoaderVersion}")
+    testImplementation('junit:junit:4.13.2')
     List<Object> fabricApi = [
         libs.fabricApi.base,
         libs.fabricApi.registrySync,
@@ -199,6 +205,10 @@ tasks.named('shadowJar', ShadowJar).configure {
     exclude('META-INF/*.RSA')
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     relocate('org.objectweb.asm', 'art.arcane.iris.shadow.asm')
+    relocate('io.sentry', 'art.arcane.iris.shadow.sentry')
+    relocate('com.sun.jna', 'art.arcane.iris.shadow.jna')
+    relocate('oshi', 'art.arcane.iris.shadow.oshi')
+    relocate('net.jpountz', 'art.arcane.iris.shadow.jpountz')
     exclude('oshi.properties')
     from(project.configurations.named('jij')) {
         into('META-INF/jars')

@@ -41,7 +41,13 @@ public class IrisCeilingDecorator extends IrisEngineDecorator {
     @Override
     public void decorate(int x, int z, int realX, int realX1, int realX_1, int realZ, int realZ1, int realZ_1,
                          Hunk<PlatformBlockState> data, IrisBiome biome, int height, int max) {
-        boolean caveSkipFluid = biome.getInferredType() == InferredType.CAVE;
+        decorate(x, z, realX, realX1, realX_1, realZ, realZ1, realZ_1, data, biome, biome.getInferredType(), height, max);
+    }
+
+    @BlockCoordinates
+    public void decorate(int x, int z, int realX, int realX1, int realX_1, int realZ, int realZ1, int realZ_1,
+                         Hunk<PlatformBlockState> data, IrisBiome biome, InferredType inferredType, int height, int max) {
+        boolean caveSkipFluid = IrisSurfaceDecorator.skipsFluid(inferredType);
         RNG rng = getRNG(realX, realZ);
         IrisDecorator decorator = DecoratorCore.pickDecorator(biome, getPart(), partRNG, rng, getData(), realX, realZ);
 

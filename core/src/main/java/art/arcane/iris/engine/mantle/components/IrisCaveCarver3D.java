@@ -46,7 +46,6 @@ public class IrisCaveCarver3D {
     private static final int ADAPTIVE_DEEP_SURFACE_MARGIN = 12;
     private static final double ADAPTIVE_LOCAL_RANGE_SCALE = 0.125D;
     private static final double ADAPTIVE_DEEP_MARGIN_BOOST = 0.015D;
-    private static final ThreadLocal<Scratch> SCRATCH = ThreadLocal.withInitial(Scratch::new);
 
     private final Engine engine;
     private final IrisData data;
@@ -70,6 +69,7 @@ public class IrisCaveCarver3D {
     private final boolean hasWarp;
     private final boolean hasModules;
     private final int warpResolution;
+    private final ThreadLocal<Scratch> scratchCache = ThreadLocal.withInitial(Scratch::new);
 
     public IrisCaveCarver3D(Engine engine, IrisCaveProfile profile) {
         this.engine = engine;
@@ -112,7 +112,7 @@ public class IrisCaveCarver3D {
     }
 
     public int carve(MantleWriter writer, int chunkX, int chunkZ) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         if (!scratch.fullWeightsInitialized) {
             Arrays.fill(scratch.fullWeights, 1D);
             scratch.fullWeightsInitialized = true;
@@ -169,7 +169,7 @@ public class IrisCaveCarver3D {
     ) {
         PrecisionStopwatch applyStopwatch = PrecisionStopwatch.start();
         try {
-            Scratch scratch = SCRATCH.get();
+            Scratch scratch = scratchCache.get();
             if (columnWeights == null || columnWeights.length < 256) {
                 if (!scratch.fullWeightsInitialized) {
                     Arrays.fill(scratch.fullWeights, 1D);
@@ -364,7 +364,7 @@ public class IrisCaveCarver3D {
             boolean skipExistingCarved
     ) {
         int carved = 0;
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         double[] passThreshold = scratch.passThreshold;
         int[] activeColumnIndices = scratch.activeColumnIndices;
         int[] activeColumnTopY = scratch.activeColumnTopY;
@@ -483,7 +483,7 @@ public class IrisCaveCarver3D {
             boolean skipExistingCarved
     ) {
         int carved = 0;
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         double[] passThreshold = scratch.passThreshold;
         int[] activeColumnIndices = scratch.activeColumnIndices;
         int[] activeColumnTopY = scratch.activeColumnTopY;
@@ -639,7 +639,7 @@ public class IrisCaveCarver3D {
             boolean skipExistingCarved
     ) {
         int carved = 0;
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         double[] passThreshold = scratch.passThreshold;
         int[] tileIndices = scratch.tileIndices;
         int[] tileLocalX = scratch.tileLocalX;
@@ -778,7 +778,7 @@ public class IrisCaveCarver3D {
             boolean skipExistingCarved
     ) {
         int carved = 0;
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
 
         for (int lx = 0; lx < 16; lx++) {
             int x = x0 + lx;
@@ -926,7 +926,7 @@ public class IrisCaveCarver3D {
     }
 
     private void classifyDensityPlaneNoWarpModules(int x0, int z0, int y, int[] planeColumnIndices, double[] planeThresholdLimit, int planeCount, boolean[] planeCarve) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         int activeModuleCount = prepareActiveModules(scratch, y);
         if (activeModuleCount == 0) {
             classifyDensityPlaneNoWarpNoModules(x0, z0, y, planeColumnIndices, planeThresholdLimit, planeCount, planeCarve);
@@ -964,7 +964,7 @@ public class IrisCaveCarver3D {
     }
 
     private void classifyDensityPlaneWarpModules(int x0, int z0, int y, int[] planeColumnIndices, double[] planeThresholdLimit, int planeCount, boolean[] planeCarve) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         int activeModuleCount = prepareActiveModules(scratch, y);
         if (activeModuleCount == 0) {
             classifyDensityPlaneWarpOnly(x0, z0, y, planeColumnIndices, planeThresholdLimit, planeCount, planeCarve);
@@ -1003,7 +1003,7 @@ public class IrisCaveCarver3D {
             int adaptiveSampleStep,
             double adaptiveThresholdMargin
     ) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         double[] adaptivePlaneDensity = scratch.adaptivePlaneDensity;
         int axisCells = (16 + adaptiveSampleStep - 1) / adaptiveSampleStep;
         int axisSamples = axisCells + 1;
@@ -1046,7 +1046,7 @@ public class IrisCaveCarver3D {
             int adaptiveSampleStep,
             double adaptiveThresholdMargin
     ) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         int activeModuleCount = prepareActiveModules(scratch, y);
         if (activeModuleCount == 0) {
             classifyDensityPlaneAdaptiveNoWarpNoModules(x0, z0, y, planeColumnIndices, planeThresholdLimit, planeCount, planeCarve, adaptiveSampleStep, adaptiveThresholdMargin);
@@ -1102,7 +1102,7 @@ public class IrisCaveCarver3D {
             int adaptiveSampleStep,
             double adaptiveThresholdMargin
     ) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         double[] adaptivePlaneDensity = scratch.adaptivePlaneDensity;
         int axisCells = (16 + adaptiveSampleStep - 1) / adaptiveSampleStep;
         int axisSamples = axisCells + 1;
@@ -1145,7 +1145,7 @@ public class IrisCaveCarver3D {
             int adaptiveSampleStep,
             double adaptiveThresholdMargin
     ) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         int activeModuleCount = prepareActiveModules(scratch, y);
         if (activeModuleCount == 0) {
             classifyDensityPlaneAdaptiveWarpOnly(x0, z0, y, planeColumnIndices, planeThresholdLimit, planeCount, planeCarve, adaptiveSampleStep, adaptiveThresholdMargin);
@@ -1211,7 +1211,7 @@ public class IrisCaveCarver3D {
             int axisCells,
             int axisSamples
     ) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         double[] adaptivePlanePrediction = scratch.adaptivePlanePrediction;
         double[] adaptivePlaneAmbiguity = scratch.adaptivePlaneAmbiguity;
         prepareAdaptivePlaneColumns(
@@ -1271,7 +1271,7 @@ public class IrisCaveCarver3D {
             double[] remainingMin,
             double[] remainingMax
     ) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         double[] adaptivePlanePrediction = scratch.adaptivePlanePrediction;
         double[] adaptivePlaneAmbiguity = scratch.adaptivePlaneAmbiguity;
         prepareAdaptivePlaneColumns(
@@ -1348,7 +1348,7 @@ public class IrisCaveCarver3D {
             int axisCells,
             int axisSamples
     ) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         double[] adaptivePlanePrediction = scratch.adaptivePlanePrediction;
         double[] adaptivePlaneAmbiguity = scratch.adaptivePlaneAmbiguity;
         prepareAdaptivePlaneColumns(
@@ -1408,7 +1408,7 @@ public class IrisCaveCarver3D {
             double[] remainingMin,
             double[] remainingMax
     ) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         double[] adaptivePlanePrediction = scratch.adaptivePlanePrediction;
         double[] adaptivePlaneAmbiguity = scratch.adaptivePlaneAmbiguity;
         prepareAdaptivePlaneColumns(
@@ -1485,7 +1485,7 @@ public class IrisCaveCarver3D {
             double[] remainingMin,
             double[] remainingMax
     ) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         double[] adaptivePlanePrediction = scratch.adaptivePlanePrediction;
         double[] adaptivePlaneAmbiguity = scratch.adaptivePlaneAmbiguity;
         prepareAdaptivePlaneColumns(
@@ -1604,7 +1604,7 @@ public class IrisCaveCarver3D {
     }
 
     private boolean classifyDensityPointWarpOnly(int x, int y, int z, double thresholdLimit) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         int sx = snapWarp(x);
         int sy = snapWarp(y);
         int sz = snapWarp(z);
@@ -1640,7 +1640,7 @@ public class IrisCaveCarver3D {
             return classifyDensityPointWarpOnly(x, y, z, thresholdLimit);
         }
 
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         int sx = snapWarp(x);
         int sy = snapWarp(y);
         int sz = snapWarp(z);
@@ -1740,7 +1740,7 @@ public class IrisCaveCarver3D {
             return true;
         }
 
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         int sx = snapWarp(x);
         int sy = snapWarp(y);
         int sz = snapWarp(z);
@@ -1778,7 +1778,7 @@ public class IrisCaveCarver3D {
             int[] adaptivePlaneSampleBounds,
             int axisCells
     ) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         prepareAdaptiveGeometry(scratch, adaptiveSampleStep, axisCells, axisCells + 1);
         int[] adaptiveCellX = scratch.adaptiveCellX;
         int[] adaptiveCellZ = scratch.adaptiveCellZ;
@@ -1822,7 +1822,7 @@ public class IrisCaveCarver3D {
             double[] adaptivePlanePrediction,
             double[] adaptivePlaneAmbiguity
     ) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         prepareAdaptiveGeometry(scratch, adaptiveSampleStep, axisCells, axisSamples);
         int[] adaptiveCellZ = scratch.adaptiveCellZ;
         int[] adaptiveRow0 = scratch.adaptiveRow0;
@@ -1882,7 +1882,7 @@ public class IrisCaveCarver3D {
     }
 
     private double sampleDensityNoWarpModules(int x, int y, int z) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         int activeModuleCount = prepareActiveModules(scratch, y);
         if (activeModuleCount == 0) {
             return sampleDensityNoWarpNoModules(x, y, z);
@@ -1905,7 +1905,7 @@ public class IrisCaveCarver3D {
     }
 
     private double sampleDensityWarpOnly(int x, int y, int z) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         int sx = snapWarp(x);
         int sy = snapWarp(y);
         int sz = snapWarp(z);
@@ -1921,7 +1921,7 @@ public class IrisCaveCarver3D {
     }
 
     private double sampleDensityWarpModules(int x, int y, int z) {
-        Scratch scratch = SCRATCH.get();
+        Scratch scratch = scratchCache.get();
         int activeModuleCount = prepareActiveModules(scratch, y);
         if (activeModuleCount == 0) {
             return sampleDensityWarpOnly(x, y, z);

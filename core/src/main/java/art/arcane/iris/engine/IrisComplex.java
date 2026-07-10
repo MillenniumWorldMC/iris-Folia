@@ -42,8 +42,10 @@ import art.arcane.iris.util.project.interpolation.IrisInterpolation.NoiseBounds;
 import art.arcane.iris.util.project.noise.CNG;
 import art.arcane.iris.util.project.stream.ProceduralStream;
 import art.arcane.iris.util.project.stream.interpolation.Interpolated;
+import lombok.AccessLevel;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.ToString;
 
 import java.io.File;
@@ -56,13 +58,14 @@ import java.util.Set;
 import java.util.UUID;
 
 @Data
-@EqualsAndHashCode(exclude = "data")
-@ToString(exclude = "data")
+@EqualsAndHashCode(exclude = {"data", "gridBoundsCache"})
+@ToString(exclude = {"data", "gridBoundsCache"})
 public class IrisComplex implements DataProvider {
     private static final NoiseBounds ZERO_NOISE_BOUNDS = new NoiseBounds(0D, 0D);
     private static final int GRID_BOUNDS_CACHE_SIZE = 8192;
     private static final int HEIGHT_BOUNDS_GRID = 4;
-    private static final ThreadLocal<GridBoundsCache> GRID_BOUNDS_CACHE = ThreadLocal.withInitial(GridBoundsCache::new);
+    @Getter(AccessLevel.NONE)
+    private final transient ThreadLocal<GridBoundsCache> gridBoundsCache = ThreadLocal.withInitial(GridBoundsCache::new);
     private RNG rng;
     private double fluidHeight;
     private IrisData data;
@@ -362,7 +365,7 @@ public class IrisComplex implements DataProvider {
         double fx = (x - gx) / grid;
         double fz = (z - gz) / grid;
 
-        GridBoundsCache cache = GRID_BOUNDS_CACHE.get();
+        GridBoundsCache cache = gridBoundsCache.get();
         long b00 = cornerBounds(cache, engine, interpolator, interpolatorIndex, generators, gx, gz);
         long b10 = cornerBounds(cache, engine, interpolator, interpolatorIndex, generators, gx + grid, gz);
         long b01 = cornerBounds(cache, engine, interpolator, interpolatorIndex, generators, gx, gz + grid);

@@ -12,6 +12,7 @@ public class DataFixerV1217 extends DataFixerV1213 {
             Dimension.OVERWORLD, """
                     {
                       "ambient_light": 0.0,
+                      "default_clock": "minecraft:overworld",
                       "has_ender_dragon_fight": false,
                       "attributes": {
                         "minecraft:audio/ambient_sounds": {
@@ -43,6 +44,7 @@ public class DataFixerV1217 extends DataFixerV1213 {
             Dimension.NETHER, """
                     {
                       "ambient_light": 0.1,
+                      "has_fixed_time": true,
                       "has_ender_dragon_fight": false,
                       "attributes": {
                         "minecraft:gameplay/sky_light_level": 4.0,
@@ -59,6 +61,8 @@ public class DataFixerV1217 extends DataFixerV1213 {
             Dimension.END, """
                     {
                       "ambient_light": 0.25,
+                      "default_clock": "minecraft:the_end",
+                      "has_fixed_time": true,
                       "has_ender_dragon_fight": true,
                       "attributes": {
                         "minecraft:audio/ambient_sounds": {

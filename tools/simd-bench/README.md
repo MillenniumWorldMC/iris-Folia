@@ -30,6 +30,9 @@ macOS / Linux:
 ./run.sh
 ```
 
+The run scripts compile the sources and create the ignored `simd-bench.jar` locally when it is
+missing. Use `build.bat` or `./build.sh` to rebuild it explicitly.
+
 Or invoke directly (the `--add-modules` flag is required because the Vector API
 is still an incubator module):
 
