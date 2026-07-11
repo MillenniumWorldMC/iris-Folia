@@ -242,6 +242,7 @@ tasks.named('forgeJar').configure {
 }
 
 tasks.named('fabricJar').configure {
+    mustRunAfter(tasks.named('jar'))
     mustRunAfter(tasks.named('buildBukkit'))
     mustRunAfter(project(':spi').tasks.named('jar'))
 }
