@@ -39,10 +39,11 @@ public class TransientWorldCleanupSupportTest {
     public void collectsOnlyTransientStudioWorldFamiliesFromContainer() throws IOException {
         File container = Files.createTempDirectory("transient-world-cleanup-test").toFile();
         String baseName = "iris-123e4567-e89b-12d3-a456-426614174000";
-        File baseFolder = new File(container, baseName);
-        File netherFolder = new File(container, baseName + "_nether");
-        File smokeFolder = new File(container, "iris-smoke-studio-deadbeef");
-        File regularFolder = new File(container, "overworld");
+        File namespace = new File(container, "dimensions/minecraft");
+        File baseFolder = new File(namespace, baseName);
+        File netherFolder = new File(namespace, baseName + "_nether");
+        File smokeFolder = new File(namespace, "iris-smoke-studio-deadbeef");
+        File regularFolder = new File(namespace, "overworld");
         baseFolder.mkdirs();
         netherFolder.mkdirs();
         smokeFolder.mkdirs();
@@ -57,6 +58,8 @@ public class TransientWorldCleanupSupportTest {
             Files.deleteIfExists(netherFolder.toPath());
             Files.deleteIfExists(smokeFolder.toPath());
             Files.deleteIfExists(regularFolder.toPath());
+            Files.deleteIfExists(namespace.toPath());
+            Files.deleteIfExists(namespace.getParentFile().toPath());
             Files.deleteIfExists(container.toPath());
         }
     }

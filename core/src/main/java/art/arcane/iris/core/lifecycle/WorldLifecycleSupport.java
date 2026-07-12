@@ -1,12 +1,15 @@
 package art.arcane.iris.core.lifecycle;
 
+import art.arcane.iris.core.IrisWorldStorage;
 import art.arcane.iris.core.link.Identifier;
 import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.nms.INMSBinding;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
 import art.arcane.iris.util.common.scheduling.J;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -18,7 +21,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -119,10 +121,8 @@ final class WorldLifecycleSupport {
         return lookupMethod.invoke(datapackDimensions, levelStemRegistryKey);
     }
 
-    static Object createRuntimeLevelStemKey(String worldName) throws ReflectiveOperationException {
-        String sanitized = worldName.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9/_-]", "_");
-        String path = "runtime/" + sanitized;
-        Identifier identifier = new Identifier("iris", path);
+    static Object createRuntimeLevelStemKey(NamespacedKey worldKey) throws ReflectiveOperationException {
+        Identifier identifier = new Identifier(worldKey.getNamespace(), worldKey.getKey());
         Object rawIdentifier = Class.forName("net.minecraft.resources.Identifier")
                 .getMethod("fromNamespaceAndPath", String.class, String.class)
                 .invoke(null, identifier.namespace(), identifier.key());
@@ -253,11 +253,13 @@ final class WorldLifecycleSupport {
         setModdedInfoMethod.invoke(worldData, modName, modified);
     }
 
-    static boolean hasExistingWorldData(String worldName) {
-        File worldFolder = new File(Bukkit.getWorldContainer(), worldName);
-        return new File(worldFolder, "level.dat").exists()
-                || new File(worldFolder, "region").exists()
-                || new File(worldFolder, "data").exists();
+    static boolean hasExistingWorldData(NamespacedKey worldKey) {
+        File worldFolder = IrisWorldStorage.dimensionRoot(worldKey);
+        return new File(worldFolder, "region").exists()
+                || new File(worldFolder, "entities").exists()
+                || new File(worldFolder, "poi").exists()
+                || new File(worldFolder, "data/paper/metadata.dat").exists()
+                || new File(worldFolder, "paper-world.yml").exists();
     }
 
     static Object applySeedToWorldDataAndGenSettings(Object worldDataAndGenSettings, long seed) throws ReflectiveOperationException {
@@ -386,18 +388,19 @@ final class WorldLifecycleSupport {
         return primaryLevelData;
     }
 
-    static Object createLegacyStorageAccess(CapabilitySnapshot capabilities, String worldName) throws ReflectiveOperationException {
+    static Object createLegacyStorageAccess(CapabilitySnapshot capabilities) throws ReflectiveOperationException {
         Class<?> levelStorageSourceClass = Class.forName("net.minecraft.world.level.storage.LevelStorageSource");
         Method createDefaultMethod = levelStorageSourceClass.getMethod("createDefault", Path.class);
-        Object levelStorageSource = createDefaultMethod.invoke(null, Bukkit.getWorldContainer().toPath());
+        File levelRoot = IrisWorldStorage.levelRoot();
+        Object levelStorageSource = createDefaultMethod.invoke(null, levelRoot.getParentFile().toPath());
         Method storageAccessMethod = capabilities.levelStorageAccessMethod();
         if (storageAccessMethod.getParameterCount() == 1) {
-            return storageAccessMethod.invoke(levelStorageSource, worldName);
+            return storageAccessMethod.invoke(levelStorageSource, levelRoot.getName());
         }
         Object overworldStemKey = Class.forName("net.minecraft.world.level.dimension.LevelStem")
                 .getField("OVERWORLD")
                 .get(null);
-        return storageAccessMethod.invoke(levelStorageSource, worldName, overworldStemKey);
+        return storageAccessMethod.invoke(levelStorageSource, levelRoot.getName(), overworldStemKey);
     }
 
     static void closeLevelStorageAccess(Object levelStorageAccess) {
@@ -437,8 +440,8 @@ final class WorldLifecycleSupport {
             Method getHandleMethod = world.getClass().getMethod("getHandle");
             Object serverLevel = getHandleMethod.invoke(world);
             closeServerLevel(world, serverLevel);
-            detachServerLevel(capabilities, serverLevel, world.getName());
-            return Bukkit.getWorld(world.getName()) == null;
+            detachServerLevel(capabilities, serverLevel, world);
+            return WorldIdentity.resolve(WorldIdentity.key(world)).isEmpty();
         } catch (Throwable e) {
             throw new IllegalStateException("Failed to unload world \"" + world.getName() + "\" through the selected world lifecycle backend.", unwrap(e));
         }
@@ -527,7 +530,7 @@ final class WorldLifecycleSupport {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void removeWorldFromCraftServerMap(String worldName) throws ReflectiveOperationException {
+    private static void removeWorldFromCraftServerMap(World world) throws ReflectiveOperationException {
         Object bukkitServer = Bukkit.getServer();
         if (bukkitServer == null) {
             return;
@@ -536,16 +539,17 @@ final class WorldLifecycleSupport {
         Field worldsField = CapabilityResolution.resolveField(bukkitServer.getClass(), "worlds");
         Object rawWorlds = worldsField.get(bukkitServer);
         if (rawWorlds instanceof Map map) {
-            map.remove(worldName);
-            map.remove(worldName.toLowerCase(Locale.ROOT));
+            map.remove(WorldIdentity.key(world));
+            map.remove(WorldIdentity.serialize(world));
+            map.remove(world.getName());
         }
     }
 
-    private static void detachServerLevel(CapabilitySnapshot capabilities, Object serverLevel, String worldName) throws Throwable {
+    private static void detachServerLevel(CapabilitySnapshot capabilities, Object serverLevel, World world) throws Throwable {
         Runnable detachTask = () -> {
             try {
                 capabilities.removeLevelMethod().invoke(capabilities.minecraftServer(), serverLevel);
-                removeWorldFromCraftServerMap(worldName);
+                removeWorldFromCraftServerMap(world);
             } catch (Throwable e) {
                 throw new RuntimeException(e);
             }
@@ -558,7 +562,7 @@ final class WorldLifecycleSupport {
 
         CompletableFuture<Void> detachFuture = J.sfut(detachTask);
         if (detachFuture == null) {
-            throw new IllegalStateException("Failed to schedule global detach task for world \"" + worldName + "\".");
+            throw new IllegalStateException("Failed to schedule global detach task for world \"" + world.getName() + "\".");
         }
         detachFuture.get(15, TimeUnit.SECONDS);
     }

@@ -389,7 +389,7 @@ public class IrisEngineSVC implements IrisService {
             }
 
             PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
-            return pregeneratorJob != null && pregeneratorJob.targetsWorldName(engine.getWorld().name());
+            return pregeneratorJob != null && pregeneratorJob.targetsWorldIdentity(engine.getWorld().identity());
         }
 
         private int activeTectonicLimit(Engine engine) {
@@ -446,7 +446,7 @@ public class IrisEngineSVC implements IrisService {
             }
 
             PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
-            boolean pregeneratorTargetsWorld = pregeneratorJob != null && pregeneratorJob.targetsWorldName(world.getName());
+            boolean pregeneratorTargetsWorld = pregeneratorJob != null && pregeneratorJob.targetsWorld(world);
             return shouldSkipMantleReductionForMaintenance(maintenanceActive, pregeneratorTargetsWorld);
         }
     }

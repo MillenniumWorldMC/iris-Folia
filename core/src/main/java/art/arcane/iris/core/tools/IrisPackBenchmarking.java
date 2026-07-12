@@ -1,6 +1,7 @@
 package art.arcane.iris.core.tools;
 
 
+import art.arcane.iris.core.IrisWorldStorage;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.core.lifecycle.WorldLifecycleService;
@@ -9,12 +10,13 @@ import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.IrisDimension;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import art.arcane.volmlib.util.exceptions.IrisException;
 import art.arcane.volmlib.util.format.Form;
 import art.arcane.volmlib.util.io.IO;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.scheduling.PrecisionStopwatch;
-import org.bukkit.Bukkit;
+import org.bukkit.World;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -47,9 +49,9 @@ public class IrisPackBenchmarking {
                 .name("PackBenchmarking")
                 .start(() -> {
                     IrisLogging.info("Setting up benchmark environment ");
-                    IO.delete(new File(Bukkit.getWorldContainer(), "benchmark"));
+                    IO.delete(IrisWorldStorage.dimensionRoot("benchmark"));
                     createBenchmark();
-                    while (!IrisToolbelt.isIrisWorld(Bukkit.getWorld("benchmark"))) {
+                    while (!IrisToolbelt.isIrisWorld(benchmarkWorld())) {
                         J.sleep(1000);
                         IrisLogging.debug("Iris PackBenchmark: Waiting...");
                     }
@@ -63,7 +65,11 @@ public class IrisPackBenchmarking {
     public void finishedBenchmark(KList<Integer> cps) {
         try {
             String time = Form.duration((long) stopwatch.getMilliseconds());
-            Engine engine = IrisToolbelt.access(Bukkit.getWorld("benchmark")).getEngine();
+            World benchmarkWorld = benchmarkWorld();
+            if (benchmarkWorld == null) {
+                throw new IllegalStateException("Benchmark world is not loaded.");
+            }
+            Engine engine = IrisToolbelt.access(benchmarkWorld).getEngine();
             IrisLogging.info("-----------------");
             IrisLogging.info("Results:");
             IrisLogging.info("- Total time: " + time);
@@ -101,7 +107,7 @@ public class IrisPackBenchmarking {
             }
 
             J.s(() -> {
-                org.bukkit.World world = Bukkit.getWorld("benchmark");
+                World world = benchmarkWorld();
                 if (world == null) return;
                 IrisToolbelt.evacuate(world);
                 WorldLifecycleService.get().unload(world, true);
@@ -136,11 +142,15 @@ public class IrisPackBenchmarking {
                     .gui(gui)
                     .radiusX(radius)
                     .radiusZ(radius)
-                    .build(), Bukkit.getWorld("benchmark")
+                    .build(), benchmarkWorld()
             );
         } finally {
             instance.remove();
         }
+    }
+
+    private static World benchmarkWorld() {
+        return WorldIdentity.resolve(IrisWorldStorage.keyFromLegacyName("benchmark")).orElse(null);
     }
 
     private double calculateAverage(KList<Integer> list) {

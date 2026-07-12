@@ -77,7 +77,7 @@ public class MantleWriter implements IObjectPlacer, AutoCloseable {
         this.z = z;
 
         final boolean foliaMaintenance = J.isFolia()
-                && WorldMaintenance.isWorldMaintenanceActive(engineMantle.getEngine().getWorld().name());
+                && WorldMaintenance.isWorldMaintenanceActive(engineMantle.getEngine().getWorld().identity());
         final int parallelism = foliaMaintenance ? 1 : (multicore ? Runtime.getRuntime().availableProcessors() / 2 : 4);
         if (foliaMaintenance && IrisSettings.get().getGeneral().isDebug()) {
             IrisLogging.info("MantleWriter using sequential chunk prefetch for maintenance regen at " + x + "," + z + ".");

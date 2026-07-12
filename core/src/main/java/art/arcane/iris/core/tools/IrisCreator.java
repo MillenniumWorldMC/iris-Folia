@@ -25,6 +25,7 @@ import art.arcane.iris.spi.IrisServices;
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.core.link.MultiverseCoreLink;
 import art.arcane.iris.core.IrisRuntimeSchedulerMode;
+import art.arcane.iris.core.IrisWorldStorage;
 import art.arcane.iris.core.IrisWorlds;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.ServerConfigurator;
@@ -50,7 +51,6 @@ import org.bukkit.WorldCreator;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
@@ -166,7 +166,7 @@ public class IrisCreator {
 
         reportStudioProgress(0.16D, "prepare_world_pack");
         if (!studio() || benchmark) {
-            d = IrisServices.get(StudioSVC.class).installIntoWorld(sender, d, new File(Bukkit.getWorldContainer(), name()));
+            d = IrisServices.get(StudioSVC.class).installIntoWorld(sender, d, IrisWorldStorage.dimensionRoot(name()));
             if (d == null) {
                 throw new IrisException("Failed to install dimension pack for " + dimension());
             }
@@ -188,7 +188,7 @@ public class IrisCreator {
                 .studio(studio)
                 .create();
         if (!studio()) {
-            IrisWorlds.get().put(name(), dimension());
+            IrisWorlds.get().put(wc.key().toString(), dimension());
         }
         ServerConfigurator.installDataPacksIfChanged(!studio());
         IrisLogging.debug("[Studio timing]   create.packPrep + datapacks = " + (System.currentTimeMillis() - createStart) + "ms (cumulative in create)");

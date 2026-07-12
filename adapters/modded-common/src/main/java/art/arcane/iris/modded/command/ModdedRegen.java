@@ -106,8 +106,8 @@ public final class ModdedRegen {
 
     private void run() {
         long startedAt = M.ms();
-        String worldName = engine.getWorld() == null ? null : engine.getWorld().name();
-        WorldMaintenance.beginWorldMaintenance(worldName, "regen");
+        String worldIdentity = engine.getWorld() == null ? null : engine.getWorld().identity();
+        WorldMaintenance.beginWorldMaintenance(worldIdentity, "regen");
         try {
             resetMantleMargin();
             List<int[]> targets = ChunkSpiral.centerOut(centerX, centerZ, radius);
@@ -120,7 +120,7 @@ public final class ModdedRegen {
             LOGGER.error("Iris regen failed", e);
             fail("Regen failed: " + e);
         } finally {
-            WorldMaintenance.endWorldMaintenance(worldName, "regen");
+            WorldMaintenance.endWorldMaintenance(worldIdentity, "regen");
             ACTIVE.set(false);
         }
     }

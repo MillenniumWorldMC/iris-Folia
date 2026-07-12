@@ -96,13 +96,13 @@ public interface EngineMode extends Staged {
     }
 
     private boolean shouldDisableContextCacheForMaintenance() {
-        boolean maintenanceActive = WorldMaintenance.isWorldMaintenanceActive(getEngine().getWorld().name());
+        boolean maintenanceActive = WorldMaintenance.isWorldMaintenanceActive(getEngine().getWorld().identity());
         if (!maintenanceActive) {
             return false;
         }
 
         PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
-        boolean pregeneratorTargetsWorld = pregeneratorJob != null && pregeneratorJob.targetsWorldName(getEngine().getWorld().name());
+        boolean pregeneratorTargetsWorld = pregeneratorJob != null && pregeneratorJob.targetsWorldIdentity(getEngine().getWorld().identity());
         return shouldDisableContextCacheForMaintenance(maintenanceActive, pregeneratorTargetsWorld);
     }
 }

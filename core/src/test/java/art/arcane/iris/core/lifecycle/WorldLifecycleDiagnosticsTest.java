@@ -1,5 +1,6 @@
 package art.arcane.iris.core.lifecycle;
 
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.junit.Test;
 
@@ -15,7 +16,7 @@ public class WorldLifecycleDiagnosticsTest {
     @Test
     public void studioCreateSelectionFailurePrintsFullStacktrace() {
         WorldLifecycleService service = new WorldLifecycleService(CapabilitySnapshot.forTesting(ServerFamily.PAPER, false, false, false));
-        WorldLifecycleRequest request = new WorldLifecycleRequest("studio", World.Environment.NORMAL, null, null, null, true, false, 1337L, true, false, WorldLifecycleCaller.STUDIO);
+        WorldLifecycleRequest request = new WorldLifecycleRequest("studio", NamespacedKey.minecraft("studio"), World.Environment.NORMAL, null, null, null, true, false, 1337L, true, false, WorldLifecycleCaller.STUDIO);
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         PrintStream originalErr = System.err;

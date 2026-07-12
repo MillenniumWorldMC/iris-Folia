@@ -1,8 +1,10 @@
 package art.arcane.iris.core.service;
 
 import art.arcane.iris.core.IrisSettings;
+import art.arcane.iris.core.IrisWorldStorage;
 import art.arcane.iris.core.pregenerator.cache.PregenCache;
 import art.arcane.iris.core.tools.IrisToolbelt;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.iris.util.common.plugin.IrisService;
 import art.arcane.volmlib.util.scheduling.Looper;
@@ -64,7 +66,7 @@ public class GlobalCacheSVC implements IrisService {
 
     @Nullable
     public PregenCache get(@NonNull World world) {
-        return globalCache.get(world.getName());
+        return globalCache.get(WorldIdentity.serialize(world));
     }
 
     @Nullable
@@ -80,7 +82,7 @@ public class GlobalCacheSVC implements IrisService {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void on(WorldUnloadEvent event) {
-        var cache = globalCache.remove(event.getWorld().getName());
+        PregenCache cache = globalCache.remove(WorldIdentity.serialize(event.getWorld()));
         if (cache == null) return;
         cache.write();
     }
@@ -94,7 +96,8 @@ public class GlobalCacheSVC implements IrisService {
 
     private void createCache(World world) {
         if (!IrisToolbelt.isIrisWorld(world)) return;
-        globalCache.computeIfAbsent(world.getName(), GlobalCacheSVC::createDefault);
+        String worldIdentity = WorldIdentity.serialize(world);
+        globalCache.computeIfAbsent(worldIdentity, GlobalCacheSVC::createDefault);
     }
 
     private boolean isDisabled() {
@@ -116,25 +119,26 @@ public class GlobalCacheSVC implements IrisService {
 
 
     @NonNull
-    public static PregenCache createCache(@NonNull String worldName, @NonNull Function<String, PregenCache> provider) {
+    public static PregenCache createCache(@NonNull String worldIdentity, @NonNull Function<String, PregenCache> provider) {
         PregenCache[] holder = new PregenCache[1];
-        REFERENCE_CACHE.compute(worldName, (name, ref) -> {
+        REFERENCE_CACHE.compute(worldIdentity, (identity, ref) -> {
             if (ref != null) {
                 if ((holder[0] = ref.get()) != null)
                     return ref;
             }
-            return new WeakReference<>(holder[0] = provider.apply(worldName));
+            return new WeakReference<>(holder[0] = provider.apply(worldIdentity));
         });
         return holder[0];
     }
 
     @NonNull
-    public static PregenCache createDefault(@NonNull String worldName) {
-        return createCache(worldName, GlobalCacheSVC::createDefault0);
+    public static PregenCache createDefault(@NonNull String worldIdentity) {
+        return createCache(worldIdentity, GlobalCacheSVC::createDefault0);
     }
 
-    private static PregenCache createDefault0(String worldName) {
+    private static PregenCache createDefault0(String worldIdentity) {
         if (disabled) return PregenCache.EMPTY;
-        return PregenCache.create(new File(Bukkit.getWorldContainer(), String.join(File.separator, worldName, "iris", "pregen"))).sync();
+        File dimensionRoot = IrisWorldStorage.dimensionRoot(WorldIdentity.parse(worldIdentity));
+        return PregenCache.create(new File(dimensionRoot, "iris/pregen")).sync();
     }
 }

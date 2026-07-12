@@ -84,6 +84,7 @@ public final class ModdedWorldEngines {
         long seed = seedOverride == Long.MIN_VALUE ? level.getSeed() : seedOverride;
         File worldFolder = DimensionType.getStorageFolder(level.dimension(), level.getServer().getWorldPath(LevelResource.ROOT)).toFile();
         IrisWorld world = IrisWorld.builder()
+                .platformIdentity(level.dimension().identifier().toString())
                 .name(level.dimension().identifier().toString().replace(':', '_'))
                 .seed(seed)
                 .worldFolder(worldFolder)

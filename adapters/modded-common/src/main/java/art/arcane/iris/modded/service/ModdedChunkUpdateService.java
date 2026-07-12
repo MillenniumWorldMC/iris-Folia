@@ -127,7 +127,7 @@ public final class ModdedChunkUpdateService implements ModdedTickableService {
 
     private boolean isPregenActive(Engine engine) {
         PregeneratorJob job = PregeneratorJob.getInstance();
-        return job != null && job.targetsWorldName(engine.getWorld().name());
+        return job != null && job.targetsWorldIdentity(engine.getWorld().identity());
     }
 
     private void updateNearPlayers(Engine engine, ServerLevel level) {

@@ -36,6 +36,8 @@ import art.arcane.volmlib.util.mantle.runtime.Mantle;
 import art.arcane.volmlib.util.math.Position2;
 import art.arcane.volmlib.util.scheduling.ChronoLatch;
 import art.arcane.iris.util.common.scheduling.J;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
+import org.bukkit.generator.WorldInfo;
 
 import java.awt.Color;
 import java.util.concurrent.ExecutorService;
@@ -216,13 +218,20 @@ public class PregeneratorJob implements PregenListener, PregenRenderSource {
         return engine.getWorld().name();
     }
 
-    public boolean targetsWorldName(String worldName) {
-        if (worldName == null || engine == null || engine.getWorld() == null) {
+    public boolean targetsWorld(WorldInfo world) {
+        if (world == null || engine == null || engine.getWorld() == null) {
             return false;
         }
 
-        String targetName = engine.getWorld().name();
-        return targetName != null && targetName.equalsIgnoreCase(worldName);
+        return WorldIdentity.key(world).equals(engine.getWorld().key());
+    }
+
+    public boolean targetsWorldIdentity(String worldIdentity) {
+        if (worldIdentity == null || engine == null || engine.getWorld() == null) {
+            return false;
+        }
+
+        return worldIdentity.equals(engine.getWorld().identity());
     }
 
     private static Color parseColor(String c) {

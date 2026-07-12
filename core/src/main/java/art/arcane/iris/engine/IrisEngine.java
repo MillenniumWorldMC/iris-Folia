@@ -650,7 +650,7 @@ public class IrisEngine implements Engine {
 
     private boolean isPregeneratorActiveForThisWorld() {
         PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
-        return pregeneratorJob != null && pregeneratorJob.targetsWorldName(getWorld().name());
+        return pregeneratorJob != null && pregeneratorJob.targetsWorldIdentity(getWorld().identity());
     }
 
     private void savePrefetchOnce() {

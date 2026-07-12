@@ -50,6 +50,7 @@ import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.PlatformBiome;
 import art.arcane.iris.util.common.format.C;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.math.M;
 import art.arcane.iris.util.project.hunk.Hunk;
@@ -77,6 +78,7 @@ import java.io.File;
 import java.io.PrintWriter;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -136,8 +138,9 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onWorldInit(WorldInitEvent event) {
-        if (!world.name().equals(event.getWorld().getName())) return;
+        if (!Objects.equals(world.key(), WorldIdentity.key(event.getWorld()))) return;
         BukkitPlatform.volmitPlugin().unregisterListener(this);
+        world.bind(event.getWorld());
         world.setRawWorldSeed(event.getWorld().getSeed());
         if (initialize(event.getWorld())) return;
 
@@ -165,7 +168,7 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
         }
         spawnChunks.complete(INMS.get().getSpawnChunkCount(world));
         BukkitPlatform.volmitPlugin().unregisterListener(this);
-        IrisWorlds.get().put(world.getName(), dimensionKey);
+        IrisWorlds.get().put(WorldIdentity.serialize(world), dimensionKey);
         return true;
     }
 
@@ -524,7 +527,7 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
 
         World realWorld = this.world.realWorld();
         PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
-        return realWorld != null && pregeneratorJob != null && pregeneratorJob.targetsWorldName(realWorld.getName());
+        return realWorld != null && pregeneratorJob != null && pregeneratorJob.targetsWorld(realWorld);
     }
 
     @Override

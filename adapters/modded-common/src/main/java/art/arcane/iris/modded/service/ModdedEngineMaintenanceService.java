@@ -169,7 +169,7 @@ public final class ModdedEngineMaintenanceService implements ModdedTickableServi
     }
 
     private boolean shouldSkipForMaintenance(Engine engine) {
-        if (engine.getWorld() == null || !WorldMaintenance.isWorldMaintenanceActive(engine.getWorld().name())) {
+        if (engine.getWorld() == null || !WorldMaintenance.isWorldMaintenanceActive(engine.getWorld().identity())) {
             return false;
         }
         return !pregenTargets(engine);
@@ -180,7 +180,7 @@ public final class ModdedEngineMaintenanceService implements ModdedTickableServi
             return false;
         }
         PregeneratorJob job = PregeneratorJob.getInstance();
-        return job != null && job.targetsWorldName(engine.getWorld().name());
+        return job != null && job.targetsWorldIdentity(engine.getWorld().identity());
     }
 
     private int activeTectonicLimit(Engine engine, int share) {

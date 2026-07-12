@@ -22,6 +22,7 @@ import com.google.gson.JsonSyntaxException;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.IrisServices;
 import art.arcane.iris.core.IrisSettings;
+import art.arcane.iris.core.IrisWorldStorage;
 import art.arcane.iris.core.ServerConfigurator;
 import art.arcane.iris.core.lifecycle.WorldLifecycleService;
 import art.arcane.iris.core.loader.IrisData;
@@ -86,7 +87,7 @@ public class StudioSVC implements IrisService {
     public void onDisable() {
         IrisLogging.debug("Studio Mode Active: Closing Projects");
         boolean stopping = IrisToolbelt.isServerStopping();
-        LinkedHashSet<String> worldNamesToDelete = new LinkedHashSet<>(TransientWorldCleanupSupport.collectTransientStudioWorldNames(Bukkit.getWorldContainer()));
+        LinkedHashSet<String> worldNamesToDelete = new LinkedHashSet<>(TransientWorldCleanupSupport.collectTransientStudioWorldNames(IrisWorldStorage.levelRoot()));
 
         if (activeProject != null) {
             PlatformChunkGenerator activeProvider = activeProject.getActiveProvider();
@@ -425,9 +426,8 @@ public class StudioSVC implements IrisService {
             return;
         }
 
-        File container = Bukkit.getWorldContainer();
         for (String familyWorldName : TransientWorldCleanupSupport.worldFamilyNames(worldName)) {
-            File folder = new File(container, familyWorldName);
+            File folder = IrisWorldStorage.dimensionRoot(familyWorldName);
             if (!folder.exists()) {
                 continue;
             }

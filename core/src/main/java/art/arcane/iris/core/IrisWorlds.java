@@ -1,16 +1,20 @@
 package art.arcane.iris.core;
 
+import art.arcane.iris.core.loader.IrisData;
+import art.arcane.iris.core.service.StudioSVC;
+import art.arcane.iris.engine.data.cache.AtomicCache;
+import art.arcane.iris.engine.object.IrisDimension;
+import art.arcane.iris.spi.IrisLogging;
+import art.arcane.iris.spi.IrisPlatforms;
+import art.arcane.iris.spi.IrisServices;
+import art.arcane.iris.util.common.misc.ServerProperties;
+import art.arcane.iris.util.common.plugin.VolmitSender;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
+import art.arcane.volmlib.util.collection.KMap;
+import art.arcane.volmlib.util.io.IO;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-import art.arcane.iris.spi.IrisLogging;
-import art.arcane.iris.spi.IrisPlatforms;
-import art.arcane.iris.core.loader.IrisData;
-import art.arcane.iris.engine.data.cache.AtomicCache;
-import art.arcane.iris.engine.object.IrisDimension;
-import art.arcane.volmlib.util.collection.KMap;
-import art.arcane.volmlib.util.io.IO;
-import art.arcane.iris.util.common.misc.ServerProperties;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -30,8 +34,15 @@ public class IrisWorlds {
     private volatile boolean dirty = false;
 
     private IrisWorlds(KMap<String, String> worlds) {
-        this.worlds = worlds;
-        readBukkitWorlds().forEach(this::put0);
+        this.worlds = new KMap<>();
+        worlds.forEach((identity, type) -> {
+            String normalizedIdentity = migrateLoadedIdentity(identity);
+            this.worlds.put(normalizedIdentity, type);
+            if (!normalizedIdentity.equals(identity)) {
+                dirty = true;
+            }
+        });
+        readBukkitWorlds().forEach((name, type) -> put0(IrisWorldStorage.keyFromLegacyName(name).toString(), type));
         save();
     }
 
@@ -56,20 +67,23 @@ public class IrisWorlds {
         });
     }
 
-    public void put(String name, String type) {
-        put0(name, type);
+    public void put(String identity, String type) {
+        put0(identity, type);
         save();
     }
 
-    private void put0(String name, String type) {
-        String old = worlds.put(name, type);
+    private void put0(String identity, String type) {
+        String canonicalIdentity = WorldIdentity.parse(identity).toString();
+        String old = worlds.put(canonicalIdentity, type);
         if (!type.equals(old))
             dirty = true;
     }
 
     public KMap<String, String> getWorlds() {
         clean();
-        return readBukkitWorlds().put(worlds);
+        KMap<String, String> result = new KMap<>();
+        readBukkitWorlds().forEach((name, type) -> result.put(IrisWorldStorage.keyFromLegacyName(name).toString(), type));
+        return result.put(worlds);
     }
 
     public Stream<IrisData> getPacks() {
@@ -87,7 +101,15 @@ public class IrisWorlds {
     }
 
     public void clean() {
-        dirty = worlds.entrySet().removeIf(entry -> !new File(Bukkit.getWorldContainer(), entry.getKey() + "/iris/pack/dimensions/" + entry.getValue() + ".json").exists());
+        boolean removed = worlds.entrySet().removeIf(entry -> {
+            try {
+                File packRoot = IrisWorldStorage.packRoot(WorldIdentity.parse(entry.getKey()));
+                return !new File(packRoot, "dimensions/" + entry.getValue() + ".json").exists();
+            } catch (IllegalArgumentException e) {
+                return true;
+            }
+        });
+        dirty = dirty || removed;
     }
 
     public synchronized void save() {
@@ -114,13 +136,13 @@ public class IrisWorlds {
     }
 
     public static KMap<String, String> readBukkitWorlds() {
-        var bukkit = YamlConfiguration.loadConfiguration(ServerProperties.BUKKIT_YML);
-        var worlds = bukkit.getConfigurationSection("worlds");
+        YamlConfiguration bukkit = YamlConfiguration.loadConfiguration(ServerProperties.BUKKIT_YML);
+        ConfigurationSection worlds = bukkit.getConfigurationSection("worlds");
         if (worlds == null) return new KMap<>();
 
-        var result = new KMap<String, String>();
+        KMap<String, String> result = new KMap<>();
         for (String world : worlds.getKeys(false)) {
-            var gen = worlds.getString(world + ".generator");
+            String gen = worlds.getString(world + ".generator");
             if (gen == null) continue;
 
             String loadKey;
@@ -136,20 +158,28 @@ public class IrisWorlds {
         return result;
     }
 
-    private static art.arcane.iris.engine.object.IrisDimension loadDimension(String worldName, String id) {
-        java.io.File pack = new java.io.File(org.bukkit.Bukkit.getWorldContainer(), String.join(java.io.File.separator, worldName, "iris", "pack"));
-        art.arcane.iris.engine.object.IrisDimension dimension = pack.isDirectory() ? art.arcane.iris.core.loader.IrisData.get(pack).getDimensionLoader().load(id) : null;
+    private static IrisDimension loadDimension(String worldIdentity, String id) {
+        File pack = IrisWorldStorage.packRoot(WorldIdentity.parse(worldIdentity));
+        IrisDimension dimension = pack.isDirectory() ? IrisData.get(pack).getDimensionLoader().load(id) : null;
         if (dimension == null) {
-            dimension = art.arcane.iris.core.loader.IrisData.loadAnyDimension(id, null);
+            dimension = IrisData.loadAnyDimension(id, null);
         }
         if (dimension == null) {
             IrisLogging.warn("Unable to find dimension type " + id + " Looking for online packs...");
-            art.arcane.iris.spi.IrisServices.get(art.arcane.iris.core.service.StudioSVC.class).downloadSearch(new art.arcane.iris.util.common.plugin.VolmitSender(org.bukkit.Bukkit.getConsoleSender()), id, false);
-            dimension = art.arcane.iris.core.loader.IrisData.loadAnyDimension(id, null);
+            IrisServices.get(StudioSVC.class).downloadSearch(new VolmitSender(Bukkit.getConsoleSender()), id, false);
+            dimension = IrisData.loadAnyDimension(id, null);
             if (dimension != null) {
                 IrisLogging.info("Resolved missing dimension, proceeding.");
             }
         }
         return dimension;
+    }
+
+    private static String migrateLoadedIdentity(String identity) {
+        try {
+            return WorldIdentity.parse(identity).toString();
+        } catch (IllegalArgumentException e) {
+            return IrisWorldStorage.keyFromLegacyName(identity).toString();
+        }
     }
 }

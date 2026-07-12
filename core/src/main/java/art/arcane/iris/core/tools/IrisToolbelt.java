@@ -37,10 +37,12 @@ import art.arcane.iris.core.service.GlobalCacheSVC;
 import art.arcane.iris.core.service.StudioSVC;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.IrisDimension;
+import art.arcane.iris.engine.object.IrisWorld;
 import art.arcane.iris.engine.platform.BukkitChunkGenerator;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.iris.util.common.plugin.VolmitSender;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import io.papermc.lib.PaperLib;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -222,14 +224,14 @@ public class IrisToolbelt {
             return ((PlatformChunkGenerator) world.getGenerator());
         }
 
-        StudioSVC studioService = IrisServices.get(StudioSVC.class);
+        StudioSVC studioService = IrisServices.getOrNull(StudioSVC.class);
         if (studioService != null && studioService.isProjectOpen()) {
             IrisProject activeProject = studioService.getActiveProject();
             if (activeProject != null) {
                 PlatformChunkGenerator activeProvider = activeProject.getActiveProvider();
                 if (activeProvider != null) {
                     World activeWorld = activeProvider.getTarget().getWorld().realWorld();
-                    if (activeWorld != null && activeWorld.getName().equals(world.getName())) {
+                    if (activeWorld != null && WorldIdentity.key(activeWorld).equals(WorldIdentity.key(world))) {
                         if (activeProvider instanceof BukkitChunkGenerator bukkit) {
                             bukkit.touch(world);
                         }
@@ -267,14 +269,18 @@ public class IrisToolbelt {
             IrisRuntimeSchedulerMode runtimeSchedulerMode = IrisRuntimeSchedulerMode.resolve(IrisSettings.get().getPregen());
             useCachedWrapper = runtimeSchedulerMode != IrisRuntimeSchedulerMode.FOLIA;
         }
-        return new PregeneratorJob(task, useCachedWrapper ? new CachedPregenMethod(method, resolvePregenCache(engine.getWorld().name()), task) : method, engine);
+        return new PregeneratorJob(task, useCachedWrapper ? new CachedPregenMethod(method, resolvePregenCache(engine.getWorld()), task) : method, engine);
     }
 
-    private static PregenCache resolvePregenCache(String worldName) {
-        PregenCache cache = IrisServices.get(GlobalCacheSVC.class).get(worldName);
+    private static PregenCache resolvePregenCache(IrisWorld world) {
+        String worldIdentity = world.key() == null ? null : world.key().toString();
+        if (worldIdentity == null) {
+            throw new IllegalStateException("Pregeneration requires a namespaced world identity.");
+        }
+        PregenCache cache = IrisServices.get(GlobalCacheSVC.class).get(worldIdentity);
         if (cache == null) {
-            IrisLogging.debug("Could not find existing cache for " + worldName + " creating fallback");
-            cache = GlobalCacheSVC.createDefault(worldName);
+            IrisLogging.debug("Could not find existing cache for " + worldIdentity + " creating fallback");
+            cache = GlobalCacheSVC.createDefault(worldIdentity);
         }
         return cache;
     }
@@ -351,7 +357,7 @@ public class IrisToolbelt {
         }
 
         for (World i : Bukkit.getWorlds()) {
-            if (!i.getName().equals(world.getName())) {
+            if (!WorldIdentity.key(i).equals(WorldIdentity.key(world))) {
                 for (Player j : new ArrayList<>(world.getPlayers())) {
                     new VolmitSender(j, BukkitPlatform.volmitPlugin().getTag()).sendMessage("You have been evacuated from this world.");
                     Location target = i.getSpawnLocation();
@@ -381,7 +387,7 @@ public class IrisToolbelt {
         }
 
         for (World i : Bukkit.getWorlds()) {
-            if (!i.getName().equals(world.getName())) {
+            if (!WorldIdentity.key(i).equals(WorldIdentity.key(world))) {
                 for (Player j : new ArrayList<>(world.getPlayers())) {
                     new VolmitSender(j, BukkitPlatform.volmitPlugin().getTag()).sendMessage("You have been evacuated from this world. " + m);
                     Location target = i.getSpawnLocation();
@@ -460,7 +466,7 @@ public class IrisToolbelt {
             return;
         }
 
-        beginWorldMaintenance(world.getName(), reason, bypassMantleStages);
+        beginWorldMaintenance(WorldIdentity.serialize(world), reason, bypassMantleStages);
     }
 
     public static void beginWorldMaintenance(String worldName, String reason) {
@@ -476,7 +482,7 @@ public class IrisToolbelt {
             return;
         }
 
-        endWorldMaintenance(world.getName(), reason);
+        endWorldMaintenance(WorldIdentity.serialize(world), reason);
     }
 
     public static void endWorldMaintenance(String worldName, String reason) {
@@ -484,7 +490,7 @@ public class IrisToolbelt {
     }
 
     public static boolean isWorldMaintenanceActive(World world) {
-        return world != null && isWorldMaintenanceActive(world.getName());
+        return world != null && isWorldMaintenanceActive(WorldIdentity.serialize(world));
     }
 
     public static boolean isWorldMaintenanceActive(String worldName) {
@@ -492,7 +498,7 @@ public class IrisToolbelt {
     }
 
     public static boolean isWorldMaintenanceBypassingMantleStages(World world) {
-        return world != null && isWorldMaintenanceBypassingMantleStages(world.getName());
+        return world != null && isWorldMaintenanceBypassingMantleStages(WorldIdentity.serialize(world));
     }
 
     public static boolean isWorldMaintenanceBypassingMantleStages(String worldName) {

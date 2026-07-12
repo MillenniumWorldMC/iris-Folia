@@ -155,6 +155,7 @@ public final class GenerationProbe {
             }
 
             IrisWorld world = IrisWorld.builder()
+                    .platformIdentity("iris:probe")
                     .name("probe")
                     .seed(SEED)
                     .worldFolder(new File(workRoot, "world"))

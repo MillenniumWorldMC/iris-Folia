@@ -139,7 +139,7 @@ public final class ModdedStudioHotloadService implements ModdedTickableService {
             return true;
         }
         PregeneratorJob job = PregeneratorJob.getInstance();
-        return job != null && job.targetsWorldName(engine.getWorld().name());
+        return job != null && job.targetsWorldIdentity(engine.getWorld().identity());
     }
 
     private void poll(String dimensionId, Watch watch, IrisModdedChunkGenerator generator, Engine engine) {

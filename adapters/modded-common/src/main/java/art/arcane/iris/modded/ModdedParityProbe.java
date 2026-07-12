@@ -133,6 +133,7 @@ public final class ModdedParityProbe {
         }
 
         IrisWorld world = IrisWorld.builder()
+                .platformIdentity("iris:parity")
                 .name("parity")
                 .seed(SEED)
                 .worldFolder(new File(workRoot, "world"))

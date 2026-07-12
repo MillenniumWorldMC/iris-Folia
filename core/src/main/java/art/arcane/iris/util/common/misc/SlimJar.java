@@ -10,12 +10,13 @@ import io.github.slimjar.logging.ProcessLogger;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Logger;
 
 public class SlimJar {
     private static final boolean DEBUG = Boolean.getBoolean("iris.debug-slimjar");
-    private static final boolean DISABLE_REMAPPER = Boolean.getBoolean("iris.disable-remapper");
 
     private static final ReentrantLock lock = new ReentrantLock();
     private static final AtomicBoolean loaded = new AtomicBoolean();
@@ -26,16 +27,15 @@ public class SlimJar {
 
         try {
             if (loaded.getAndSet(true)) return;
-            final VolmitPlugin plugin = BukkitPlatform.volmitPlugin();
-            final var downloadPath = plugin.getDataFolder("cache", "libraries").toPath();
-            final var logger = plugin.getLogger();
+            VolmitPlugin plugin = BukkitPlatform.volmitPlugin();
+            Path downloadPath = plugin.getDataFolder("cache", "libraries").toPath();
+            Logger logger = plugin.getLogger();
 
             logger.info("Loading libraries...");
             try {
                 new SpigotApplicationBuilder(plugin)
                         .downloadDirectoryPath(downloadPath)
                         .debug(DEBUG)
-                        .remap(!DISABLE_REMAPPER)
                         .build();
             } catch (Throwable e) {
                 IrisLogging.warn("Failed to inject the library loader, falling back to application builder");

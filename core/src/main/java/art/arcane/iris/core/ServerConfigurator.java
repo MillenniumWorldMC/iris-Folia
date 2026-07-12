@@ -36,6 +36,7 @@ import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
 import lombok.NonNull;
 import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -46,6 +47,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -58,8 +60,6 @@ import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.stream.Stream;
 
 public class ServerConfigurator {
-    private static volatile boolean deferredInstallPending = false;
-
     public static void configure() {
         IrisSettings.IrisSettingsAutoconfiguration s = IrisSettings.get().getAutoConfiguration();
         if (s.isConfigureSpigotTimeoutTime()) {
@@ -70,24 +70,7 @@ public class ServerConfigurator {
             J.attempt(ServerConfigurator::increasePaperWatchdog);
         }
 
-        if (shouldDeferInstallUntilWorldsReady()) {
-            deferredInstallPending = true;
-            return;
-        }
-
-        deferredInstallPending = false;
         installDataPacks(true);
-    }
-
-    public static void configureIfDeferred() {
-        if (!deferredInstallPending) {
-            return;
-        }
-
-        configure();
-        if (deferredInstallPending) {
-            J.a(ServerConfigurator::configureIfDeferred, 20);
-        }
     }
 
     private static void increaseKeepAliveSpigot() throws IOException, InvalidConfigurationException {
@@ -122,20 +105,7 @@ public class ServerConfigurator {
     }
 
     public static KList<File> getDatapacksFolder() {
-        if (!IrisSettings.get().getGeneral().forceMainWorld.isEmpty()) {
-            return new KList<File>().qadd(new File(Bukkit.getWorldContainer(), IrisSettings.get().getGeneral().forceMainWorld + "/datapacks"));
-        }
-        KList<File> worlds = new KList<>();
-        Bukkit.getServer().getWorlds().forEach(w -> {
-            File folder = resolveDatapacksFolder(w.getWorldFolder());
-            if (!worlds.contains(folder)) {
-                worlds.add(folder);
-            }
-        });
-        if (worlds.isEmpty()) {
-            worlds.add(new File(Bukkit.getWorldContainer(), ServerProperties.LEVEL_NAME + "/datapacks"));
-        }
-        return worlds;
+        return new KList<File>().qadd(new File(IrisWorldStorage.levelRoot(), "datapacks"));
     }
 
     public static boolean installDataPacks(boolean fullInstall) {
@@ -250,15 +220,6 @@ public class ServerConfigurator {
         }
     }
 
-    private static boolean shouldDeferInstallUntilWorldsReady() {
-        String forcedMainWorld = IrisSettings.get().getGeneral().forceMainWorld;
-        if (forcedMainWorld != null && !forcedMainWorld.isBlank()) {
-            return false;
-        }
-
-        return Bukkit.getServer().getWorlds().isEmpty();
-    }
-
     public static File resolveDatapacksFolder(File worldFolder) {
         File rootFolder = resolveWorldRootFolder(worldFolder);
         return new File(rootFolder, "datapacks");
@@ -266,22 +227,9 @@ public class ServerConfigurator {
 
     static File resolveWorldRootFolder(File worldFolder) {
         if (worldFolder == null) {
-            return new File(Bukkit.getWorldContainer(), ServerProperties.LEVEL_NAME);
+            return IrisWorldStorage.levelRoot();
         }
-
-        File current = worldFolder.getAbsoluteFile();
-        while (current != null) {
-            if ("dimensions".equals(current.getName())) {
-                File parent = current.getParentFile();
-                if (parent != null) {
-                    return parent;
-                }
-                break;
-            }
-            current = current.getParentFile();
-        }
-
-        return worldFolder.getAbsoluteFile();
+        return IrisWorldStorage.levelRoot(worldFolder);
     }
 
     private static boolean verifyDataPacksPost(boolean allowRestarting) {
@@ -401,13 +349,19 @@ public class ServerConfigurator {
 
     @Nullable
     public static String getWorld(@NonNull IrisData data) {
-        String worldContainer = Bukkit.getWorldContainer().getAbsolutePath();
-        if (!worldContainer.endsWith(File.separator)) worldContainer += File.separator;
+        Path packPath = data.getDataFolder().toPath().toAbsolutePath().normalize();
+        Path irisPath = packPath.getParent();
+        if (irisPath == null || !"pack".equals(packPath.getFileName().toString()) || !"iris".equals(irisPath.getFileName().toString())) {
+            return null;
+        }
 
-        String path = data.getDataFolder().getAbsolutePath();
-        if (!path.startsWith(worldContainer)) return null;
-        int l = path.endsWith(File.separator) ? 11 : 10;
-        return path.substring(worldContainer.length(), path.length() - l);
+        Path dimensionPath = irisPath.getParent();
+        if (dimensionPath == null) {
+            return null;
+        }
+        File dimensionRoot = dimensionPath.toFile();
+        NamespacedKey key = IrisWorldStorage.keyFromDimensionRoot(IrisWorldStorage.levelRoot(), dimensionRoot).orElse(null);
+        return key == null ? null : key.toString();
     }
 
     public static class DimensionHeight {

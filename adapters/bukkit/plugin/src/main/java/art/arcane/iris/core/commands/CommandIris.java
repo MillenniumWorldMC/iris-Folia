@@ -21,6 +21,7 @@ package art.arcane.iris.core.commands;
 import art.arcane.iris.Iris;
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.core.IrisSettings;
+import art.arcane.iris.core.IrisWorldStorage;
 import art.arcane.iris.core.IrisWorlds;
 import art.arcane.iris.core.ServerConfigurator;
 import art.arcane.iris.core.lifecycle.WorldLifecycleService;
@@ -30,6 +31,7 @@ import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.object.IrisDimension;
 import art.arcane.volmlib.util.collection.KList;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import art.arcane.volmlib.util.director.DirectorParameterHandler;
 import art.arcane.iris.util.common.director.DirectorExecutor;
 import art.arcane.volmlib.util.director.DirectorOrigin;
@@ -44,6 +46,7 @@ import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -55,6 +58,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -108,7 +112,7 @@ public class CommandIris implements DirectorExecutor {
             return;
         }
 
-        if (new File(Bukkit.getWorldContainer(), name).exists()) {
+        if (IrisWorldStorage.dimensionRoot(name).exists()) {
             sender().sendMessage(C.RED + "That folder already exists!");
             return;
         }
@@ -161,29 +165,44 @@ public class CommandIris implements DirectorExecutor {
 
     private boolean updateMainWorld(String newName) {
         try {
-            File worlds = Bukkit.getWorldContainer();
-            var data = ServerProperties.DATA;
-            try (var in = new FileInputStream(ServerProperties.SERVER_PROPERTIES)) {
+            File oldLevelRoot = IrisWorldStorage.levelRoot();
+            File worldContainer = oldLevelRoot.getParentFile();
+            Properties data = ServerProperties.DATA;
+            try (FileInputStream in = new FileInputStream(ServerProperties.SERVER_PROPERTIES)) {
                 data.load(in);
             }
 
-            File oldWorldFolder = new File(worlds, ServerProperties.LEVEL_NAME);
-            File newWorldFolder = new File(worlds, newName);
-            if (!newWorldFolder.exists() && !newWorldFolder.mkdirs()) {
-                Iris.warn("Could not create target main world folder: " + newWorldFolder.getAbsolutePath());
+            File sourceDimensionRoot = IrisWorldStorage.dimensionRoot(IrisWorldStorage.keyFromLegacyName(newName));
+            if (!sourceDimensionRoot.isDirectory()) {
+                throw new IllegalStateException("Source dimension folder does not exist: " + sourceDimensionRoot.getAbsolutePath());
             }
 
-            for (String sub : List.of("datapacks", "playerdata", "advancements", "stats")) {
-                File source = new File(oldWorldFolder, sub);
+            File newLevelRoot = new File(worldContainer, newName);
+            if (!newLevelRoot.exists() && !newLevelRoot.mkdirs()) {
+                throw new IllegalStateException("Could not create target level folder: " + newLevelRoot.getAbsolutePath());
+            }
+
+            for (String sub : List.of("data", "datapacks", "players")) {
+                File source = new File(oldLevelRoot, sub);
                 if (!source.exists()) {
                     continue;
                 }
 
-                IO.copyDirectory(source.toPath(), new File(newWorldFolder, sub).toPath());
+                IO.copyDirectory(source.toPath(), new File(newLevelRoot, sub).toPath());
             }
 
+            File targetDimensionRoot = IrisWorldStorage.dimensionRoot(newLevelRoot, NamespacedKey.minecraft("overworld"));
+            IO.copyDirectory(sourceDimensionRoot.toPath(), targetDimensionRoot.toPath());
+
+            World sourceWorld = WorldIdentity.resolve(IrisWorldStorage.keyFromLegacyName(newName)).orElse(null);
+            Long stagedSeed = IrisWorlds.readBukkitWorldSeed(newName);
+            if (sourceWorld == null && stagedSeed == null) {
+                throw new IllegalStateException("Cannot determine the promoted world's seed.");
+            }
+            long promotedSeed = sourceWorld == null ? stagedSeed : sourceWorld.getSeed();
             data.setProperty("level-name", newName);
-            try (var out = new FileOutputStream(ServerProperties.SERVER_PROPERTIES)) {
+            data.setProperty("level-seed", Long.toString(promotedSeed));
+            try (FileOutputStream out = new FileOutputStream(ServerProperties.SERVER_PROPERTIES)) {
                 data.store(out, null);
             }
             return true;
@@ -198,7 +217,7 @@ public class CommandIris implements DirectorExecutor {
         sender().sendMessage(C.YELLOW + "Runtime world creation is disabled on Folia.");
         sender().sendMessage(C.YELLOW + "Preparing world files and bukkit.yml for next startup...");
 
-        File worldFolder = new File(Bukkit.getWorldContainer(), name);
+        File worldFolder = IrisWorldStorage.dimensionRoot(name);
         IrisDimension installed = Iris.service(StudioSVC.class).installIntoWorld(sender(), dimension, worldFolder);
         if (installed == null) {
             sender().sendMessage(C.RED + "Failed to stage world files for dimension \"" + dimension.getLoadKey() + "\".");
@@ -497,7 +516,6 @@ public class CommandIris implements DirectorExecutor {
             @Param(description = "The name of the world to load")
             String world
     ) {
-        World worldloaded = Bukkit.getWorld(world);
         worldNameToCheck = world;
         boolean worldExists = doesWorldExist(worldNameToCheck);
         WorldEngine = world;
@@ -507,8 +525,7 @@ public class CommandIris implements DirectorExecutor {
             return;
         }
 
-        String pathtodim = world + File.separator +"iris"+File.separator +"pack"+File.separator +"dimensions"+File.separator;
-        File directory = new File(Bukkit.getWorldContainer(), pathtodim);
+        File directory = new File(IrisWorldStorage.packRoot(IrisWorldStorage.keyFromLegacyName(world)), "dimensions");
 
         String dimension = null;
         if (directory.exists() && directory.isDirectory()) {
@@ -562,8 +579,7 @@ public class CommandIris implements DirectorExecutor {
     }
 
     boolean doesWorldExist(String worldName) {
-        File worldContainer = Bukkit.getWorldContainer();
-        File worldDirectory = new File(worldContainer, worldName);
+        File worldDirectory = IrisWorldStorage.dimensionRoot(worldName);
         return worldDirectory.exists() && worldDirectory.isDirectory();
     }
 

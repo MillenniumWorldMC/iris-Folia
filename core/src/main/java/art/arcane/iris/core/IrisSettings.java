@@ -254,7 +254,6 @@ public class IrisSettings {
         public boolean adjustVanillaHeight = false;
         public boolean autoIngestDatapacks = true;
         public boolean autoImportDatapackStructures = true;
-        public String forceMainWorld = "";
         public int spinh = -20;
         public int spins = 7;
         public int spinb = 8;

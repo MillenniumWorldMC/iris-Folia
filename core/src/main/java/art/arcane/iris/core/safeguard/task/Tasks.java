@@ -3,6 +3,7 @@ package art.arcane.iris.core.safeguard.task;
 import art.arcane.iris.BuildConstants;
 import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.core.IrisWorlds;
+import art.arcane.iris.core.IrisWorldStorage;
 import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.nms.v1X.NMSBinding1X;
 import art.arcane.iris.core.safeguard.Mode;
@@ -137,7 +138,7 @@ public final class Tasks {
     });
 
     private static final Task DISK_SPACE = Task.of("diskSpace", () -> {
-        double freeGiB = server().getWorldContainer().getFreeSpace() / (double) 0x4000_0000;
+        double freeGiB = IrisWorldStorage.levelRoot().getFreeSpace() / (double) 0x4000_0000;
         if (freeGiB > 3.0) {
             return withDiagnostics(Mode.STABLE);
         }

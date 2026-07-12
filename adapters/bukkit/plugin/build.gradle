@@ -10,9 +10,9 @@ dependencies {
     compileOnly(volmLibCoordinate) {
         transitive = false
     }
-    compileOnly(libs.spigot)
+    compileOnly(libs.paper.api)
     testImplementation('junit:junit:4.13.2')
-    testImplementation(libs.spigot)
+    testImplementation(libs.paper.api)
     testImplementation(libs.bstats)
     testImplementation(libs.sentry)
     testImplementation(project(':core'))

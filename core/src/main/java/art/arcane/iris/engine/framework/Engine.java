@@ -691,11 +691,11 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
         if (world == null) {
             return false;
         }
-        String worldName = world.name();
-        if (!WorldMaintenance.isWorldMaintenanceActive(worldName)) {
+        String worldIdentity = world.identity();
+        if (!WorldMaintenance.isWorldMaintenanceActive(worldIdentity)) {
             return false;
         }
         PregeneratorJob pregeneratorJob = PregeneratorJob.getInstance();
-        return pregeneratorJob == null || !pregeneratorJob.targetsWorldName(worldName);
+        return pregeneratorJob == null || !pregeneratorJob.targetsWorldIdentity(worldIdentity);
     }
 }

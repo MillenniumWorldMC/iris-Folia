@@ -32,6 +32,7 @@ import art.arcane.iris.spi.IrisServices;
 import art.arcane.iris.spi.protocol.IrisProtocol;
 import art.arcane.iris.util.common.plugin.IrisService;
 import art.arcane.iris.util.common.scheduling.J;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -167,7 +168,7 @@ public class IrisProtocolService implements IrisService, PluginMessageListener, 
                     world.getSeed(), engine.getMinHeight(), engine.getMaxHeight(), true);
             return;
         }
-        protocol.sendDimensionStatus(sessionId, world.getName(), "", world.getSeed(), world.getMinHeight(), world.getMaxHeight(), false);
+        protocol.sendDimensionStatus(sessionId, WorldIdentity.serialize(world), "", world.getSeed(), world.getMinHeight(), world.getMaxHeight(), false);
     }
 
     private static Engine resolveEngine(String sessionId) {

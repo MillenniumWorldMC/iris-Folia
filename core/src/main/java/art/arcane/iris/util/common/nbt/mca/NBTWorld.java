@@ -138,8 +138,8 @@ public class NBTWorld {
         Map<Biome, Integer> biomeIds = new KMap<>();
 
         for (Biome biome : Registry.BIOME) {
-            NamespacedKey key = biome.getKeyOrNull();
-            if (key != null && !key.getKey().equals("custom")) {
+            NamespacedKey key = biome.getKey();
+            if (!key.getKey().equals("custom")) {
                 biomeIds.put(biome, INMS.get().getBiomeId(biome));
             }
         }

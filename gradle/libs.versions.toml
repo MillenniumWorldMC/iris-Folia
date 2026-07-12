@@ -14,6 +14,7 @@ grgit = "5.3.2" # https://github.com/ajoberstar/grgit
 # Core Libraries
 lombok = "1.18.44"
 spigot = "26.2-R0.1-SNAPSHOT" # https://hub.spigotmc.org/nexus/repository/snapshots/org/spigotmc/spigot-api/maven-metadata.xml
+paper-api = "26.2.build.60-beta"
 log4j = "2.19.0" # https://central.sonatype.com/artifact/org.apache.logging.log4j/log4j-api
 adventure-api = "5.1.1" # https://github.com/KyoriPowered/adventure
 adventure-platform = "4.4.1" # https://github.com/KyoriPowered/adventure-platform
@@ -71,6 +72,7 @@ fabricApi-keyMapping = "2.0.5+e2bdee789e"
 # Core Libraries
 lombok = { module = "org.projectlombok:lombok", version.ref ="lombok" }
 spigot = { module = "org.spigotmc:spigot-api", version.ref = "spigot" }
+paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper-api" }
 log4j-api = { module = "org.apache.logging.log4j:log4j-api", version.ref = "log4j" }
 log4j-core = { module = "org.apache.logging.log4j:log4j-core", version.ref = "log4j" }
 annotations = { module = "org.jetbrains:annotations", version.ref = "annotations" }

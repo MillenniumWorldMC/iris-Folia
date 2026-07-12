@@ -1,7 +1,7 @@
 package art.arcane.iris.core.lifecycle;
 
 import art.arcane.iris.core.nms.INMS;
-import org.bukkit.Bukkit;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 
@@ -21,7 +21,7 @@ final class BukkitPublicBackend implements WorldLifecycleBackend {
 
     @Override
     public CompletableFuture<World> create(WorldLifecycleRequest request) {
-        World existing = Bukkit.getWorld(request.worldName());
+        World existing = WorldIdentity.resolve(request.worldKey()).orElse(null);
         if (existing != null) {
             return CompletableFuture.completedFuture(existing);
         }

@@ -574,7 +574,7 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
             return false;
         }
 
-        return job.targetsWorldName(world.getName());
+        return job.targetsWorld(world);
     }
 
     private Position2[] getLoadedChunkPositionsSnapshot(World world) {

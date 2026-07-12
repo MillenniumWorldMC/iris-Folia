@@ -31,15 +31,19 @@ import art.arcane.iris.util.common.director.DirectorExecutor;
 import art.arcane.iris.util.common.director.specialhandlers.ObjectHandler;
 import art.arcane.iris.util.common.director.specialhandlers.StructureHandler;
 import art.arcane.iris.util.common.format.C;
+import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.director.DirectorOrigin;
 import art.arcane.volmlib.util.director.annotations.Director;
 import art.arcane.volmlib.util.director.annotations.Param;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
 import org.bukkit.entity.Player;
+import org.bukkit.generator.structure.Structure;
 import org.bukkit.util.StructureSearchResult;
 
 @Director(name = "find", origin = DirectorOrigin.PLAYER, description = "Iris Find commands", aliases = "goto")
@@ -99,10 +103,16 @@ public class CommandFind implements DirectorExecutor {
             @Param(description = "The structure to look for (e.g. minecraft:village_plains, minecraft:stronghold, minecraft_ancient_city)", customHandler = StructureHandler.class)
             String structure
     ) {
+        VolmitSender commandSender = sender();
+        if (commandSender == null) {
+            Iris.reportError("Structure lookup started without a command sender context.", new IllegalStateException("Missing command sender context"));
+            return;
+        }
+
         Engine e = engine();
 
         if (e == null) {
-            sender().sendMessage(C.GOLD + "Not in an Iris World!");
+            commandSender.sendMessage(C.GOLD + "Not in an Iris World!");
             return;
         }
 
@@ -113,43 +123,45 @@ public class CommandFind implements DirectorExecutor {
 
         Player target = player();
         if (target == null) {
-            sender().sendMessage(C.GOLD + "Run this in-game to teleport to a structure.");
+            commandSender.sendMessage(C.GOLD + "Run this in-game to teleport to a structure.");
             return;
         }
 
-        sender().sendMessage(C.GRAY + "Locating " + structure + "...");
+        commandSender.sendMessage(C.GRAY + "Locating " + structure + "...");
         J.s(() -> {
             try {
-                org.bukkit.generator.structure.Structure match = null;
-                for (org.bukkit.generator.structure.Structure s : Registry.STRUCTURE) {
-                    NamespacedKey key = s.getKey();
+                Registry<Structure> structureRegistry = RegistryAccess.registryAccess().getRegistry(RegistryKey.STRUCTURE);
+                Structure match = null;
+                for (Structure candidate : structureRegistry) {
+                    NamespacedKey key = structureRegistry.getKey(candidate);
                     if (key != null && key.toString().equalsIgnoreCase(structure)) {
-                        match = s;
+                        match = candidate;
                         break;
                     }
                 }
                 if (match == null) {
-                    sender().sendMessage(C.RED + "Unknown structure: " + structure);
+                    commandSender.sendMessage(C.RED + "Unknown structure: " + structure);
                     return;
                 }
                 if (!StructureReachability.isReachable(e, structure)) {
                     KList<String> miss = StructureReachability.missingBiomeKeys(e, structure);
-                    sender().sendMessage(C.YELLOW + structure + " cannot generate in this world (its required biomes are not produced by this pack"
+                    commandSender.sendMessage(C.YELLOW + structure + " cannot generate in this world (its required biomes are not produced by this pack"
                             + (miss.isEmpty() ? "" : ": needs " + String.join("/", miss)) + ").");
                     return;
                 }
                 StructureSearchResult result = target.getWorld().locateNearestStructure(target.getLocation(), match, 100, true);
                 if (result == null || result.getLocation() == null) {
-                    sender().sendMessage(C.YELLOW + "No " + structure + " found within range of you.");
+                    commandSender.sendMessage(C.YELLOW + "No " + structure + " found within range of you.");
                     return;
                 }
                 Location at = result.getLocation();
                 int y = target.getWorld().getHighestBlockYAt(at.getBlockX(), at.getBlockZ()) + 2;
                 Location dest = new Location(target.getWorld(), at.getBlockX() + 0.5, y, at.getBlockZ() + 0.5);
                 BukkitPlatform.teleportAsync(target, dest);
-                sender().sendMessage(C.GREEN + "Teleported to " + structure + " @ " + at.getBlockX() + ", " + at.getBlockZ());
+                commandSender.sendMessage(C.GREEN + "Teleported to " + structure + " @ " + at.getBlockX() + ", " + at.getBlockZ());
             } catch (Throwable t) {
-                sender().sendMessage(C.RED + "Could not locate " + structure + ": " + t.getClass().getSimpleName());
+                commandSender.sendMessage(C.RED + "Could not locate " + structure + ": " + t.getClass().getSimpleName());
+                Iris.reportError("Could not locate structure '" + structure + "'.", t);
             }
         });
     }

@@ -18,8 +18,10 @@
 
 package art.arcane.iris.engine.object;
 
+import art.arcane.iris.core.IrisWorldStorage;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.spi.IrisLogging;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import art.arcane.volmlib.util.collection.KList;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -27,8 +29,8 @@ import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -44,6 +46,8 @@ import java.util.List;
 public class IrisWorld {
     private static final KList<Player> NO_PLAYERS = new KList<>();
     private static final KList<? extends Entity> NO_ENTITIES = new KList<>();
+    private NamespacedKey key;
+    private String platformIdentity;
     private String name;
     private File worldFolder;
 
@@ -60,7 +64,8 @@ public class IrisWorld {
     }
 
     private static IrisWorld bindWorld(IrisWorld iw, World world) {
-        return iw.name(world.getName())
+        return iw.key(WorldIdentity.key(world))
+                .name(world.getName())
                 .worldFolder(world.getWorldFolder())
                 .minHeight(world.getMinHeight())
                 .maxHeight(world.getMaxHeight())
@@ -72,6 +77,10 @@ public class IrisWorld {
         return seed;
     }
 
+    public String identity() {
+        return key == null ? platformIdentity : key.toString();
+    }
+
     public void setRawWorldSeed(long seed) {
         this.seed = seed;
     }
@@ -81,7 +90,11 @@ public class IrisWorld {
             return true;
         }
 
-        World w = Bukkit.getWorld(name);
+        if (key == null) {
+            return false;
+        }
+
+        World w = WorldIdentity.resolve(key).orElse(null);
 
         if (w != null) {
             realWorld = w;
@@ -111,8 +124,8 @@ public class IrisWorld {
     }
 
     public void bind(WorldInfo worldInfo) {
-        name(worldInfo.getName())
-                .worldFolder(new File(Bukkit.getWorldContainer(), worldInfo.getName()))
+        key(WorldIdentity.key(worldInfo))
+                .worldFolder(IrisWorldStorage.dimensionRoot(worldInfo))
                 .minHeight(worldInfo.getMinHeight())
                 .maxHeight(worldInfo.getMaxHeight())
                 .environment(worldInfo.getEnvironment());

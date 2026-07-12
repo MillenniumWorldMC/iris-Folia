@@ -49,31 +49,38 @@ public final class TransientWorldCleanupSupport {
         return names;
     }
 
-    public static LinkedHashSet<String> collectTransientStudioWorldNames(File worldContainer) {
+    public static LinkedHashSet<String> collectTransientStudioWorldNames(File levelRoot) {
         LinkedHashSet<String> names = new LinkedHashSet<>();
-        if (worldContainer == null) {
+        if (levelRoot == null) {
             return names;
         }
 
-        File[] children = worldContainer.listFiles();
-        if (children == null) {
+        File namespacesRoot = new File(levelRoot, "dimensions");
+        File[] namespaces = namespacesRoot.listFiles(File::isDirectory);
+        if (namespaces == null) {
             return names;
+        }
+
+        for (File namespace : namespaces) {
+            collectTransientStudioWorldNames(namespace, names);
+        }
+        return names;
+    }
+
+    private static void collectTransientStudioWorldNames(File folder, LinkedHashSet<String> names) {
+        File[] children = folder.listFiles(File::isDirectory);
+        if (children == null) {
+            return;
         }
 
         for (File child : children) {
-            if (child == null || !child.isDirectory()) {
-                continue;
-            }
-
             String baseName = transientStudioBaseWorldName(child.getName());
-            if (baseName == null) {
+            if (baseName != null) {
+                names.add(baseName);
                 continue;
             }
-
-            names.add(baseName);
+            collectTransientStudioWorldNames(child, names);
         }
-
-        return names;
     }
 
     private static String normalizeWorldName(String worldName) {

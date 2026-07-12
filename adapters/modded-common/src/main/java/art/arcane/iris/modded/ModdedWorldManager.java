@@ -641,7 +641,7 @@ public final class ModdedWorldManager implements EngineWorldManager {
 
     private boolean isPregenActive() {
         PregeneratorJob job = PregeneratorJob.getInstance();
-        return job != null && job.targetsWorldName(engine.getWorld().name());
+        return job != null && job.targetsWorldIdentity(engine.getWorld().identity());
     }
 
     private static boolean markerSystemEnabled() {

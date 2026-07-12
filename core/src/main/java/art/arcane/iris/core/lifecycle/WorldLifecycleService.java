@@ -2,6 +2,8 @@ package art.arcane.iris.core.lifecycle;
 
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.util.common.scheduling.J;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 
 import java.util.List;
@@ -18,7 +20,7 @@ public final class WorldLifecycleService {
     private final PaperLikeRuntimeBackend paperLikeRuntimeBackend;
     private final BukkitPublicBackend bukkitPublicBackend;
     private final List<WorldLifecycleBackend> backends;
-    private final Map<String, String> worldBackendByName;
+    private final Map<String, String> worldBackendByKey;
 
     public WorldLifecycleService(CapabilitySnapshot capabilities) {
         this.capabilities = capabilities;
@@ -26,7 +28,7 @@ public final class WorldLifecycleService {
         this.paperLikeRuntimeBackend = new PaperLikeRuntimeBackend(capabilities);
         this.bukkitPublicBackend = new BukkitPublicBackend(capabilities);
         this.backends = List.of(worldsProviderBackend, paperLikeRuntimeBackend, bukkitPublicBackend);
-        this.worldBackendByName = new ConcurrentHashMap<>();
+        this.worldBackendByKey = new ConcurrentHashMap<>();
     }
 
     public static WorldLifecycleService get() {
@@ -74,7 +76,7 @@ public final class WorldLifecycleService {
                 return;
             }
             if (world != null) {
-                worldBackendByName.put(world.getName(), backend.backendName());
+                worldBackendByKey.put(WorldIdentity.serialize(world), backend.backendName());
             }
         });
     }
@@ -104,7 +106,8 @@ public final class WorldLifecycleService {
     }
 
     private boolean unloadDirect(World world, boolean save) {
-        WorldLifecycleBackend backend = selectUnloadBackend(world.getName());
+        String worldIdentity = WorldIdentity.serialize(world);
+        WorldLifecycleBackend backend = selectUnloadBackend(worldIdentity);
         IrisLogging.info("WorldLifecycle unload: world=%s, backend=%s",
                 world.getName(),
                 backend.backendName());
@@ -124,13 +127,13 @@ public final class WorldLifecycleService {
             throw new IllegalStateException(e);
         }
         if (unloaded) {
-            worldBackendByName.remove(world.getName());
+            worldBackendByKey.remove(worldIdentity);
         }
         return unloaded;
     }
 
-    public String backendNameForWorld(String worldName) {
-        return selectUnloadBackend(worldName).backendName();
+    public String backendNameForWorld(NamespacedKey worldKey) {
+        return selectUnloadBackend(worldKey.toString()).backendName();
     }
 
     WorldLifecycleBackend selectCreateBackend(WorldLifecycleRequest request) {
@@ -155,8 +158,8 @@ public final class WorldLifecycleService {
         throw new IllegalStateException("No world lifecycle backend supports request for \"" + request.worldName() + "\".");
     }
 
-    WorldLifecycleBackend selectUnloadBackend(String worldName) {
-        String backendName = worldBackendByName.get(worldName);
+    WorldLifecycleBackend selectUnloadBackend(String worldIdentity) {
+        String backendName = worldBackendByKey.get(worldIdentity);
         if (backendName == null) {
             return bukkitPublicBackend;
         }
@@ -170,7 +173,7 @@ public final class WorldLifecycleService {
         return bukkitPublicBackend;
     }
 
-    void rememberBackend(String worldName, String backendName) {
-        worldBackendByName.put(worldName, backendName);
+    void rememberBackend(NamespacedKey worldKey, String backendName) {
+        worldBackendByKey.put(worldKey.toString(), backendName);
     }
 }

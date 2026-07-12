@@ -42,6 +42,8 @@ import art.arcane.volmlib.util.director.annotations.Param;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
 import art.arcane.volmlib.util.math.RNG;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
@@ -49,6 +51,7 @@ import org.bukkit.Registry;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.generator.structure.Structure;
 import org.bukkit.util.StructureSearchResult;
 
 import java.io.File;
@@ -139,8 +142,9 @@ public class CommandStructure implements DirectorExecutor {
         int irisPlaced = 0;
         KList<String> notFound = new KList<>();
         KList<String> cannotGenerate = new KList<>();
-        for (org.bukkit.generator.structure.Structure structure : Registry.STRUCTURE) {
-            NamespacedKey key = structure.getKey();
+        Registry<Structure> structureRegistry = RegistryAccess.registryAccess().getRegistry(RegistryKey.STRUCTURE);
+        for (Structure structure : structureRegistry) {
+            NamespacedKey key = structureRegistry.getKey(structure);
             String keyName = key == null ? structure.toString() : key.toString();
             boolean isIrisPlaced = engine != null && IrisStructureLocator.suppressesVanilla(engine, keyName);
             boolean isReachable = engine != null && reachable.contains(keyName.toLowerCase());

@@ -24,6 +24,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.World;
 import art.arcane.iris.Iris;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.edit.DustRevealer;
@@ -32,6 +33,7 @@ import art.arcane.iris.core.wand.WandSelection;
 import art.arcane.iris.engine.object.IrisObject;
 import art.arcane.iris.util.project.matter.WorldMatter;
 import art.arcane.volmlib.util.collection.KList;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import art.arcane.volmlib.util.data.Cuboid;
 import art.arcane.iris.util.common.format.C;
 import art.arcane.volmlib.util.math.M;
@@ -210,7 +212,9 @@ public class WandSVC implements IrisService {
             if (f.length != 2) return null;
             String[] g = f[0].split("\\Q,\\E");
             if (g.length != 3) return null;
-            return new Location(Bukkit.getWorld(f[1]), Integer.parseInt(g[0]), Integer.parseInt(g[1]), Integer.parseInt(g[2]));
+            World world = WorldIdentity.resolve(f[1]).orElse(null);
+            if (world == null) return null;
+            return new Location(world, Integer.parseInt(g[0]), Integer.parseInt(g[1]), Integer.parseInt(g[2]));
         } catch (Throwable e) {
             Iris.reportError(e);
             return null;
@@ -228,7 +232,7 @@ public class WandSVC implements IrisService {
             return "<#>";
         }
 
-        return loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ() + " in " + loc.getWorld().getName();
+        return loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ() + " in " + WorldIdentity.serialize(loc.getWorld());
     }
 
     /**
@@ -532,7 +536,7 @@ public class WandSVC implements IrisService {
         Location[] f = getCuboidFromItem(item);
         Location other = left ? f[1] : f[0];
 
-        if (other != null && !other.getWorld().getName().equals(a.getWorld().getName())) {
+        if (other != null && !WorldIdentity.key(other.getWorld()).equals(WorldIdentity.key(a.getWorld()))) {
             other = null;
         }
 

@@ -1,5 +1,6 @@
 package art.arcane.iris.core.lifecycle;
 
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.WorldType;
@@ -8,6 +9,7 @@ import org.bukkit.generator.ChunkGenerator;
 
 public record WorldLifecycleRequest(
         String worldName,
+        NamespacedKey worldKey,
         World.Environment environment,
         ChunkGenerator generator,
         BiomeProvider biomeProvider,
@@ -22,6 +24,7 @@ public record WorldLifecycleRequest(
     public static WorldLifecycleRequest fromCreator(WorldCreator creator, boolean studio, boolean benchmark, WorldLifecycleCaller callerKind) {
         return new WorldLifecycleRequest(
                 creator.name(),
+                creator.key(),
                 creator.environment(),
                 creator.generator(),
                 creator.biomeProvider(),
@@ -36,7 +39,7 @@ public record WorldLifecycleRequest(
     }
 
     public WorldCreator toWorldCreator() {
-        WorldCreator creator = new WorldCreator(worldName)
+        WorldCreator creator = WorldCreator.ofKey(worldKey)
                 .environment(environment)
                 .generateStructures(generateStructures)
                 .hardcore(hardcore)

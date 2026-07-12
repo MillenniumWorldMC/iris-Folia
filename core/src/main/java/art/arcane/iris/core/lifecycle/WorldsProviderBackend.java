@@ -1,10 +1,9 @@
 package art.arcane.iris.core.lifecycle;
 
-import org.bukkit.Bukkit;
+import art.arcane.iris.core.IrisWorldStorage;
 import org.bukkit.World;
 import org.bukkit.WorldType;
 
-import java.io.File;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
@@ -25,7 +24,7 @@ final class WorldsProviderBackend implements WorldLifecycleBackend {
     @SuppressWarnings("unchecked")
     public CompletableFuture<World> create(WorldLifecycleRequest request) {
         try {
-            Path worldPath = new File(Bukkit.getWorldContainer(), request.worldName()).toPath();
+            Path worldPath = IrisWorldStorage.dimensionRoot(request.worldKey()).toPath();
             Object builder = WorldLifecycleSupport.invokeNamed(capabilities.worldsProvider(), "levelBuilder", new Class[]{Path.class}, worldPath);
             builder = WorldLifecycleSupport.invokeNamed(builder, "name", new Class[]{String.class}, request.worldName());
             builder = WorldLifecycleSupport.invokeNamed(builder, "seed", new Class[]{long.class}, request.seed());

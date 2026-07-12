@@ -46,6 +46,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionAttachment;
 import org.bukkit.permissions.PermissionAttachmentInfo;
+import org.jetbrains.annotations.NotNull;
 import org.bukkit.plugin.Plugin;
 
 import java.util.Set;
@@ -505,6 +506,12 @@ public class VolmitSender implements CommandSender {
     @Override
     public String getName() {
         return s.getName();
+    }
+
+    @NotNull
+    @Override
+    public Component name() {
+        return s.name();
     }
 
     @Override

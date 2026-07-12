@@ -1,7 +1,7 @@
 package art.arcane.iris.core.lifecycle;
 
 import art.arcane.iris.spi.IrisLogging;
-import org.bukkit.Bukkit;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import org.bukkit.World;
 
 import java.util.Locale;
@@ -31,7 +31,7 @@ final class PaperLikeRuntimeBackend implements WorldLifecycleBackend {
     public CompletableFuture<World> create(WorldLifecycleRequest request) {
         Object legacyStorageAccess = null;
         try {
-            World existing = Bukkit.getWorld(request.worldName());
+            World existing = WorldIdentity.resolve(request.worldKey()).orElse(null);
             if (existing != null) {
                 return CompletableFuture.completedFuture(existing);
             }
@@ -47,7 +47,7 @@ final class PaperLikeRuntimeBackend implements WorldLifecycleBackend {
                     + ", backend=paper_like_runtime, flavor=" + capabilities.paperLikeFlavor().name().toLowerCase(Locale.ROOT)
                     + ", registrySource=" + WorldLifecycleSupport.runtimeLevelStemRegistrySource(request));
             Object levelStem = WorldLifecycleSupport.resolveRuntimeLevelStem(capabilities, request);
-            Object stemKey = WorldLifecycleSupport.createRuntimeLevelStemKey(request.worldName());
+            Object stemKey = WorldLifecycleSupport.createRuntimeLevelStemKey(request.worldKey());
 
             if (capabilities.paperLikeFlavor() == CapabilitySnapshot.PaperLikeFlavor.CURRENT_INFO_AND_DATA) {
                 Object dimensionKey = WorldLifecycleSupport.createDimensionKey(stemKey);
@@ -55,18 +55,18 @@ final class PaperLikeRuntimeBackend implements WorldLifecycleBackend {
                 Object worldLoadingInfo = capabilities.worldLoadingInfoConstructor().newInstance(request.environment(), stemKey, dimensionKey, !request.studio());
                 Object worldLoadingInfoAndData = capabilities.worldLoadingInfoAndDataConstructor().newInstance(worldLoadingInfo, loadedWorldData);
                 Object worldDataAndGenSettings = WorldLifecycleSupport.createCurrentWorldDataAndSettings(capabilities, request.worldName());
-                if (!WorldLifecycleSupport.hasExistingWorldData(request.worldName())) {
+                if (!WorldLifecycleSupport.hasExistingWorldData(request.worldKey())) {
                     worldDataAndGenSettings = WorldLifecycleSupport.applySeedToWorldDataAndGenSettings(worldDataAndGenSettings, request.seed());
                 }
                 capabilities.createLevelMethod().invoke(capabilities.minecraftServer(), levelStem, worldLoadingInfoAndData, worldDataAndGenSettings);
             } else {
-                legacyStorageAccess = WorldLifecycleSupport.createLegacyStorageAccess(capabilities, request.worldName());
+                legacyStorageAccess = WorldLifecycleSupport.createLegacyStorageAccess(capabilities);
                 Object primaryLevelData = WorldLifecycleSupport.createLegacyPrimaryLevelData(capabilities, legacyStorageAccess, request.worldName());
                 Object worldLoadingInfo = capabilities.worldLoadingInfoConstructor().newInstance(0, request.worldName(), request.environment().name().toLowerCase(Locale.ROOT), stemKey, !request.studio());
                 capabilities.createLevelMethod().invoke(capabilities.minecraftServer(), levelStem, worldLoadingInfo, legacyStorageAccess, primaryLevelData);
             }
 
-            World loadedWorld = Bukkit.getWorld(request.worldName());
+            World loadedWorld = WorldIdentity.resolve(request.worldKey()).orElse(null);
             if (loadedWorld == null) {
                 return CompletableFuture.failedFuture(new IllegalStateException("Paper-like runtime backend did not load world \"" + request.worldName() + "\"."));
             }

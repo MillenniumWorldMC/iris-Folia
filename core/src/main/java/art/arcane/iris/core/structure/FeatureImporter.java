@@ -18,6 +18,7 @@
 
 package art.arcane.iris.core.structure;
 
+import art.arcane.iris.core.IrisWorldStorage;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.nms.INMS;
@@ -28,6 +29,7 @@ import art.arcane.iris.util.common.format.C;
 import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.collection.KList;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import art.arcane.volmlib.util.io.IO;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -293,11 +295,11 @@ public final class FeatureImporter {
 
     static World createScratchWorld(VolmitSender sender) {
         try {
-            World existing = Bukkit.getWorld(SCRATCH_WORLD_NAME);
+            World existing = WorldIdentity.resolve(IrisWorldStorage.keyFromLegacyName(SCRATCH_WORLD_NAME)).orElse(null);
             if (existing != null) {
                 return existing;
             }
-            WorldCreator creator = new WorldCreator(SCRATCH_WORLD_NAME)
+            WorldCreator creator = WorldCreator.ofKey(IrisWorldStorage.keyFromLegacyName(SCRATCH_WORLD_NAME))
                     .environment(World.Environment.NORMAL)
                     .type(WorldType.FLAT)
                     .generateStructures(false);

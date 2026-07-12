@@ -1,5 +1,6 @@
 package art.arcane.iris.core.runtime;
 
+import art.arcane.iris.core.IrisWorldStorage;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.IrisServices;
 import art.arcane.iris.core.lifecycle.WorldLifecycleService;
@@ -10,6 +11,7 @@ import art.arcane.iris.engine.platform.PlatformChunkGenerator;
 import art.arcane.iris.util.common.plugin.VolmitSender;
 import art.arcane.iris.util.common.scheduling.J;
 import art.arcane.volmlib.util.exceptions.IrisException;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import art.arcane.volmlib.util.io.IO;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -327,7 +329,7 @@ public final class StudioOpenCoordinator {
         }
 
         for (String familyWorldName : TransientWorldCleanupSupport.worldFamilyNames(worldName)) {
-            World familyWorld = Bukkit.getWorld(familyWorldName);
+            World familyWorld = WorldIdentity.resolve(IrisWorldStorage.keyFromLegacyName(familyWorldName)).orElse(null);
             if (familyWorld == null) {
                 continue;
             }
@@ -342,10 +344,9 @@ public final class StudioOpenCoordinator {
             return new WorldFamilyDeleteResult(true, false);
         }
 
-        File container = Bukkit.getWorldContainer();
         boolean liveDeleted = true;
         for (String familyWorldName : TransientWorldCleanupSupport.worldFamilyNames(worldName)) {
-            File folder = new File(container, familyWorldName);
+            File folder = IrisWorldStorage.dimensionRoot(familyWorldName);
             if (!folder.exists()) {
                 continue;
             }
@@ -378,15 +379,14 @@ public final class StudioOpenCoordinator {
     }
 
     private void cleanupStaleTransientWorlds(String worldName) {
-        File container = Bukkit.getWorldContainer();
-        LinkedHashSet<String> staleWorldNames = TransientWorldCleanupSupport.collectTransientStudioWorldNames(container);
+        LinkedHashSet<String> staleWorldNames = TransientWorldCleanupSupport.collectTransientStudioWorldNames(IrisWorldStorage.levelRoot());
         String requestedBaseName = TransientWorldCleanupSupport.transientStudioBaseWorldName(worldName);
         if (requestedBaseName != null) {
             staleWorldNames.add(requestedBaseName);
         }
 
         for (String staleWorldName : staleWorldNames) {
-            if (Bukkit.getWorld(staleWorldName) != null) {
+            if (WorldIdentity.resolve(IrisWorldStorage.keyFromLegacyName(staleWorldName)).isPresent()) {
                 continue;
             }
 
@@ -480,7 +480,7 @@ public final class StudioOpenCoordinator {
         }
 
         for (String familyWorldName : TransientWorldCleanupSupport.worldFamilyNames(worldName)) {
-            if (Bukkit.getWorld(familyWorldName) != null) {
+            if (WorldIdentity.resolve(IrisWorldStorage.keyFromLegacyName(familyWorldName)).isPresent()) {
                 return true;
             }
         }

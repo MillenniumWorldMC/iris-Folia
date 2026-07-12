@@ -18,11 +18,12 @@
 
 package art.arcane.iris.core.tools;
 
+import art.arcane.iris.core.IrisWorldStorage;
 import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.engine.object.IrisDimension;
 import art.arcane.iris.engine.object.IrisWorld;
 import art.arcane.iris.engine.platform.BukkitChunkGenerator;
-import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.generator.ChunkGenerator;
@@ -74,13 +75,15 @@ public class IrisWorldCreator {
 
     public WorldCreator create() {
         IrisDimension dim = dimension == null ? IrisData.loadAnyDimension(dimensionName, null) : dimension;
+        NamespacedKey worldKey = IrisWorldStorage.keyFromLegacyName(name);
 
         IrisWorld w = IrisWorld.builder()
+                .key(worldKey)
                 .name(name)
                 .minHeight(dim.getMinHeight())
                 .maxHeight(dim.getMaxHeight())
                 .seed(seed)
-                .worldFolder(new File(Bukkit.getWorldContainer(), name))
+                .worldFolder(IrisWorldStorage.dimensionRoot(worldKey))
                 .environment(findEnvironment())
                 .build();
         ChunkGenerator g = new BukkitChunkGenerator(w, studio, studio
@@ -88,7 +91,7 @@ public class IrisWorldCreator {
                 new File(w.worldFolder(), "iris/pack"), dimensionName);
 
 
-        return new WorldCreator(name)
+        return WorldCreator.ofKey(worldKey)
                 .environment(w.environment())
                 .generateStructures(true)
                 .generator(g).seed(seed);

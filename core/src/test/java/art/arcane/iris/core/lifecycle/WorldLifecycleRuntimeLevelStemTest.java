@@ -5,6 +5,7 @@ import art.arcane.iris.core.nms.INMSBinding;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.EngineTarget;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.generator.ChunkGenerator;
 import org.junit.Test;
@@ -26,6 +27,7 @@ public class WorldLifecycleRuntimeLevelStemTest {
         CapabilitySnapshot capabilities = CapabilitySnapshot.forTestingRuntimeRegistries(ServerFamily.PURPUR, false, datapackDimensions, serverRegistryAccess);
         WorldLifecycleRequest request = new WorldLifecycleRequest(
                 "studio",
+                NamespacedKey.minecraft("studio"),
                 World.Environment.NORMAL,
                 new TestingPlatformChunkGenerator(),
                 null,

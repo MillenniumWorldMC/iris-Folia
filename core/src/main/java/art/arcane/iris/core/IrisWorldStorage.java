@@ -1,0 +1,129 @@
+package art.arcane.iris.core;
+
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
+import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
+import org.bukkit.World;
+import org.bukkit.generator.WorldInfo;
+
+import java.io.File;
+import java.nio.file.Path;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
+
+public final class IrisWorldStorage {
+    private IrisWorldStorage() {
+    }
+
+    public static File levelRoot() {
+        return Bukkit.getServer().getLevelDirectory().toAbsolutePath().normalize().toFile();
+    }
+
+    public static File levelRoot(File dimensionRoot) {
+        Path current = Objects.requireNonNull(dimensionRoot, "dimensionRoot").toPath().toAbsolutePath().normalize();
+        while (current != null) {
+            Path fileName = current.getFileName();
+            if (fileName != null && "dimensions".equals(fileName.toString())) {
+                Path parent = current.getParent();
+                if (parent != null) {
+                    return parent.toFile();
+                }
+                break;
+            }
+            current = current.getParent();
+        }
+        return dimensionRoot.getAbsoluteFile();
+    }
+
+    public static NamespacedKey keyFromLegacyName(String worldName) {
+        return keyFromLegacyName(worldName, levelRoot().getName());
+    }
+
+    static NamespacedKey keyFromLegacyName(String worldName, String levelName) {
+        String name = Objects.requireNonNull(worldName, "worldName").trim();
+        String mainLevelName = Objects.requireNonNull(levelName, "levelName").trim();
+        if (name.isEmpty()) {
+            throw new IllegalArgumentException("World name cannot be empty.");
+        }
+        if (name.equals(mainLevelName)) {
+            return NamespacedKey.minecraft("overworld");
+        }
+        if (name.equals(mainLevelName + "_nether")) {
+            return NamespacedKey.minecraft("the_nether");
+        }
+        if (name.equals(mainLevelName + "_the_end")) {
+            return NamespacedKey.minecraft("the_end");
+        }
+
+        String key = name.toLowerCase(Locale.ENGLISH).replace(' ', '_');
+        return NamespacedKey.minecraft(key);
+    }
+
+    public static File dimensionRoot(String worldName) {
+        return dimensionRoot(keyFromLegacyName(worldName));
+    }
+
+    public static File dimensionRoot(WorldInfo world) {
+        NamespacedKey key = WorldIdentity.key(world);
+        Optional<World> loadedWorld = WorldIdentity.resolve(key);
+        if (loadedWorld.isPresent()) {
+            return loadedWorld.get().getWorldFolder().getAbsoluteFile();
+        }
+        return dimensionRoot(key);
+    }
+
+    public static File dimensionRoot(NamespacedKey key) {
+        return dimensionRoot(levelRoot(), key);
+    }
+
+    public static File dimensionRoot(File levelRoot, NamespacedKey key) {
+        Path dimensionsRoot = Objects.requireNonNull(levelRoot, "levelRoot")
+                .toPath()
+                .toAbsolutePath()
+                .normalize()
+                .resolve("dimensions");
+        NamespacedKey worldKey = Objects.requireNonNull(key, "key");
+        Path namespaceRoot = dimensionsRoot.resolve(worldKey.getNamespace()).normalize();
+        Path dimensionRoot = namespaceRoot.resolve(worldKey.getKey()).normalize();
+        if (!dimensionRoot.startsWith(namespaceRoot)) {
+            throw new IllegalArgumentException("World key escapes its namespace storage root: " + worldKey);
+        }
+        return dimensionRoot.toFile();
+    }
+
+    public static Optional<NamespacedKey> keyFromDimensionRoot(File levelRoot, File dimensionRoot) {
+        Path dimensionsPath = Objects.requireNonNull(levelRoot, "levelRoot")
+                .toPath()
+                .toAbsolutePath()
+                .normalize()
+                .resolve("dimensions");
+        Path worldPath = Objects.requireNonNull(dimensionRoot, "dimensionRoot")
+                .toPath()
+                .toAbsolutePath()
+                .normalize();
+        if (!worldPath.startsWith(dimensionsPath)) {
+            return Optional.empty();
+        }
+
+        Path relative = dimensionsPath.relativize(worldPath);
+        if (relative.getNameCount() < 2) {
+            return Optional.empty();
+        }
+
+        String namespace = relative.getName(0).toString();
+        StringBuilder key = new StringBuilder();
+        for (int i = 1; i < relative.getNameCount(); i++) {
+            if (!key.isEmpty()) {
+                key.append('/');
+            }
+            key.append(relative.getName(i));
+        }
+
+        return Optional.ofNullable(NamespacedKey.fromString(namespace + ":" + key));
+    }
+
+    public static File packRoot(NamespacedKey key) {
+        return new File(dimensionRoot(key), "iris/pack");
+    }
+}

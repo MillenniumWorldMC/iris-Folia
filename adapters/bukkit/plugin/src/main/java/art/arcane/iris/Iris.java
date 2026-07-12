@@ -23,6 +23,7 @@ import art.arcane.iris.engine.IrisWorldManager;
 import art.arcane.iris.engine.framework.EngineWorldManagerProvider;
 import art.arcane.iris.core.splash.IrisSplashComposer;
 import art.arcane.iris.core.IrisSettings;
+import art.arcane.iris.core.IrisWorldStorage;
 import art.arcane.iris.core.IrisWorlds;
 import art.arcane.iris.core.ServerConfigurator;
 import art.arcane.iris.core.datapack.DatapackIngestService;
@@ -61,6 +62,7 @@ import art.arcane.iris.spi.IrisPlatforms;
 import art.arcane.iris.spi.IrisServices;
 import art.arcane.iris.spi.LogLevel;
 import art.arcane.volmlib.integration.ReloadAware;
+import art.arcane.volmlib.util.bukkit.WorldIdentity;
 import art.arcane.volmlib.util.collection.KList;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.exceptions.IrisException;
@@ -88,6 +90,7 @@ import lombok.NonNull;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.block.data.BlockData;
@@ -590,6 +593,7 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
     }
 
     private void enable() {
+        alreadyDrained.set(false);
         PaperLibBootstrap.install();
         SimdSupport.install();
         services = new KMap<>();
@@ -646,7 +650,6 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
             J.ar(this::checkConfigHotload, 60);
             J.sr(this::tickQueue, 0);
             J.s(this::setupPapi);
-            J.a(ServerConfigurator::configureIfDeferred, 20);
             J.a(DatapackIngestService::autoIngestOnStartup, 60);
 
             autoStartStudio();
@@ -668,17 +671,22 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
             }
         }
         shutdownHook = new Thread(() -> {
-            Bukkit.getWorlds()
-                    .stream()
-                    .map(IrisToolbelt::access)
-                    .filter(Objects::nonNull)
-                    .forEach(PlatformChunkGenerator::close);
+            if (alreadyDrained.compareAndSet(false, true)) {
+                try {
+                    Bukkit.getWorlds()
+                            .stream()
+                            .map(World::getGenerator)
+                            .filter(PlatformChunkGenerator.class::isInstance)
+                            .map(PlatformChunkGenerator.class::cast)
+                            .forEach(PlatformChunkGenerator::close);
+                } catch (Throwable e) {
+                    Iris.reportError("Failed to close Iris world generators from the JVM shutdown hook.", e);
+                }
+            }
 
             MultiBurst.burst.close();
             MultiBurst.ioBurst.close();
-            if (services != null) {
-                services.clear();
-            }
+            IrisServices.clear();
         }, "Iris-ShutdownHook");
         try {
             Runtime.getRuntime().addShutdownHook(shutdownHook);
@@ -692,15 +700,16 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
             KList<String> deferredStartupWorlds = new KList<>();
             IrisWorlds.readBukkitWorlds().forEach((s, generator) -> {
                 try {
-                    if (Bukkit.getWorld(s) != null || !filter.test(s)) return;
+                    NamespacedKey worldKey = IrisWorldStorage.keyFromLegacyName(s);
+                    if (WorldIdentity.resolve(worldKey).isPresent() || !filter.test(s)) return;
 
                     Iris.info("Loading World: %s | Generator: %s", s, generator);
-                    var gen = getDefaultWorldGenerator(s, generator);
-                    var dim = loadDimension(s, generator);
+                    ChunkGenerator gen = getDefaultWorldGenerator(s, generator);
+                    IrisDimension dim = loadDimension(s, generator);
                     assert dim != null && gen != null;
 
                     Iris.info(C.LIGHT_PURPLE + "Preparing Spawn for " + s + "' using Iris:" + generator + "...");
-                    WorldCreator c = new WorldCreator(s)
+                    WorldCreator c = WorldCreator.ofKey(worldKey)
                             .generator(gen)
                             .environment(dim.getEnvironment());
                     Long stagedSeed = IrisWorlds.readBukkitWorldSeed(s);
@@ -786,7 +795,7 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
             }
 
             LinkedHashMap<String, String> queue = loadPendingWorldDeleteMap();
-            for (String transientStudioWorld : TransientWorldCleanupSupport.collectTransientStudioWorldNames(Bukkit.getWorldContainer())) {
+            for (String transientStudioWorld : TransientWorldCleanupSupport.collectTransientStudioWorldNames(IrisWorldStorage.levelRoot())) {
                 queue.putIfAbsent(transientStudioWorld.toLowerCase(Locale.ROOT), transientStudioWorld);
             }
             if (queue.isEmpty()) {
@@ -800,7 +809,8 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
                     continue;
                 }
 
-                org.bukkit.World loaded = Bukkit.getWorld(worldName);
+                NamespacedKey worldKey = IrisWorldStorage.keyFromLegacyName(worldName);
+                World loaded = WorldIdentity.resolve(worldKey).orElse(null);
                 if (loaded != null) {
                     if (TransientWorldCleanupSupport.isTransientStudioWorldName(worldName)) {
                         try {
@@ -815,7 +825,7 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
                             Iris.reportError("Failed to unload leftover studio world \"" + worldName + "\".", e);
                         }
 
-                        if (Bukkit.getWorld(worldName) != null) {
+                        if (WorldIdentity.resolve(worldKey).isPresent()) {
                             Iris.warn("Studio world \"" + worldName + "\" is still loaded after unload; will retry next startup.");
                             remaining.put(worldName.toLowerCase(Locale.ROOT), worldName);
                             continue;
@@ -830,7 +840,7 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
                 boolean foundAny = false;
                 boolean deletedAll = true;
                 for (String familyWorldName : TransientWorldCleanupSupport.worldFamilyNames(worldName)) {
-                    File worldFolder = new File(Bukkit.getWorldContainer(), familyWorldName);
+                    File worldFolder = IrisWorldStorage.dimensionRoot(familyWorldName);
                     if (!worldFolder.exists()) {
                         continue;
                     }
@@ -975,7 +985,7 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
 
     public void onDisable() {
         if (IrisSafeguard.isForceShutdown()) return;
-        if (!alreadyDrained.get()) {
+        if (alreadyDrained.compareAndSet(false, true)) {
             drainWorldGenerators("onDisable", 30L);
         }
         if (services != null) {
@@ -1202,12 +1212,14 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
         }
 
         Iris.debug("Assuming IrisDimension: " + dim.getName());
+        NamespacedKey worldKey = IrisWorldStorage.keyFromLegacyName(worldName);
 
         IrisWorld w = IrisWorld.builder()
+                .key(worldKey)
                 .name(worldName)
                 .seed(1337)
                 .environment(dim.getEnvironment())
-                .worldFolder(new File(Bukkit.getWorldContainer(), worldName))
+                .worldFolder(IrisWorldStorage.dimensionRoot(worldKey))
                 .minHeight(dim.getMinHeight())
                 .maxHeight(dim.getMaxHeight())
                 .build();
@@ -1215,7 +1227,7 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
         Iris.debug("Generator Config: " + w.toString());
 
         File ff = new File(w.worldFolder(), "iris/pack");
-        var files = ff.listFiles();
+        File[] files = ff.listFiles();
         if (files == null || files.length == 0)
             IO.delete(ff);
 
@@ -1263,8 +1275,8 @@ public class Iris extends VolmitPlugin implements Listener, ReloadAware {
 
     @Nullable
     public static IrisDimension loadDimension(@NonNull String worldName, @NonNull String id) {
-        File pack = new File(Bukkit.getWorldContainer(), String.join(File.separator, worldName, "iris", "pack"));
-        var dimension = pack.isDirectory() ? IrisData.get(pack).getDimensionLoader().load(id) : null;
+        File pack = IrisWorldStorage.packRoot(IrisWorldStorage.keyFromLegacyName(worldName));
+        IrisDimension dimension = pack.isDirectory() ? IrisData.get(pack).getDimensionLoader().load(id) : null;
         if (dimension == null) dimension = IrisData.loadAnyDimension(id, null);
         if (dimension == null) {
             Iris.warn("Unable to find dimension type " + id + " Looking for online packs...");
