@@ -1,5 +1,6 @@
 String apiVersion = providers.gradleProperty('minecraftVersion').get()
 def mainClass = 'art.arcane.iris.Iris'
+def bootstrapperClass = 'art.arcane.iris.IrisBootstrap'
 
 String volmLibCoordinate = providers.gradleProperty('volmLibCoordinate')
     .orElse('com.github.VolmitSoftware:VolmLib:cdf7e8bb880199734dacd386a6616bda799fcde1')
@@ -29,9 +30,10 @@ tasks.named('processResources').configure {
         version   : rootProject.version,
         apiVersion: apiVersion,
         main      : mainClass,
+        bootstrapper: bootstrapperClass,
     ]
     inputs.properties(pluginProperties)
-    filesMatching('**/plugin.yml') {
+    filesMatching(['**/paper-plugin.yml', '**/plugin.yml']) {
         expand(pluginProperties)
     }
 }

@@ -41,7 +41,7 @@ public class IrisDimensionBiomeTagTest {
         IrisDimension.installBiomeTags(temporaryFolder.getRoot(), "overworld:swamp", tags);
 
         Path output = temporaryFolder.getRoot().toPath()
-                .resolve("iris/data/minecraft/tags/worldgen/biome/allows_surface_slime_spawns.json");
+                .resolve("data/minecraft/tags/worldgen/biome/allows_surface_slime_spawns.json");
         JSONObject tag = new JSONObject(Files.readString(output, StandardCharsets.UTF_8));
 
         assertEquals("overworld:swamp", tag.getJSONArray("values").getString(0));

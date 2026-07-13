@@ -18,10 +18,8 @@
 
 package art.arcane.iris.engine.object;
 
-import art.arcane.iris.core.IrisSettings;
-import art.arcane.iris.core.ServerConfigurator.DimensionHeight;
+import art.arcane.iris.core.IrisDatapackCompiler.DimensionHeight;
 import art.arcane.iris.core.loader.IrisData;
-import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.spi.IrisLogging;
 import art.arcane.iris.spi.PlatformBlockState;
 import art.arcane.iris.core.loader.IrisRegistrant;
@@ -508,7 +506,7 @@ public class IrisDimension extends IrisRegistrant {
         return landBiomeStyle;
     }
 
-    public void installBiomes(IDataFixer fixer, DataProvider data, KList<File> folders, KSet<String> biomes) {
+    public void installBiomes(IDataFixer fixer, DataProvider data, KList<File> datapackRoots, KSet<String> biomes) throws IOException {
         String namespace = getLoadKey().toLowerCase(Locale.ROOT);
 
         for (IrisBiome irisBiome : getAllBiomes(data)) {
@@ -527,26 +525,21 @@ public class IrisDimension extends IrisRegistrant {
                     }
                 }
 
-                for (File datapacks : folders) {
-                    File output = new File(datapacks, "iris/data/" + namespace + "/worldgen/biome/" + customBiomeId + ".json");
+                for (File datapackRoot : datapackRoots) {
+                    File output = new File(datapackRoot, "data/" + namespace + "/worldgen/biome/" + customBiomeId + ".json");
 
                     IrisLogging.debug("    Installing Data Pack Biome: " + output.getPath());
                     output.getParentFile().mkdirs();
-                    try {
-                        IO.writeAll(output, json);
-                        installBiomeTags(datapacks, namespace + ":" + customBiomeId, customBiome.getTags());
-                    } catch (IOException e) {
-                        IrisLogging.reportError(e);
-                        e.printStackTrace();
-                    }
+                    IO.writeAll(output, json);
+                    installBiomeTags(datapackRoot, namespace + ":" + customBiomeId, customBiome.getTags());
                 }
             }
         }
     }
 
-    public static void clearGeneratedBiomeTags(KList<File> folders) {
-        for (File datapacks : folders) {
-            File dataFolder = new File(datapacks, "iris/data");
+    public static void clearGeneratedBiomeTags(KList<File> datapackRoots) {
+        for (File datapackRoot : datapackRoots) {
+            File dataFolder = new File(datapackRoot, "data");
             File[] namespaces = dataFolder.listFiles(File::isDirectory);
             if (namespaces == null) {
                 continue;
@@ -557,7 +550,7 @@ public class IrisDimension extends IrisRegistrant {
         }
     }
 
-    static void installBiomeTags(File datapacks, String biomeKey, KList<String> tags) throws IOException {
+    static void installBiomeTags(File datapackRoot, String biomeKey, KList<String> tags) throws IOException {
         if (tags == null || tags.isEmpty()) {
             return;
         }
@@ -570,7 +563,7 @@ public class IrisDimension extends IrisRegistrant {
             int separator = tag.indexOf(':');
             String namespace = tag.substring(0, separator);
             String path = tag.substring(separator + 1);
-            Path tagRoot = new File(datapacks, "iris/data/" + namespace + "/tags/worldgen/biome").toPath()
+            Path tagRoot = new File(datapackRoot, "data/" + namespace + "/tags/worldgen/biome").toPath()
                     .toAbsolutePath().normalize();
             Path output = tagRoot.resolve(path + ".json").normalize();
             if (!output.startsWith(tagRoot)) {
@@ -677,21 +670,16 @@ public class IrisDimension extends IrisRegistrant {
         return upperDimension != null && !upperDimension.isEmpty() && !upperDimension.equalsIgnoreCase("none");
     }
 
-    public void installDimensionType(IDataFixer fixer, KList<File> folders) {
+    public void installDimensionType(IDataFixer fixer, KList<File> datapackRoots) throws IOException {
         IrisDimensionType type = getDimensionType();
         String json = type.toJson(fixer);
         String dimensionTypeKey = getDimensionTypeKey();
 
         IrisLogging.debug("    Installing Data Pack Dimension Type: \"iris:" + dimensionTypeKey + '"');
-        for (File datapacks : folders) {
-            File output = new File(datapacks, "iris/data/iris/dimension_type/" + dimensionTypeKey + ".json");
+        for (File datapackRoot : datapackRoots) {
+            File output = new File(datapackRoot, "data/iris/dimension_type/" + dimensionTypeKey + ".json");
             output.getParentFile().mkdirs();
-            try {
-                IO.writeAll(output, json);
-            } catch (IOException e) {
-                IrisLogging.reportError(e);
-                e.printStackTrace();
-            }
+            IO.writeAll(output, json);
         }
     }
 
@@ -710,13 +698,18 @@ public class IrisDimension extends IrisRegistrant {
 
     }
 
-    public static void writeShared(KList<File> folders, DimensionHeight height) {
+    public static void writeShared(
+            KList<File> datapackRoots,
+            DimensionHeight height,
+            int packFormat,
+            boolean adjustVanillaHeight
+    ) throws IOException {
         IrisLogging.debug("    Installing Data Pack Vanilla Dimension Types");
         String[] jsonStrings = height.jsonStrings();
-        for (File datapacks : folders) {
-            write(datapacks, "overworld", jsonStrings[0]);
-            write(datapacks, "the_nether", jsonStrings[1]);
-            write(datapacks, "the_end", jsonStrings[2]);
+        for (File datapackRoot : datapackRoots) {
+            write(datapackRoot, "overworld", jsonStrings[0], adjustVanillaHeight);
+            write(datapackRoot, "the_nether", jsonStrings[1], adjustVanillaHeight);
+            write(datapackRoot, "the_end", jsonStrings[2], adjustVanillaHeight);
         }
 
         String raw = """
@@ -728,32 +721,24 @@ public class IrisDimension extends IrisRegistrant {
                                 "max_format": {}
                             }
                         }
-                        """.replace("{}", BukkitPlatform.dataPackFormat() + "");
+                        """.replace("{}", Integer.toString(packFormat));
 
-        for (File datapacks : folders) {
-            File mcm = new File(datapacks, "iris/pack.mcmeta");
-            try {
-                IO.writeAll(mcm, raw);
-            } catch (IOException e) {
-                IrisLogging.reportError(e);
-                e.printStackTrace();
-            }
+        for (File datapackRoot : datapackRoots) {
+            File mcm = new File(datapackRoot, "pack.mcmeta");
+            IO.writeAll(mcm, raw);
             IrisLogging.debug("    Installing Data Pack MCMeta: " + mcm.getPath());
         }
     }
 
-    private static void write(File datapacks, String type, String json) {
-        if (json == null) return;
-        File dimTypeVanilla = new File(datapacks, "iris/data/minecraft/dimension_type/" + type + ".json");
+    private static void write(File datapackRoot, String type, String json, boolean adjustVanillaHeight) throws IOException {
+        if (json == null) {
+            return;
+        }
+        File dimTypeVanilla = new File(datapackRoot, "data/minecraft/dimension_type/" + type + ".json");
 
-        if (IrisSettings.get().getGeneral().adjustVanillaHeight || dimTypeVanilla.exists()) {
+        if (adjustVanillaHeight || dimTypeVanilla.exists()) {
             dimTypeVanilla.getParentFile().mkdirs();
-            try {
-                IO.writeAll(dimTypeVanilla, json);
-            } catch (IOException e) {
-                IrisLogging.reportError(e);
-                e.printStackTrace();
-            }
+            IO.writeAll(dimTypeVanilla, json);
         }
     }
 }

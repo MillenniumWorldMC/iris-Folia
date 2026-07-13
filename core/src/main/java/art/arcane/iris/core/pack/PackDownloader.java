@@ -33,11 +33,22 @@ import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 public final class PackDownloader {
+    private static final String DEFAULT_OVERWORLD_PACK = "overworld";
+    private static final String DEFAULT_OVERWORLD_REPOSITORY = "IrisDimensions/overworld";
+    private static final String DEFAULT_OVERWORLD_RELEASE_URL = "https://github.com/IrisDimensions/overworld/releases/download/beta/overworld.zip";
     private static final Pattern GITHUB_REPOSITORY = Pattern.compile("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+");
     private static final Pattern GITHUB_REF = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._/-]*");
     private static final Pattern COMMIT_SHA = Pattern.compile("[0-9a-fA-F]{40}");
 
     private PackDownloader() {
+    }
+
+    public static boolean isDefaultOverworld(String pack) {
+        return DEFAULT_OVERWORLD_PACK.equals(pack);
+    }
+
+    public static String downloadDefaultOverworld(File packsFolder, boolean forceOverwrite, Consumer<String> feedback) throws IOException {
+        return download(packsFolder, DEFAULT_OVERWORLD_REPOSITORY, defaultOverworldReleaseUrl(), forceOverwrite, true, feedback);
     }
 
     public static String download(File packsFolder, String repo, String ref, boolean forceOverwrite, boolean directUrl, Consumer<String> feedback) throws IOException {
@@ -168,6 +179,10 @@ public final class PackDownloader {
         }
         validateGithubRef(qualifiedRef);
         return "https://codeload.github.com/" + repo + "/zip/" + qualifiedRef;
+    }
+
+    static String defaultOverworldReleaseUrl() {
+        return DEFAULT_OVERWORLD_RELEASE_URL;
     }
 
     private static void validateGithubRef(String qualifiedRef) {

@@ -25,6 +25,8 @@ import art.arcane.iris.core.loader.IrisData;
 import art.arcane.iris.core.nms.INMS;
 import art.arcane.iris.core.nms.datapack.DataVersion;
 import art.arcane.iris.core.nms.datapack.IDataFixer;
+import art.arcane.iris.core.pack.DefaultPackBootstrapProvisioner;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.iris.engine.object.IrisBiome;
 import art.arcane.iris.engine.object.IrisBiomeCustom;
 import art.arcane.iris.engine.object.IrisDimension;
@@ -56,7 +58,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.stream.Stream;
 
 public class ServerConfigurator {
@@ -70,7 +71,11 @@ public class ServerConfigurator {
             J.attempt(ServerConfigurator::increasePaperWatchdog);
         }
 
-        installDataPacks(true);
+        if (DefaultPackBootstrapProvisioner.wasProvisionedThisStartup()) {
+            IrisLogging.info("Paper loaded the Iris datapack during bootstrap; skipping the legacy startup install.");
+        } else {
+            installDataPacks(true);
+        }
     }
 
     private static void increaseKeepAliveSpigot() throws IOException, InvalidConfigurationException {
@@ -108,6 +113,14 @@ public class ServerConfigurator {
         return new KList<File>().qadd(new File(IrisWorldStorage.levelRoot(), "datapacks"));
     }
 
+    public static KList<File> getIrisDatapackRoots() {
+        KList<File> roots = new KList<>();
+        for (File datapacksFolder : getDatapacksFolder()) {
+            roots.add(new File(datapacksFolder, "iris"));
+        }
+        return roots;
+    }
+
     public static boolean installDataPacks(boolean fullInstall) {
         IDataFixer fixer = DataVersion.getDefault();
         if (fixer == null) {
@@ -128,22 +141,29 @@ public class ServerConfigurator {
         } else {
             IrisLogging.debug("Checking Data Packs...");
         }
-        DimensionHeight height = new DimensionHeight(fixer);
-        KList<File> folders = getDatapacksFolder();
-        IrisDimension.clearGeneratedBiomeTags(folders);
-        DatapackIngestService.reapplyFromStaging(folders);
-        java.util.concurrent.ConcurrentMap<String, KSet<String>> biomes = new java.util.concurrent.ConcurrentHashMap<>();
-
+        KList<File> datapacksFolders = getDatapacksFolder();
+        DatapackIngestService.reapplyFromStaging(datapacksFolders);
+        List<File> packRoots;
         try (Stream<IrisData> stream = allPacks()) {
-            stream.flatMap(height::merge)
-                    .parallel()
-                    .forEach(dim -> {
-                        IrisLogging.debug("  Checking Dimension " + dim.getLoadFile().getPath());
-                        dim.installBiomes(fixer, dim::getLoader, folders, biomes.computeIfAbsent(dim.getLoadKey(), k -> new KSet<>()));
-                        dim.installDimensionType(fixer, folders);
-                    });
+            packRoots = stream
+                    .map(IrisData::getDataFolder)
+                    .map(File::getAbsoluteFile)
+                    .distinct()
+                    .toList();
         }
-        IrisDimension.writeShared(folders, height);
+
+        try {
+            IrisDatapackCompiler.compile(
+                    packRoots,
+                    getIrisDatapackRoots(),
+                    fixer,
+                    BukkitPlatform.dataPackFormat(),
+                    IrisSettings.get().getGeneral().adjustVanillaHeight
+            );
+        } catch (IOException e) {
+            IrisLogging.reportError("Unable to compile Iris datapacks", e);
+            return false;
+        }
         if (fullInstall) {
             IrisLogging.info("Data Packs Setup!");
         } else {
@@ -263,7 +283,7 @@ public class ServerConfigurator {
 
             for (Player i : Bukkit.getOnlinePlayers()) {
                 if (i.isOp() || i.hasPermission("iris.all")) {
-                    VolmitSender sender = new VolmitSender(i, art.arcane.iris.platform.bukkit.BukkitPlatform.volmitPlugin().getTag("WARNING"));
+                    VolmitSender sender = new VolmitSender(i, BukkitPlatform.volmitPlugin().getTag("WARNING"));
                     sender.sendMessage("There are some Iris Packs that have custom biomes in them");
                     sender.sendMessage("You need to restart your server to use these packs.");
                 }
@@ -364,52 +384,4 @@ public class ServerConfigurator {
         return key == null ? null : key.toString();
     }
 
-    public static class DimensionHeight {
-        private final IDataFixer fixer;
-        private final AtomicIntegerArray[] dimensions = new AtomicIntegerArray[3];
-
-        public DimensionHeight(IDataFixer fixer) {
-            this.fixer = fixer;
-            for (int i = 0; i < 3; i++) {
-                dimensions[i] = new AtomicIntegerArray(new int[]{
-                        Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE
-                });
-            }
-        }
-
-        public Stream<IrisDimension> merge(IrisData data) {
-            IrisLogging.debug("Checking Pack: " + data.getDataFolder().getPath());
-            var loader = data.getDimensionLoader();
-            return loader.loadAll(loader.getPossibleKeys())
-                    .stream()
-                    .filter(Objects::nonNull)
-                    .peek(this::merge);
-        }
-
-        public void merge(IrisDimension dimension) {
-            AtomicIntegerArray array = dimensions[dimension.getBaseDimension().ordinal()];
-            array.updateAndGet(0, min -> Math.min(min, dimension.getMinHeight()));
-            array.updateAndGet(1, max -> Math.max(max, dimension.getMaxHeight()));
-            array.updateAndGet(2, logical -> Math.max(logical, dimension.getLogicalHeight()));
-        }
-
-        public String[] jsonStrings() {
-            var dims = IDataFixer.Dimension.values();
-            var arr = new String[3];
-            for (int i = 0; i < 3; i++) {
-                arr[i] = jsonString(dims[i]);
-            }
-            return arr;
-        }
-
-        public String jsonString(IDataFixer.Dimension dimension) {
-            var data = dimensions[dimension.ordinal()];
-            int minY = data.get(0);
-            int maxY = data.get(1);
-            int logicalHeight = data.get(2);
-            if (minY == Integer.MAX_VALUE || maxY == Integer.MIN_VALUE || Integer.MIN_VALUE == logicalHeight)
-                return null;
-            return fixer.createDimension(dimension, minY, maxY - minY, logicalHeight, null).toString(4);
-        }
-    }
 }

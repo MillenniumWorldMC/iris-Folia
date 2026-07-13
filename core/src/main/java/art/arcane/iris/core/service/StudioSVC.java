@@ -37,6 +37,7 @@ import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.data.cache.AtomicCache;
 import art.arcane.iris.engine.object.IrisDimension;
 import art.arcane.iris.engine.platform.PlatformChunkGenerator;
+import art.arcane.iris.platform.bukkit.BukkitPlatform;
 import art.arcane.volmlib.util.collection.KMap;
 import art.arcane.volmlib.util.exceptions.IrisException;
 import art.arcane.volmlib.util.io.IO;
@@ -72,9 +73,9 @@ public class StudioSVC implements IrisService {
             File f = IrisPack.packsPack(pack);
 
             if (!f.exists()) {
-                if (pack.equals("overworld")) {
-                    IrisLogging.info("Downloading Default Pack " + pack + " (latest on master)");
-                    IrisServices.get(StudioSVC.class).downloadBranch(art.arcane.iris.platform.bukkit.BukkitPlatform.console(), "IrisDimensions/overworld", "master", false);
+                if (PackDownloader.isDefaultOverworld(pack)) {
+                    IrisLogging.info("Downloading Default Pack " + pack + " (beta release)");
+                    IrisServices.get(StudioSVC.class).downloadDefaultOverworld(BukkitPlatform.console(), false);
                     ServerConfigurator.installDataPacksIfChanged(true);
                 } else {
                     IrisLogging.warn("Default pack '" + pack + "' is not installed. Please download it manually with /iris download " + pack);
@@ -244,13 +245,16 @@ public class StudioSVC implements IrisService {
         }
     }
 
-    public void downloadRelease(VolmitSender sender, String url, boolean forceOverwrite) {
+    public void downloadDefaultOverworld(VolmitSender sender, boolean forceOverwrite) {
         try {
-            download(sender, "IrisDimensions", url, forceOverwrite, true);
+            String key = PackDownloader.downloadDefaultOverworld(getWorkspaceFolder(), forceOverwrite, sender::sendMessage);
+            if (key != null) {
+                ServerConfigurator.installDataPacks(true);
+            }
         } catch (Throwable e) {
             IrisLogging.reportError(e);
             e.printStackTrace();
-            sender.sendMessage("Failed to download 'IrisDimensions/overworld' from " + url + ".");
+            sender.sendMessage("Failed to download the IrisDimensions/overworld beta release.");
         }
     }
 

@@ -121,7 +121,7 @@ public final class ModdedForcedDatapack {
 
         File packFolder = packDirectory.toFile();
         KList<File> folders = new KList<>();
-        folders.add(packFolder.getParentFile());
+        folders.add(packFolder);
         KSet<String> seenBiomes = new KSet<>();
         IDataFixer fixer = DataVersion.getLatest().get();
 
@@ -185,8 +185,8 @@ public final class ModdedForcedDatapack {
     private static void writeWorldPreset(KList<File> folders, IrisDimension dimension, String packName, String dimensionKey, String presetKey) throws IOException {
         String dimensionRef = dimensionKey.equals(packName) ? packName : packName + ":" + dimensionKey;
         String json = worldPresetJson(dimensionRef, dimensionTypeRef(dimension));
-        for (File parent : folders) {
-            Path output = parent.toPath().resolve(PACK_FOLDER).resolve("data").resolve("irisworldgen").resolve("worldgen").resolve("world_preset").resolve(presetKey + ".json");
+        for (File datapackRoot : folders) {
+            Path output = datapackRoot.toPath().resolve("data").resolve("irisworldgen").resolve("worldgen").resolve("world_preset").resolve(presetKey + ".json");
             Files.createDirectories(output.getParent());
             Files.writeString(output, json, StandardCharsets.UTF_8);
         }
@@ -257,8 +257,8 @@ public final class ModdedForcedDatapack {
         IrisDimensionType type = dimension.getDimensionType();
         String json = type.toJson(fixer);
         String typeKey = dimension.getDimensionTypeKey();
-        for (File parent : folders) {
-            Path output = parent.toPath().resolve(PACK_FOLDER).resolve("data").resolve("irisworldgen").resolve("dimension_type").resolve(typeKey + ".json");
+        for (File datapackRoot : folders) {
+            Path output = datapackRoot.toPath().resolve("data").resolve("irisworldgen").resolve("dimension_type").resolve(typeKey + ".json");
             Files.createDirectories(output.getParent());
             Files.writeString(output, json, StandardCharsets.UTF_8);
         }

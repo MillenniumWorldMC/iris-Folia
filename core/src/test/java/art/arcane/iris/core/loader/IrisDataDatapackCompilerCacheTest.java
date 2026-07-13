@@ -1,0 +1,69 @@
+package art.arcane.iris.core.loader;
+
+import art.arcane.iris.engine.framework.MeteredCache;
+import art.arcane.iris.engine.framework.PreservationRegistry;
+import art.arcane.iris.spi.IrisServices;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+
+import java.io.File;
+import java.util.concurrent.ExecutorService;
+
+import static org.junit.Assert.assertSame;
+
+public class IrisDataDatapackCompilerCacheTest {
+    @Rule
+    public TemporaryFolder temporaryFolder = new TemporaryFolder();
+
+    private IrisData runtimeData;
+    private IrisData compilerData;
+
+    @Before
+    public void registerPreservationService() {
+        IrisServices.register(PreservationRegistry.class, new NoOpPreservationRegistry());
+    }
+
+    @After
+    public void closeDataAndServices() {
+        if (compilerData != null) {
+            compilerData.close();
+        }
+        if (runtimeData != null) {
+            runtimeData.close();
+        }
+        IrisServices.clear();
+    }
+
+    @Test
+    public void closingCompilerDoesNotEvictRuntimeDataForSameDirectory() throws Exception {
+        File packDirectory = temporaryFolder.newFolder("pack");
+        runtimeData = IrisData.get(packDirectory);
+        compilerData = IrisData.openDatapackCompiler(packDirectory);
+
+        compilerData.close();
+        compilerData = null;
+
+        assertSame(runtimeData, IrisData.getLoaded(packDirectory).orElseThrow());
+    }
+
+    private static final class NoOpPreservationRegistry implements PreservationRegistry {
+        @Override
+        public void register(Thread thread) {
+        }
+
+        @Override
+        public void register(ExecutorService service) {
+        }
+
+        @Override
+        public void registerCache(MeteredCache cache) {
+        }
+
+        @Override
+        public void dereference() {
+        }
+    }
+}

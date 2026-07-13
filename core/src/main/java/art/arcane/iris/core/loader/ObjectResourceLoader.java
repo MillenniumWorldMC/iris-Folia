@@ -31,8 +31,8 @@ import java.io.IOException;
 import java.util.HashSet;
 
 public class ObjectResourceLoader extends ResourceLoader<IrisObject> {
-    public ObjectResourceLoader(File root, IrisData idm, String folderName, String resourceTypeName) {
-        super(root, idm, folderName, resourceTypeName, IrisObject.class);
+    public ObjectResourceLoader(File root, IrisData idm, String folderName, String resourceTypeName, Options options) {
+        super(root, idm, folderName, resourceTypeName, IrisObject.class, options);
         loadCache = new KCache<>(this::loadRaw, IrisSettings.get().getPerformance().getObjectLoaderCacheSize());
     }
 

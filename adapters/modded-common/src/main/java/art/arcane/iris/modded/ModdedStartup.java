@@ -18,6 +18,7 @@
 
 package art.arcane.iris.modded;
 
+import art.arcane.iris.core.pack.PackDownloader;
 import art.arcane.iris.core.pack.PackValidationRegistry;
 import art.arcane.iris.core.pack.PackValidationResult;
 import art.arcane.iris.core.pack.PackValidator;
@@ -131,7 +132,8 @@ public final class ModdedStartup {
             if (new File(packFolder, "dimensions/" + pack + ".json").isFile()) {
                 return;
             }
-            LOGGER.info("Iris default pack '{}' missing; downloading IrisDimensions/{} (master)", pack, pack);
+            String source = PackDownloader.isDefaultOverworld(pack) ? "beta release" : "master branch";
+            LOGGER.info("Iris default pack '{}' missing; downloading IrisDimensions/{} ({})", pack, pack, source);
             boolean installed = ModdedPackInstaller.install(configDir, pack, "master", (String line) -> LOGGER.info("Iris: {}", line));
             if (!installed) {
                 LOGGER.warn("Iris default pack '{}' could not be downloaded; install it with /iris download {}", pack, pack);

@@ -55,6 +55,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -93,8 +94,17 @@ public class ResourceLoader<T extends IrisRegistrant> implements MeteredCache {
     protected IrisData manager;
     protected AtomicInteger loads;
     protected ChronoLatch sec;
+    private final Options options;
 
-    public ResourceLoader(File root, IrisData manager, String folderName, String resourceTypeName, Class<? extends T> objectClass) {
+    public ResourceLoader(
+            File root,
+            IrisData manager,
+            String folderName,
+            String resourceTypeName,
+            Class<? extends T> objectClass,
+            Options options
+    ) {
+        this.options = Objects.requireNonNull(options, "options");
         this.manager = manager;
         firstAccess = new KSet<>();
         folderCache = new AtomicCache<>();
@@ -105,12 +115,14 @@ public class ResourceLoader<T extends IrisRegistrant> implements MeteredCache {
         this.resourceTypeName = resourceTypeName;
         this.root = root;
         this.folderName = folderName;
-        loadCache = new KCache<>(this::loadRaw, IrisSettings.get().getPerformance().getResourceLoaderCacheSize());
+        loadCache = new KCache<>(this::loadRaw, options.cacheSize());
         IrisLogging.debug("Loader<" + C.GREEN + resourceTypeName + C.LIGHT_PURPLE + "> created in " + C.RED + "IDM/" + manager.getId() + C.LIGHT_PURPLE + " on " + C.GRAY + manager.getDataFolder().getPath());
-        IrisServices.get(PreservationRegistry.class).registerCache(this);
-        PreservationRegistry preservation = IrisServices.getOrNull(PreservationRegistry.class);
-        if (preservation != null && schemaBuildExecutorRegistered.compareAndSet(false, true)) {
-            preservation.register(schemaBuildExecutor);
+        if (options.registerPreservation()) {
+            IrisServices.get(PreservationRegistry.class).registerCache(this);
+            PreservationRegistry preservation = IrisServices.getOrNull(PreservationRegistry.class);
+            if (preservation != null && schemaBuildExecutorRegistered.compareAndSet(false, true)) {
+                preservation.register(schemaBuildExecutor);
+            }
         }
     }
 
@@ -201,10 +213,15 @@ public class ResourceLoader<T extends IrisRegistrant> implements MeteredCache {
         }
 
         if (sec.flip()) {
-            J.a(() -> {
+            Runnable summary = () -> {
                 IrisLogging.debug("Loaded " + C.WHITE + loads.get() + " " + resourceTypeName + (loads.get() == 1 ? "" : "s") + C.GRAY + " (" + Form.f(getLoadCache().getSize()) + " " + resourceTypeName + (loadCache.getSize() == 1 ? "" : "s") + " Loaded)");
                 loads.set(0);
-            });
+            };
+            if (options.synchronousReporting()) {
+                summary.run();
+            } else {
+                J.a(summary);
+            }
         }
 
         IrisLogging.debug("Loader<" + C.GREEN + resourceTypeName + C.LIGHT_PURPLE + "> iload " + C.YELLOW + t.getLoadKey() + C.LIGHT_PURPLE + " in " + C.GRAY + t.getLoadFile().getPath() + C.LIGHT_PURPLE + " TLT: " + C.RED + Form.duration(tlt.get(), 2));
@@ -215,7 +232,12 @@ public class ResourceLoader<T extends IrisRegistrant> implements MeteredCache {
     }
 
     public void failLoad(File path, String rawText, Throwable e) {
-        J.a(() -> JsonSchemaValidator.reportLoadFailure(path, rawText, resourceTypeName, e));
+        Runnable report = () -> JsonSchemaValidator.reportLoadFailure(path, rawText, resourceTypeName, e);
+        if (options.synchronousReporting()) {
+            report.run();
+        } else {
+            J.a(report);
+        }
     }
 
     private KList<File> matchAllFiles(File root, Predicate<File> f) {
@@ -576,5 +598,25 @@ public class ResourceLoader<T extends IrisRegistrant> implements MeteredCache {
 
     public long getTotalStorage() {
         return getSize();
+    }
+
+    public record Options(int cacheSize, boolean registerPreservation, boolean synchronousReporting) {
+        public Options {
+            if (cacheSize < 1) {
+                throw new IllegalArgumentException("Resource loader cache size must be positive");
+            }
+        }
+
+        public static Options runtime() {
+            return new Options(
+                    IrisSettings.get().getPerformance().getResourceLoaderCacheSize(),
+                    true,
+                    false
+            );
+        }
+
+        public static Options datapackCompiler() {
+            return new Options(CACHE_SIZE, false, true);
+        }
     }
 }

@@ -21,9 +21,27 @@ package art.arcane.iris.core.pack;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public class PackDownloaderTest {
+    @Test
+    public void resolvesDefaultOverworldBetaRelease() {
+        assertEquals(
+                "https://github.com/IrisDimensions/overworld/releases/download/beta/overworld.zip",
+                PackDownloader.defaultOverworldReleaseUrl()
+        );
+        assertTrue(PackDownloader.isDefaultOverworld("overworld"));
+    }
+
+    @Test
+    public void rejectsOtherPacksAsDefaultOverworld() {
+        assertFalse(PackDownloader.isDefaultOverworld("theend"));
+        assertFalse(PackDownloader.isDefaultOverworld(""));
+        assertFalse(PackDownloader.isDefaultOverworld(null));
+    }
+
     @Test
     public void resolvesBranchReference() {
         assertEquals(

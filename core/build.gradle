@@ -87,6 +87,9 @@ dependencies {
     implementation(volmLibCoordinate) {
         transitive = false
     }
+    implementation(libs.gson)
+    implementation(libs.lru)
+    implementation(libs.caffeine)
 
     // Dynamically Loaded
     slim(libs.paralithic)
@@ -104,11 +107,8 @@ dependencies {
     slim(libs.oshi)
     slim(libs.lz4)
     slim(libs.fastutil)
-    slim(libs.lru)
     slim(libs.zip)
-    slim(libs.gson)
     slim(libs.asm)
-    slim(libs.caffeine)
     slim(libs.byteBuddy.core)
     slim(libs.byteBuddy.agent)
     slim(libs.dom4j)

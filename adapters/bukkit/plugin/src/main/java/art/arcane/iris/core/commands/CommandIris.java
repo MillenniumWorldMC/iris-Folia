@@ -26,6 +26,7 @@ import art.arcane.iris.core.IrisWorlds;
 import art.arcane.iris.core.ServerConfigurator;
 import art.arcane.iris.core.lifecycle.WorldLifecycleService;
 import art.arcane.iris.core.loader.IrisData;
+import art.arcane.iris.core.pack.PackDownloader;
 import art.arcane.iris.core.service.StudioSVC;
 import art.arcane.iris.core.tools.IrisToolbelt;
 import art.arcane.iris.engine.framework.Engine;
@@ -460,10 +461,11 @@ public class CommandIris implements DirectorExecutor {
             @Param(name = "overwrite", description = "Whether or not to overwrite the pack with the downloaded one", aliases = "force", defaultValue = "false")
             boolean overwrite
     ) {
-        sender().sendMessage(C.GREEN + "Downloading pack: " + pack + "/" + branch + (overwrite ? " overwriting" : ""));
-        if (pack.equals("overworld")) {
-            Iris.service(StudioSVC.class).downloadBranch(sender(), "IrisDimensions/overworld", "master", overwrite);
+        if (PackDownloader.isDefaultOverworld(pack)) {
+            sender().sendMessage(C.GREEN + "Downloading pack: " + pack + " (beta release)" + (overwrite ? " overwriting" : ""));
+            Iris.service(StudioSVC.class).downloadDefaultOverworld(sender(), overwrite);
         } else {
+            sender().sendMessage(C.GREEN + "Downloading pack: " + pack + "/" + branch + (overwrite ? " overwriting" : ""));
             Iris.service(StudioSVC.class).downloadSearch(sender(), "IrisDimensions/" + pack + "/" + branch, overwrite);
         }
         ServerConfigurator.installDataPacksIfChanged(true);

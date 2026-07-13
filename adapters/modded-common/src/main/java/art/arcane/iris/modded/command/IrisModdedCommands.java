@@ -21,6 +21,7 @@ package art.arcane.iris.modded.command;
 import art.arcane.iris.core.IrisSettings;
 import art.arcane.iris.core.gui.GuiHost;
 import art.arcane.iris.core.loader.IrisRegistrant;
+import art.arcane.iris.core.pack.PackDownloader;
 import art.arcane.iris.engine.framework.Engine;
 import art.arcane.iris.engine.framework.IrisStructureLocator;
 import art.arcane.iris.engine.framework.Locator;
@@ -983,15 +984,16 @@ public final class IrisModdedCommands {
 
     private static int download(CommandSourceStack source, String pack, String branch) {
         MinecraftServer server = source.getServer();
-        String effectiveBranch = pack.equals("overworld") ? "master" : branch;
-        ok(source, "Downloading IrisDimensions/" + pack + " (branch " + effectiveBranch + ")...");
+        boolean defaultOverworld = PackDownloader.isDefaultOverworld(pack);
+        String downloadSource = defaultOverworld ? "beta release" : "branch " + branch;
+        ok(source, "Downloading IrisDimensions/" + pack + " (" + downloadSource + ")...");
         Thread thread = new Thread(() -> {
-            boolean installed = ModdedPackInstaller.install(ModdedEngineBootstrap.loader().configDir(), pack, effectiveBranch,
+            boolean installed = ModdedPackInstaller.install(ModdedEngineBootstrap.loader().configDir(), pack, branch,
                     (String message) -> server.execute(() -> ok(source, message)));
             if (installed) {
                 server.execute(() -> ok(source, "Pack '" + pack + "' installed. Its dimension types and custom biomes join the forced Iris datapack on the next server restart; worlds created before restarting run with fallback heights until then."));
             } else {
-                server.execute(() -> fail(source, "Pack download failed for " + pack + "/" + effectiveBranch + " (see console)."));
+                server.execute(() -> fail(source, "Pack download failed for " + pack + " (" + downloadSource + "; see console)."));
             }
         }, "Iris Pack Download");
         thread.setDaemon(true);

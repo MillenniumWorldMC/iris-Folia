@@ -48,6 +48,9 @@ public final class ModdedPackInstaller {
 
         File packs = configDir.resolve("irisworldgen").resolve("packs").toFile();
         try {
+            if (PackDownloader.isDefaultOverworld(pack)) {
+                return PackDownloader.downloadDefaultOverworld(packs, true, feedback) != null;
+            }
             return PackDownloader.download(packs, "IrisDimensions/" + pack, branch, true, false, feedback) != null;
         } catch (IOException error) {
             LOGGER.error("Iris pack download failed for IrisDimensions/{} ({})", pack, branch, error);

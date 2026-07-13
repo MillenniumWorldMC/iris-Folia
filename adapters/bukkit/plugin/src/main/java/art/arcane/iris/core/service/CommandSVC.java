@@ -50,6 +50,8 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -64,14 +66,13 @@ public class CommandSVC implements IrisService, CommandExecutor, TabCompleter, D
 
     @Override
     public void onEnable() {
-        PluginCommand command = Iris.instance.getCommand(ROOT_COMMAND);
-        if (command == null) {
-            Iris.warn("Failed to find command '" + ROOT_COMMAND + "'");
-            return;
+        PluginCommand command = findBukkitCommand();
+        if (command != null) {
+            command.setExecutor(this);
+            command.setTabCompleter(this);
+        } else {
+            registerPaperCommand();
         }
-
-        command.setExecutor(this);
-        command.setTabCompleter(this);
         J.a(this::getDirector);
     }
 
@@ -139,12 +140,7 @@ public class CommandSVC implements IrisService, CommandExecutor, TabCompleter, D
             return List.of();
         }
 
-        List<String> v = runDirectorTab(sender, alias, args);
-        if (sender instanceof Player player && IrisSettings.get().getGeneral().isCommandSounds()) {
-            player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.25f, RNG.r.f(0.125f, 1.95f));
-        }
-
-        return v;
+        return tabCompleteRoot(sender, alias, args);
     }
 
     @Override
@@ -153,13 +149,52 @@ public class CommandSVC implements IrisService, CommandExecutor, TabCompleter, D
             return false;
         }
 
+        executeRoot(sender, label, args);
+        return true;
+    }
+
+    void executeRoot(CommandSender sender, String label, String[] args) {
         if (!sender.hasPermission(ROOT_PERMISSION)) {
             sender.sendMessage("You lack the Permission '" + ROOT_PERMISSION + "'");
-            return true;
+            return;
         }
 
         J.aBukkit(() -> executeCommand(sender, label, args));
-        return true;
+    }
+
+    List<String> tabCompleteRoot(CommandSender sender, String alias, String[] args) {
+        List<String> suggestions = runDirectorTab(sender, alias, args);
+        if (sender instanceof Player player && IrisSettings.get().getGeneral().isCommandSounds()) {
+            player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.25f, RNG.r.f(0.125f, 1.95f));
+        }
+        return suggestions;
+    }
+
+    private PluginCommand findBukkitCommand() {
+        try {
+            return Iris.instance.getCommand(ROOT_COMMAND);
+        } catch (UnsupportedOperationException ignored) {
+            return null;
+        }
+    }
+
+    private void registerPaperCommand() {
+        try {
+            Class<?> registrarType = Class.forName(
+                    "art.arcane.iris.core.service.PaperCommandRegistrar",
+                    true,
+                    getClass().getClassLoader()
+            );
+            Method register = registrarType.getDeclaredMethod("register", Iris.class, CommandSVC.class);
+            register.invoke(null, Iris.instance, this);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause() == null ? e : e.getCause();
+            throw new IllegalStateException("Paper command registration failed", cause);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Paper command registrar is unavailable", e);
+        } catch (LinkageError e) {
+            throw new IllegalStateException("Paper command APIs are unavailable", e);
+        }
     }
 
     private void executeCommand(CommandSender sender, String label, String[] args) {
