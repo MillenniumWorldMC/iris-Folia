@@ -306,7 +306,8 @@ public class Iris extends VolmitPlugin implements Listener {
     @SuppressWarnings("deprecation")
     public static void later(NastyRunnable object) {
         try {
-            Bukkit.getScheduler().scheduleAsyncDelayedTask(instance, () ->
+            long delayMs = RNG.r.i(100, 1200) * 50L;
+            Bukkit.getAsyncScheduler().runDelayed(instance, (task) ->
             {
                 try {
                     object.run();
@@ -314,7 +315,7 @@ public class Iris extends VolmitPlugin implements Listener {
                     e.printStackTrace();
                     Iris.reportError(e);
                 }
-            }, RNG.r.i(100, 1200));
+            }, delayMs, java.util.concurrent.TimeUnit.MILLISECONDS);
         } catch (IllegalPluginAccessException ignored) {
 
         }
@@ -501,6 +502,8 @@ public class Iris extends VolmitPlugin implements Listener {
                             .environment(dim.getEnvironment());
                     INMS.get().createWorld(c);
                     Iris.info(C.LIGHT_PURPLE + "Loaded " + s + "!");
+                } catch (UnsupportedOperationException e) {
+                    Iris.warn("World " + s + " could not be created at runtime (Folia). It should be loaded at server startup via bukkit.yml. If not, ensure it's registered in bukkit.yml.");
                 } catch (Throwable e) {
                     Iris.error("Failed to load world " + s + "!");
                     e.printStackTrace();
@@ -518,13 +521,13 @@ public class Iris extends VolmitPlugin implements Listener {
             try {
                 Player r = new KList<>(getServer().getOnlinePlayers()).getRandom();
                 Iris.service(StudioSVC.class).open(r != null ? new VolmitSender(r) : getSender(), 1337, IrisSettings.get().getGenerator().getDefaultWorldType(), (w) -> {
-                    J.s(() -> {
-                        var spawn = w.getSpawnLocation();
-                        for (Player i : getServer().getOnlinePlayers()) {
+                    var spawn = w.getSpawnLocation();
+                    for (Player i : getServer().getOnlinePlayers()) {
+                        Bukkit.getRegionScheduler().run(Iris.instance, spawn, (task) -> {
                             i.setGameMode(GameMode.SPECTATOR);
                             i.teleport(spawn);
-                        }
-                    });
+                        });
+                    }
                 });
             } catch (IrisException e) {
                 reportError(e);
@@ -556,7 +559,8 @@ public class Iris extends VolmitPlugin implements Listener {
     public void onDisable() {
         if (IrisSafeguard.isForceShutdown()) return;
         services.values().forEach(IrisService::onDisable);
-        Bukkit.getScheduler().cancelTasks(this);
+        Bukkit.getGlobalRegionScheduler().cancelTasks(this);
+        Bukkit.getAsyncScheduler().cancelTasks(this);
         HandlerList.unregisterAll((Plugin) this);
         postShutdown.forEach(Runnable::run);
         super.onDisable();

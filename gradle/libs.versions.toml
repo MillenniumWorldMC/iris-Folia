@@ -14,6 +14,7 @@ grgit = "5.3.2" # https://github.com/ajoberstar/grgit
 # Core Libraries
 lombok = "1.18.38"
 spigot = "1.20.1-R0.1-SNAPSHOT" # https://hub.spigotmc.org/nexus/repository/snapshots/org/spigotmc/spigot-api/maven-metadata.xml
+folia-api = "1.20.1-R0.1-SNAPSHOT" # https://repo.papermc.io/repository/maven-public/dev/folia/folia-api/maven-metadata.xml
 log4j = "2.19.0" # https://central.sonatype.com/artifact/org.apache.logging.log4j/log4j-api
 adventure-api = "4.24.0" # https://github.com/KyoriPowered/adventure
 adventure-platform = "4.4.1" # https://github.com/KyoriPowered/adventure-platform
@@ -61,6 +62,7 @@ craftengine = "0.0.67" # https://github.com/Xiao-MoMi/craft-engine/releases
 # Core Libraries
 lombok = { module = "org.projectlombok:lombok", version.ref ="lombok" }
 spigot = { module = "org.spigotmc:spigot-api", version.ref = "spigot" }
+folia-api = { module = "dev.folia:folia-api", version.ref = "folia-api" }
 log4j-api = { module = "org.apache.logging.log4j:log4j-api", version.ref = "log4j" }
 log4j-core = { module = "org.apache.logging.log4j:log4j-core", version.ref = "log4j" }
 annotations = { module = "org.jetbrains:annotations", version.ref = "annotations" }

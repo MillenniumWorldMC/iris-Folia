@@ -11,15 +11,14 @@ import com.volmit.iris.util.math.RollingSequence;
 import com.volmit.iris.util.math.Spiraler;
 import com.volmit.iris.util.scheduling.ChronoLatch;
 import com.volmit.iris.util.scheduling.J;
-import io.papermc.lib.PaperLib;
 import lombok.Data;
 import lombok.Getter;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.world.WorldUnloadEvent;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.io.File;
 import java.io.IOException;
@@ -150,19 +149,12 @@ public class LazyPregenerator extends Thread implements Listener {
     private void tickGenerate(Position2 chunk) {
         executorService.submit(() -> {
             CountDownLatch latch = new CountDownLatch(1);
-            if (PaperLib.isPaper()) {
-                PaperLib.getChunkAtAsync(world, chunk.getX(), chunk.getZ(), true)
-                        .thenAccept((i) -> {
-                            Iris.verbose("Generated Async " + chunk);
-                            latch.countDown();
-                        });
-            } else {
-                J.s(() -> {
-                    world.getChunkAt(chunk.getX(), chunk.getZ());
-                    Iris.verbose("Generated " + chunk);
-                    latch.countDown();
-                });
-            }
+            Location chunkLoc = new Location(world, chunk.getX() << 4, 0, chunk.getZ() << 4);
+            world.getChunkAtAsync(chunk.getX(), chunk.getZ(), true)
+                    .thenAccept((i) -> {
+                        Iris.verbose("Generated Async " + chunk);
+                        latch.countDown();
+                    });
             try {
                 latch.await();
             } catch (InterruptedException ignored) {}
@@ -171,7 +163,9 @@ public class LazyPregenerator extends Thread implements Listener {
     }
 
     private void tickRegenerate(Position2 chunk) {
-        J.s(() -> world.regenerateChunk(chunk.getX(), chunk.getZ()));
+        Location chunkLoc = new Location(world, chunk.getX() << 4, 0, chunk.getZ() << 4);
+        Bukkit.getRegionScheduler().run(Iris.instance, chunkLoc, (task) ->
+                world.regenerateChunk(chunk.getX(), chunk.getZ()));
         Iris.verbose("Regenerated " + chunk);
     }
 
@@ -238,16 +232,13 @@ public class LazyPregenerator extends Thread implements Listener {
             }
             save();
             jobs.remove(world.getName());
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    while (lazyFile.exists()){
-                        lazyFile.delete();
-                        J.sleep(1000);
-                    }
-                    Iris.info("LazyGen: " + C.IRIS + world.getName() + C.BLUE + " File deleted and instance closed.");
+            Bukkit.getGlobalRegionScheduler().runDelayed(Iris.instance, (task) -> {
+                while (lazyFile.exists()){
+                    lazyFile.delete();
+                    J.sleep(1000);
                 }
-            }.runTaskLater(Iris.instance, 20L);
+                Iris.info("LazyGen: " + C.IRIS + world.getName() + C.BLUE + " File deleted and instance closed.");
+            }, 20L);
         } catch (Exception e) {
             Iris.error("Failed to shutdown Lazygen for " + world.getName());
             e.printStackTrace();

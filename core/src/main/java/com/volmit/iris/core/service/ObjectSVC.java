@@ -71,7 +71,7 @@ public class ObjectSVC implements IrisService {
      */
     private void revert(Map<Block, BlockData> blocks) {
         Iterator<Map.Entry<Block, BlockData>> it = blocks.entrySet().iterator();
-        Bukkit.getScheduler().runTask(Iris.instance, () -> {
+        Bukkit.getGlobalRegionScheduler().run(Iris.instance, (task) -> {
             int amount = 0;
             while (it.hasNext()) {
                 Map.Entry<Block, BlockData> entry = it.next();

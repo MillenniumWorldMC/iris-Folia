@@ -52,7 +52,7 @@ val lib = "com.volmit.iris.util"
  */
 dependencies {
     // Provided or Classpath
-    compileOnly(libs.spigot)
+    compileOnly(libs.folia.api)
     compileOnly(libs.log4j.api)
     compileOnly(libs.log4j.core)
 

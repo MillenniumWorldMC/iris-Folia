@@ -171,7 +171,7 @@ public class VirtualCommand {
         for (String i : command.getRequiredPermissions()) {
             if (!sender.hasPermission(i)) {
                 failed = true;
-                Bukkit.getScheduler().scheduleSyncDelayedTask(Iris.instance, () -> sender.sendMessage("- " + C.WHITE + i), 0);
+                Bukkit.getGlobalRegionScheduler().run(Iris.instance, (task) -> sender.sendMessage("- " + C.WHITE + i));
             }
         }
 

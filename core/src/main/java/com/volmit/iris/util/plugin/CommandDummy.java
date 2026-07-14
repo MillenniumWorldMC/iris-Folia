@@ -63,6 +63,11 @@ public class CommandDummy implements CommandSender {
         return null;
     }
 
+    @Override
+    public net.kyori.adventure.text.Component name() {
+        return net.kyori.adventure.text.Component.text("Dummy");
+    }
+
     @NotNull
     @Override
     public Spigot spigot() {

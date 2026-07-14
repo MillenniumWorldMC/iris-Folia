@@ -77,8 +77,7 @@ public class MMOItemsDataProvider extends ExternalDataProvider {
                 future.completeExceptionally(e);
             }
         };
-        if (Bukkit.isPrimaryThread()) run.run();
-        else J.s(run);
+        J.s(run);
         ItemStack item = null;
         try {
             item = future.get();
@@ -107,8 +106,7 @@ public class MMOItemsDataProvider extends ExternalDataProvider {
                         .filter(dataType.asPredicate(this))
                         .toList();
 
-                if (Bukkit.isPrimaryThread()) yield supplier.get();
-                else yield J.sfut(supplier).join();
+                yield supplier.get();
             }
         };
     }

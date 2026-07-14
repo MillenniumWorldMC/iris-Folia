@@ -21,6 +21,7 @@ package com.volmit.iris.core.tools;
 import com.google.common.util.concurrent.AtomicDouble;
 import com.volmit.iris.Iris;
 import com.volmit.iris.core.IrisSettings;
+import com.volmit.iris.core.IrisWorlds;
 import com.volmit.iris.core.ServerConfigurator;
 import com.volmit.iris.core.nms.INMS;
 import com.volmit.iris.core.pregenerator.PregenTask;
@@ -110,10 +111,6 @@ public class IrisCreator {
      */
 
     public World create() throws IrisException {
-        if (Bukkit.isPrimaryThread()) {
-            throw new IrisException("You cannot invoke create() on the main thread.");
-        }
-
         IrisDimension d = IrisToolbelt.getDimension(dimension());
 
         if (d == null) {
@@ -168,9 +165,34 @@ public class IrisCreator {
 
         World world;
         try {
-            world = J.sfut(() -> INMS.get().createWorld(wc)).get();
+            if (Bukkit.isGlobalTickThread()) {
+                world = INMS.get().createWorld(wc);
+            } else {
+                world = J.sfut(() -> INMS.get().createWorld(wc)).get();
+            }
         } catch (Throwable e) {
             done.set(true);
+            boolean isUnsupported = e instanceof UnsupportedOperationException
+                    || (e instanceof java.util.concurrent.ExecutionException
+                        && e.getCause() instanceof UnsupportedOperationException)
+                    || (e.getCause() != null && e.getCause().getCause() instanceof UnsupportedOperationException);
+            if (isUnsupported) {
+                Iris.info("Folia does not support runtime world creation. Registering world in bukkit.yml for next startup...");
+                try {
+                    String genId = dimension();
+                    if (genId == null && wc.generator() instanceof PlatformChunkGenerator pg) {
+                        genId = pg.getTarget().getDimension().getLoadKey();
+                    }
+                    String finalGenId = genId != null ? genId : dimension();
+                    IrisWorlds.get().put(name(), finalGenId);
+                    IrisWorlds.writeBukkitWorld(name(), finalGenId);
+                } catch (Exception ex) {
+                    Iris.reportError(ex);
+                }
+                throw new IrisException("World registered in bukkit.yml! Please restart the server to load the world. (Folia does not support runtime world creation)");
+            }
+            Iris.reportError(e);
+            e.printStackTrace();
             throw new IrisException("Failed to create world!", e);
         }
 

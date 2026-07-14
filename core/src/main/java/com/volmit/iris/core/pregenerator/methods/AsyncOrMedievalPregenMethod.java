@@ -21,14 +21,13 @@ package com.volmit.iris.core.pregenerator.methods;
 import com.volmit.iris.core.pregenerator.PregenListener;
 import com.volmit.iris.core.pregenerator.PregeneratorMethod;
 import com.volmit.iris.util.mantle.Mantle;
-import io.papermc.lib.PaperLib;
 import org.bukkit.World;
 
 public class AsyncOrMedievalPregenMethod implements PregeneratorMethod {
     private final PregeneratorMethod method;
 
     public AsyncOrMedievalPregenMethod(World world, int threads) {
-        method = PaperLib.isPaper() ? new AsyncPregenMethod(world, threads) : new MedievalPregenMethod(world);
+        method = new AsyncPregenMethod(world, threads);
     }
 
     @Override

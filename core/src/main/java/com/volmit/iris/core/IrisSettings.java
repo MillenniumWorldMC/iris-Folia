@@ -232,6 +232,7 @@ public class IrisSettings {
 
     @Data
     public static class IrisSettingsSentry {
+        public String dsn = null;
         public boolean includeServerId = true;
         public boolean disableAutoReporting = false;
         public boolean debug = false;

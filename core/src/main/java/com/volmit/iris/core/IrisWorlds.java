@@ -123,4 +123,17 @@ public class IrisWorlds {
 
         return result;
     }
+
+    public static void writeBukkitWorld(String worldName, String dimensionKey) {
+        try {
+            var bukkit = YamlConfiguration.loadConfiguration(ServerProperties.BUKKIT_YML);
+            bukkit.set("worlds." + worldName + ".generator", "Iris:" + dimensionKey);
+            bukkit.save(ServerProperties.BUKKIT_YML);
+            Iris.info("Registered world '" + worldName + "' in bukkit.yml with generator Iris:" + dimensionKey);
+        } catch (IOException e) {
+            Iris.error("Failed to write world to bukkit.yml!");
+            e.printStackTrace();
+            Iris.reportError(e);
+        }
+    }
 }

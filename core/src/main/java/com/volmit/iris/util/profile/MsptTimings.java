@@ -3,8 +3,8 @@ package com.volmit.iris.util.profile;
 import com.volmit.iris.util.math.M;
 import com.volmit.iris.util.scheduling.J;
 import com.volmit.iris.util.scheduling.Looper;
-import org.bukkit.Bukkit;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
@@ -13,6 +13,7 @@ public abstract class MsptTimings extends Looper {
     private int lastTick, lastMspt;
     private long lastTime;
     private int taskId = -1;
+    private final AtomicBoolean taskRunning = new AtomicBoolean(false);
 
     public MsptTimings() {
         setName("MsptTimings");
@@ -52,12 +53,14 @@ public abstract class MsptTimings extends Looper {
     protected abstract void update(int mspt);
 
     private boolean startTickTask() {
-        if (taskId != -1 && (Bukkit.getScheduler().isQueued(taskId) || Bukkit.getScheduler().isCurrentlyRunning(taskId)))
+        if (taskRunning.get())
             return false;
 
+        taskRunning.set(true);
         taskId = J.sr(() -> {
             if (isInterrupted()) {
                 J.csr(taskId);
+                taskRunning.set(false);
                 return;
             }
 

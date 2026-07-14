@@ -74,9 +74,9 @@ public class IrisCommand {
                     .replaceAll("\\Q{z}\\E", String.valueOf(at.getBlockZ()));
             final String finalCommand = command;
             if (repeat) {
-                Bukkit.getScheduler().scheduleSyncRepeatingTask(Iris.instance, () -> Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), finalCommand), delay, repeatDelay);
+                Bukkit.getGlobalRegionScheduler().runAtFixedRate(Iris.instance, (task) -> Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), finalCommand), delay, repeatDelay);
             } else {
-                Bukkit.getScheduler().scheduleSyncDelayedTask(Iris.instance, () -> Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), finalCommand), delay);
+                Bukkit.getGlobalRegionScheduler().runDelayed(Iris.instance, (task) -> Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), finalCommand), delay);
             }
         }
     }

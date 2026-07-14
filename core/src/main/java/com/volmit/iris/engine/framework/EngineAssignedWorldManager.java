@@ -24,6 +24,7 @@ import com.volmit.iris.util.collection.KList;
 import com.volmit.iris.util.format.C;
 import com.volmit.iris.util.math.Position2;
 import com.volmit.iris.util.plugin.VolmitSender;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.*;
 import org.bukkit.entity.EnderSignal;
 import org.bukkit.entity.Player;
@@ -42,18 +43,19 @@ import org.bukkit.inventory.EquipmentSlot;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public abstract class EngineAssignedWorldManager extends EngineAssignedComponent implements EngineWorldManager, Listener {
-    private final int taskId;
+    private ScheduledTask scheduledTask;
     protected AtomicBoolean ignoreTP = new AtomicBoolean(false);
 
     public EngineAssignedWorldManager() {
         super(null, null);
-        taskId = -1;
+        scheduledTask = null;
     }
 
     public EngineAssignedWorldManager(Engine engine) {
         super(engine, "World");
         Iris.instance.registerListener(this);
-        taskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(Iris.instance, this::onTick, 0, 0);
+        scheduledTask = Bukkit.getGlobalRegionScheduler().runAtFixedRate(Iris.instance,
+                (task) -> this.onTick(), 1, 1);
     }
 
     @EventHandler
@@ -137,6 +139,8 @@ public abstract class EngineAssignedWorldManager extends EngineAssignedComponent
     public void close() {
         super.close();
         Iris.instance.unregisterListener(this);
-        Bukkit.getScheduler().cancelTask(taskId);
+        if (scheduledTask != null) {
+            scheduledTask.cancel();
+        }
     }
 }

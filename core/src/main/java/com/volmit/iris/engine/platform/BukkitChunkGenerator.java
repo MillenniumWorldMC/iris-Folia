@@ -41,7 +41,6 @@ import com.volmit.iris.util.io.ReactiveFolder;
 import com.volmit.iris.util.scheduling.ChronoLatch;
 import com.volmit.iris.util.scheduling.J;
 import com.volmit.iris.util.scheduling.Looper;
-import io.papermc.lib.PaperLib;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.Setter;
@@ -142,7 +141,7 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
     @Override
     public Location getFixedSpawnLocation(@NotNull World world, @NotNull Random random) {
         Location location = new Location(world, 0, 64, 0);
-        PaperLib.getChunkAtAsync(location)
+        world.getChunkAtAsync(location)
                 .thenAccept(c -> {
                     World w = c.getWorld();
                     if (!w.getSpawnLocation().equals(location))
@@ -205,7 +204,7 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
             this.world.bind(world);
             getEngine().generate(x << 4, z << 4, tc, IrisSettings.get().getGenerator().useMulticore);
 
-            Chunk c = PaperLib.getChunkAtAsync(world, x, z)
+            Chunk c = world.getChunkAtAsync(x, z, true)
                     .thenApply(d -> {
                         Iris.tickets.addTicket(d);
 
@@ -222,6 +221,8 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
 
 
             KList<CompletableFuture<?>> futures = new KList<>(1 + getEngine().getHeight() >> 4);
+            Location chunkLoc = new Location(world, x << 4, 0, z << 4);
+            Executor regionExecutor = r -> Bukkit.getRegionScheduler().run(Iris.instance, chunkLoc, (task) -> r.run());
             for (int i = getEngine().getHeight() >> 4; i >= 0; i--) {
                 int finalI = i << 4;
                 futures.add(CompletableFuture.runAsync(() -> {
@@ -236,15 +237,15 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
                             }
                         }
                     }
-                }, syncExecutor));
+                }, regionExecutor));
             }
-            futures.add(CompletableFuture.runAsync(() -> INMS.get().placeStructures(c), syncExecutor));
+            futures.add(CompletableFuture.runAsync(() -> INMS.get().placeStructures(c), regionExecutor));
 
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                     .thenRunAsync(() -> {
                         Iris.tickets.removeTicket(c);
                         engine.getWorldManager().onChunkLoad(c, true);
-                    }, syncExecutor)
+                    }, regionExecutor)
                     .get();
             Iris.debug("Regenerated " + x + " " + z);
 

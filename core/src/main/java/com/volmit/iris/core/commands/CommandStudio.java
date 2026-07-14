@@ -59,7 +59,7 @@ import com.volmit.iris.util.scheduling.J;
 import com.volmit.iris.util.scheduling.O;
 import com.volmit.iris.util.scheduling.PrecisionStopwatch;
 import com.volmit.iris.util.scheduling.jobs.ParallelRadiusJob;
-import io.papermc.lib.PaperLib;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.*;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
@@ -316,17 +316,16 @@ public class CommandStudio implements DecreeExecutor {
         }
 
 
-        O<Integer> ta = new O<>();
-        ta.set(-1);
+        O<ScheduledTask> ta = new O<>();
 
         var sender = sender();
         var player = player();
         var engine = engine();
 
-        ta.set(Bukkit.getScheduler().scheduleSyncRepeatingTask(Iris.instance, () ->
+        ta.set(Bukkit.getGlobalRegionScheduler().runAtFixedRate(Iris.instance, (task) ->
         {
             if (!player.getOpenInventory().getType().equals(InventoryType.CHEST)) {
-                Bukkit.getScheduler().cancelTask(ta.get());
+                ta.get().cancel();
                 sender.sendMessage(C.GREEN + "Opened inventory!");
                 return;
             }
@@ -689,7 +688,7 @@ public class CommandStudio implements DecreeExecutor {
 
         sender().sendMessage(C.GREEN + "Sending you to the studio world!");
         var player = player();
-        PaperLib.teleportAsync(player(), Iris.service(StudioSVC.class)
+        player().teleportAsync(Iris.service(StudioSVC.class)
                 .getActiveProject()
                 .getActiveProvider()
                 .getTarget()
@@ -748,7 +747,7 @@ public class CommandStudio implements DecreeExecutor {
             pw.println("Iris Version: " + Iris.instance.getDescription().getVersion());
             pw.println("Bukkit Version: " + Bukkit.getBukkitVersion());
             pw.println("MC Version: " + Bukkit.getVersion());
-            pw.println("PaperSpigot: " + (PaperLib.isPaper() ? "Yup!" : "Nope!"));
+            pw.println("PaperSpigot: Yup!");
             pw.println("Report Captured At: " + new Date());
             pw.println("Chunks: (" + chunks.size() + "): ");
 

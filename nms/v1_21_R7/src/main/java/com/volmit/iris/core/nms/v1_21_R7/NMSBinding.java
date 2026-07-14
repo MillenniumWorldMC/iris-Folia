@@ -852,5 +852,5 @@ public class NMSBinding implements INMSBinding {
                 throw new RuntimeException("Iris failed to replace the levelStem", e instanceof InvocationTargetException ex ? ex.getCause() : e);
             }
         }
+        }
     }
-}

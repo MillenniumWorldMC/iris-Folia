@@ -83,7 +83,11 @@ public interface KeyedRegistry<T> {
     record BukkitRegistry<T extends Keyed>(Registry<T> registry) implements KeyedRegistry<T> {
         @Override
         public @NonNull Map<NamespacedKey, T> map() {
-            return registry.stream().collect(Collectors.toMap(Keyed::getKey, Function.identity()));
+            Map<NamespacedKey, T> map = new java.util.HashMap<>();
+            for (T value : registry) {
+                map.put(value.getKey(), value);
+            }
+            return map;
         }
 
         @Override

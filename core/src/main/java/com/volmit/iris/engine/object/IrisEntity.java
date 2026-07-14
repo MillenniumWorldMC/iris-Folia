@@ -242,9 +242,7 @@ public class IrisEntity extends IrisRegistrant {
         int gg = 0;
         for (IrisEntity i : passengers) {
             Entity passenger = i.spawn(gen, at, rng.nextParallelRNG(234858 + gg++));
-            if (!Bukkit.isPrimaryThread()) {
-                J.s(() -> e.addPassenger(passenger));
-            }
+            e.addPassenger(passenger);
         }
 
         if (e instanceof Attributable) {
@@ -338,7 +336,7 @@ public class IrisEntity extends IrisRegistrant {
         if (e instanceof Villager) {
             Villager villager = (Villager) e;
             villager.setRemoveWhenFarAway(false);
-            Bukkit.getScheduler().scheduleSyncDelayedTask(Iris.instance, () -> {
+            Bukkit.getGlobalRegionScheduler().runDelayed(Iris.instance, (task) -> {
                 villager.setPersistent(true);
             }, 1);
         }
@@ -429,13 +427,11 @@ public class IrisEntity extends IrisRegistrant {
             return null;
         }
 
-        if (!Bukkit.isPrimaryThread()) {
-            // Someone called spawn (worldedit maybe?) on a non server thread
-            // Due to the structure of iris, we will call it sync and busy wait until it's done.
+        if (!Bukkit.isGlobalTickThread() && !Bukkit.isOwnedByCurrentRegion(at.getWorld(), at.getBlockX() >> 4, at.getBlockZ() >> 4)) {
             AtomicReference<Entity> ae = new AtomicReference<>();
 
             try {
-                J.s(() -> ae.set(doSpawn(at)));
+                Bukkit.getRegionScheduler().run(Iris.instance, at, (task) -> ae.set(doSpawn(at)));
             } catch (Throwable e) {
                 return null;
             }

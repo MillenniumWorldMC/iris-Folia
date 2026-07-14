@@ -4,7 +4,9 @@ import com.volmit.iris.Iris;
 import com.volmit.iris.engine.data.cache.Cache;
 import com.volmit.iris.util.collection.KMap;
 import lombok.NonNull;
+import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
+import org.bukkit.Location;
 import org.bukkit.World;
 
 public class TicketHolder {
@@ -23,7 +25,9 @@ public class TicketHolder {
     public void addTicket(int x, int z) {
         tickets.compute(Cache.key(x, z), ($, ref) -> {
             if (ref == null) {
-                world.addPluginChunkTicket(x, z, Iris.instance);
+                Location chunkLoc = new Location(world, x << 4, 0, z << 4);
+                Bukkit.getRegionScheduler().run(Iris.instance, chunkLoc, (task) ->
+                        world.addPluginChunkTicket(x, z, Iris.instance));
                 return 1L;
             }
             return ++ref;
@@ -39,7 +43,9 @@ public class TicketHolder {
         return tickets.compute(Cache.key(x, z), ($, ref) -> {
             if (ref == null) return null;
             if (--ref <= 0) {
-                world.removePluginChunkTicket(x, z, Iris.instance);
+                Location chunkLoc = new Location(world, x << 4, 0, z << 4);
+                Bukkit.getRegionScheduler().run(Iris.instance, chunkLoc, (task) ->
+                        world.removePluginChunkTicket(x, z, Iris.instance));
                 return null;
             }
             return ref;
