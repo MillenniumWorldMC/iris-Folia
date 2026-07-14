@@ -1,8 +1,6 @@
-# Iris
+# iris-Folia
 
 The master branch is for the latest version of minecraft.
-
-# [Support](https://discord.gg/3xxPTpT) **|** [Documentation](https://docs.volmit.com/iris/) **|** [Git](https://github.com/IrisDimensions)
 
 # Building
 
