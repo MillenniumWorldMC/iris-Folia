@@ -212,10 +212,107 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
     }
 
     private void updateChunks() {
+        World world = getEngine().getWorld().realWorld();
+        for (Player i : world.getPlayers()) {
+            int r = 1;
+            Location loc = i.getLocation();
+            int pcx = loc.getBlockX() >> 4;
+            int pcz = loc.getBlockZ() >> 4;
+            for (int x = -r; x <= r; x++) {
+                for (int z = -r; z <= r; z++) {
+                    final int cx = pcx + x;
+                    final int cz = pcz + z;
+                    Location chunkLoc = new Location(world, cx << 4, 0, cz << 4);
+                    Bukkit.getRegionScheduler().run(Iris.instance, chunkLoc, (task) -> {
+                        Chunk gc = world.getChunkAt(cx, cz);
+                        if (!gc.isLoaded() || !Chunks.isSafe(world, cx, cz)) return;
+
+                        if (IrisSettings.get().getWorld().isPostLoadBlockUpdates()) {
+                            getEngine().updateChunk(gc);
+                        }
+
+                        if (IrisSettings.get().getWorld().isMarkerEntitySpawningSystem()) {
+                            getMantle().raiseFlag(cx, cz, MantleFlag.INITIAL_SPAWNED_MARKER,
+                                    () -> {
+                                        J.a(() -> spawnIn(gc, true), RNG.r.i(5, 200));
+                                        getSpawnersFromMarkers(gc).forEach((blockf, spawners) -> {
+                                            if (spawners.isEmpty()) return;
+                                            IrisPosition block = new IrisPosition(blockf.getX(), blockf.getY() + getEngine().getWorld().minHeight(), blockf.getZ());
+                                            IrisSpawner s = new KList<>(spawners).getRandom();
+                                            spawn(block, s, true);
+                                        });
+                                    });
+                        }
+                    });
+                }
+            }
+        }
     }
 
     private boolean onAsyncTick() {
-        return false;
+        if (getEngine().isClosed()) {
+            return false;
+        }
+
+        actuallySpawned = 0;
+
+        if (energy < 100) {
+            J.sleep(200);
+            return false;
+        }
+
+        if (!getEngine().getWorld().hasRealWorld()) {
+            Iris.debug("Can't spawn. No real world");
+            J.sleep(5000);
+            return false;
+        }
+
+        double epx = getEntitySaturation();
+        if (epx > IrisSettings.get().getWorld().getTargetSpawnEntitiesPerChunk()) {
+            Iris.debug("Can't spawn. The entity per chunk ratio is at " + Form.pc(epx, 2) + " > 100% (total entities " + entityCount + ")");
+            J.sleep(5000);
+            return false;
+        }
+
+        if (cl.flip()) {
+            try {
+                World world = getEngine().getWorld().realWorld();
+                if (!world.getPlayers().isEmpty()) {
+                    Player p = world.getPlayers().get(0);
+                    Bukkit.getRegionScheduler().run(Iris.instance, p.getLocation(), (task) ->
+                            precount = world.getEntities());
+                }
+            } catch (Throwable e) {
+                close();
+            }
+        }
+
+        int spawnBuffer = RNG.r.i(2, 12);
+        World world = getEngine().getWorld().realWorld();
+        List<Player> players = world.getPlayers();
+        if (players.isEmpty()) return false;
+
+        while (spawnBuffer-- > 0) {
+            Player p = players.get(RNG.r.nextInt(players.size()));
+            Location loc = p.getLocation();
+            int cx = loc.getBlockX() >> 4;
+            int cz = loc.getBlockZ() >> 4;
+            int r = 2;
+            int offsetX = RNG.r.i(-r, r);
+            int offsetZ = RNG.r.i(-r, r);
+            int tx = cx + offsetX;
+            int tz = cz + offsetZ;
+            Location chunkLoc = new Location(world, tx << 4, 0, tz << 4);
+
+            Bukkit.getRegionScheduler().run(Iris.instance, chunkLoc, (task) -> {
+                Chunk c = world.getChunkAt(tx, tz);
+                if (!c.isLoaded() || !Chunks.isSafe(world, tx, tz)) return;
+                spawnIn(c, false);
+            });
+        }
+
+        energy -= (actuallySpawned / 2D);
+        return actuallySpawned > 0;
     }
 
     private void fixEnergy() {

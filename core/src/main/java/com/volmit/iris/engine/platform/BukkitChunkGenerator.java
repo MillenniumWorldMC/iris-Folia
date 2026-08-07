@@ -59,6 +59,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.*;
@@ -131,10 +132,38 @@ public class BukkitChunkGenerator extends ChunkGenerator implements PlatformChun
             Iris.error("Failed to inject biome source into " + world.getName());
             e.printStackTrace();
         }
+        ensureMobSpawning(world);
         spawnChunks.complete(INMS.get().getSpawnChunkCount(world));
         Iris.instance.unregisterListener(this);
         IrisWorlds.get().put(world.getName(), dimensionKey);
         return true;
+    }
+
+    private void ensureMobSpawning(World world) {
+        try {
+            world.setSpawnFlags(true, true);
+        } catch (Throwable ignored) {
+        }
+        setGameRule(world, "spawner_blocks_work");
+        setGameRule(world, "spawn_mobs");
+        setGameRule(world, "spawn_monsters");
+    }
+
+    private void setGameRule(World world, String ruleName) {
+        try {
+            Class<?> gameRuleClass = Class.forName("org.bukkit.GameRule");
+            Method values = gameRuleClass.getMethod("values");
+            Object[] all = (Object[]) values.invoke(null);
+            Method getName = gameRuleClass.getMethod("getName");
+            for (Object rule : all) {
+                if (ruleName.equals((String) getName.invoke(rule))) {
+                    Method setGameRule = World.class.getMethod("setGameRule", gameRuleClass, Object.class);
+                    setGameRule.invoke(world, rule, Boolean.TRUE);
+                    return;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     @Nullable

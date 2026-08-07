@@ -365,9 +365,6 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
                 }
             });
 
-            try {
-                semaphore.acquire(1024);
-            } catch (InterruptedException ignored) {}
         } finally {
             chunk.release();
         }
@@ -376,18 +373,12 @@ public interface Engine extends DataProvider, Fallible, LootProvider, BlockUpdat
     private static Runnable run(Semaphore semaphore, Runnable runnable, int delay) {
         return () -> {
             try {
-                semaphore.acquire();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
+                runnable.run();
+            } catch (Throwable e) {
+                Iris.reportError(e);
+            } finally {
+                semaphore.release();
             }
-
-            J.s(() -> {
-                try {
-                    runnable.run();
-                } finally {
-                    semaphore.release();
-                }
-            }, delay);
         };
     }
 
