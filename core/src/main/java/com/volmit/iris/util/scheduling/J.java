@@ -233,6 +233,23 @@ public class J {
         Bukkit.getGlobalRegionScheduler().run(Iris.instance, (task) -> r.run());
     }
 
+    /**
+     * Schedule a task on the region that owns the given location. This is
+     * required for operations that modify entities or read/write world data
+     * at a specific location (e.g. potion effects, block access). Using the
+     * global region scheduler (J.s) for such operations causes thread-check
+     * failures on Folia because the global region does not own any chunks.
+     *
+     * @param r   the runnable
+     * @param loc the location whose owning region should run the task
+     */
+    public static void regionS(Runnable r, org.bukkit.Location loc) {
+        if (!Bukkit.getPluginManager().isPluginEnabled(Iris.instance)) {
+            return;
+        }
+        Bukkit.getRegionScheduler().run(Iris.instance, loc, (task) -> r.run());
+    }
+
     public static CompletableFuture sfut(Runnable r) {
         CompletableFuture f = new CompletableFuture();
 

@@ -102,11 +102,13 @@ public class IrisLootEvent extends Event {
 
         LootContext context = new LootContext.Builder(loc).build();
         LootGenerateEvent event = new LootGenerateEvent(world, null, holder, EMPTY, context, loot, true);
-        if (!Bukkit.isGlobalTickThread()) {
-            Iris.warn("LootGenerateEvent was not called on the main thread, please report this issue.");
+        if (Bukkit.isGlobalTickThread() || Bukkit.isOwnedByCurrentRegion(world, x >> 4, z >> 4)) {
+            Bukkit.getPluginManager().callEvent(event);
+        } else {
+            Iris.warn("LootGenerateEvent was not called on a tick thread, please report this issue.");
             Thread.dumpStack();
             J.sfut(() -> Bukkit.getPluginManager().callEvent(event)).join();
-        } else Bukkit.getPluginManager().callEvent(event);
+        }
 
         return event.isCancelled();
     }

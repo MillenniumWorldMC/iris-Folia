@@ -231,14 +231,14 @@ public class IrisEffect {
                     return;
                 }
 
-                J.s(() -> p.removePotionEffect(getRealType()));
+                J.regionS(() -> p.removePotionEffect(getRealType()), p.getLocation());
             }
 
-            J.s(() -> p.addPotionEffect(new PotionEffect(getRealType(),
+            J.regionS(() -> p.addPotionEffect(new PotionEffect(getRealType(),
                     RNG.r.i(Math.min(potionTicksMax, potionTicksMin),
                             Math.max(potionTicksMax, potionTicksMin)),
                     getPotionStrength(),
-                    true, false, false)));
+                    true, false, false)), p.getLocation());
         }
     }
 
@@ -254,7 +254,7 @@ public class IrisEffect {
         if (sound != null) {
             Location part = p.getLocation().clone().add(RNG.r.i(-soundDistance, soundDistance), RNG.r.i(-soundDistance, soundDistance), RNG.r.i(-soundDistance, soundDistance));
 
-            J.s(() -> p.getWorld().playSound(part, getSound(), (float) volume, (float) RNG.r.d(minPitch, maxPitch)));
+            J.regionS(() -> p.getWorld().playSound(part, getSound(), (float) volume, (float) RNG.r.d(minPitch, maxPitch)), p.getLocation());
         }
 
         if (particleEffect != null) {
@@ -262,19 +262,19 @@ public class IrisEffect {
             part.add(RNG.r.d(), 0, RNG.r.d());
             int offset = p.getWorld().getMinHeight();
             if (extra != 0) {
-                J.s(() -> p.getWorld().spawnParticle(particleEffect, part.getX(), part.getY() + offset + RNG.r.i(particleOffset),
+                J.regionS(() -> p.getWorld().spawnParticle(particleEffect, part.getX(), part.getY() + offset + RNG.r.i(particleOffset),
                         part.getZ(),
                         particleCount,
                         randomAltX ? RNG.r.d(-particleAltX, particleAltX) : particleAltX,
                         randomAltY ? RNG.r.d(-particleAltY, particleAltY) : particleAltY,
                         randomAltZ ? RNG.r.d(-particleAltZ, particleAltZ) : particleAltZ,
-                        extra));
+                        extra), p.getLocation());
             } else {
-                J.s(() -> p.getWorld().spawnParticle(particleEffect, part.getX(), part.getY() + offset + RNG.r.i(particleOffset), part.getZ(),
+                J.regionS(() -> p.getWorld().spawnParticle(particleEffect, part.getX(), part.getY() + offset + RNG.r.i(particleOffset), part.getZ(),
                         particleCount,
                         randomAltX ? RNG.r.d(-particleAltX, particleAltX) : particleAltX,
                         randomAltY ? RNG.r.d(-particleAltY, particleAltY) : particleAltY,
-                        randomAltZ ? RNG.r.d(-particleAltZ, particleAltZ) : particleAltZ));
+                        randomAltZ ? RNG.r.d(-particleAltZ, particleAltZ) : particleAltZ), p.getLocation());
             }
         }
     }

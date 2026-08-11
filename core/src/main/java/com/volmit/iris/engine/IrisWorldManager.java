@@ -586,19 +586,7 @@ public class IrisWorldManager extends EngineAssignedWorldManager {
             IrisPosition pos = new IrisPosition((c.getX() << 4) + x, y, (c.getZ() << 4) + z);
 
             if (mark.isEmptyAbove()) {
-                AtomicBoolean remove = new AtomicBoolean(false);
-
-                try {
-                    J.sfut(() -> {
-                        if (c.getBlock(x, y + 1, z).getBlockData().getMaterial().isSolid() || c.getBlock(x, y + 2, z).getBlockData().getMaterial().isSolid()) {
-                            remove.set(true);
-                        }
-                    }).get();
-                } catch (InterruptedException | ExecutionException e) {
-                    e.printStackTrace();
-                }
-
-                if (remove.get()) {
+                if (c.getBlock(x, y + 1, z).getBlockData().getMaterial().isSolid() || c.getBlock(x, y + 2, z).getBlockData().getMaterial().isSolid()) {
                     b.add(pos);
                     return;
                 }
