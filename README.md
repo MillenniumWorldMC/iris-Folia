@@ -1,6 +1,6 @@
 # IRIS-Folia
 
-The `master` branch tracks the latest version of Minecraft.
+IRIS-Folia is an unofficial fork, maintained personally by PRC_qxncloud.
 
 ## Preface
 
